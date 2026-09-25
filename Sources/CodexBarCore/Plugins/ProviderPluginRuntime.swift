@@ -8,6 +8,8 @@ import FoundationNetworking
 
 public final class ProviderPluginRuntime: @unchecked Sendable {
     public typealias CookieInvalidator = @Sendable (String) -> Void
+    public typealias CookieSessionResolver = @Sendable (String, Bool) async throws -> ProviderPluginCookieSession?
+    public typealias CookieSessionInvalidator = @Sendable (String, String) -> Void
     public typealias CookieResolver = @Sendable (UsageProvider, String) async throws -> String
     public typealias InstanceCookieResolver = @Sendable (ProviderInstanceID, String) async throws -> String
 
@@ -27,6 +29,7 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
     private let allowsDynamicID: Bool
     private let contextOptions: ProviderPluginContextOptions
     private let engineKind: ProviderPluginEngineKind
+    private let storage: ProviderPluginStorage?
     private let lock = NSLock()
     private var worker: (any ProviderPluginEngine)?
 
@@ -86,7 +89,8 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
         responseSizeLimit: Int = ProviderPluginRuntime.maximumResponseBytes,
         enforcesUserResponsePolicy: Bool = false,
         allowsDynamicID: Bool = false,
-        engine: ProviderPluginEngineKind = .automatic) throws
+        engine: ProviderPluginEngineKind = .automatic,
+        storageDirectory: URL? = nil) throws
     {
         try self.init(
             source: source,
@@ -97,7 +101,8 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
             enforcesUserResponsePolicy: enforcesUserResponsePolicy,
             allowsDynamicID: allowsDynamicID,
             contextOptions: .production,
-            engine: engine)
+            engine: engine,
+            storageDirectory: storageDirectory)
     }
 
     init(
@@ -109,7 +114,8 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
         enforcesUserResponsePolicy: Bool = false,
         allowsDynamicID: Bool = false,
         contextOptions: ProviderPluginContextOptions = .production,
-        engine: ProviderPluginEngineKind = .automatic) throws
+        engine: ProviderPluginEngineKind = .automatic,
+        storageDirectory: URL? = nil) throws
     {
         guard timeout > 0 else { throw ProviderPluginError.load("timeout must be positive") }
         guard responseSizeLimit > 0 else { throw ProviderPluginError.load("response size limit must be positive") }
@@ -149,6 +155,11 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
             allowsDynamicID: allowsDynamicID)
         self.worker = worker
         self.manifest = worker.manifest
+        self.storage = worker.manifest.capabilities.contains(.persistentStorage)
+            ? ProviderPluginStorage(
+                directory: storageDirectory ?? ProviderPluginStorage.defaultDirectory,
+                instanceID: worker.manifest.id)
+            : nil
     }
 
     public func fetchUsage(
@@ -159,8 +170,37 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
         sourceMode: ProviderSourceMode = .auto,
         cookieSource: ProviderCookieSource = .auto,
         cookieInvalidator: CookieInvalidator? = nil,
+        cookieSessionResolver: CookieSessionResolver? = nil,
+        cookieSessionInvalidator: CookieSessionInvalidator? = nil,
         cookieResolver: CookieResolver? = nil,
         instanceCookieResolver: InstanceCookieResolver? = nil) async throws -> UsageSnapshot
+    {
+        try await self.fetchResult(
+            settings: settings,
+            secrets: secrets,
+            now: now,
+            timeZone: timeZone,
+            sourceMode: sourceMode,
+            cookieSource: cookieSource,
+            cookieInvalidator: cookieInvalidator,
+            cookieSessionResolver: cookieSessionResolver,
+            cookieSessionInvalidator: cookieSessionInvalidator,
+            cookieResolver: cookieResolver,
+            instanceCookieResolver: instanceCookieResolver).usage
+    }
+
+    public func fetchResult(
+        settings: [String: String] = [:],
+        secrets: [String: String] = [:],
+        now: Date = Date(),
+        timeZone: TimeZone = .current,
+        sourceMode: ProviderSourceMode = .auto,
+        cookieSource: ProviderCookieSource = .auto,
+        cookieInvalidator: CookieInvalidator? = nil,
+        cookieSessionResolver: CookieSessionResolver? = nil,
+        cookieSessionInvalidator: CookieSessionInvalidator? = nil,
+        cookieResolver: CookieResolver? = nil,
+        instanceCookieResolver: InstanceCookieResolver? = nil) async throws -> ProviderPluginResult
     {
         let sanitizedSettings = settings.mapValues {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -175,10 +215,17 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
         }
 
         var contextOptions = self.contextOptions
+        contextOptions.storage = self.storage
         contextOptions.cookieSource = sourceMode.usesWeb ? cookieSource : .off
         contextOptions.cookieInvalidator = cookieInvalidator
+        contextOptions.cookieSessionResolver = cookieSessionResolver ?? ProviderPluginCookieSession.legacyResolver(
+            provider: self.manifest.id,
+            source: cookieSource,
+            resolver: cookieResolver,
+            instanceResolver: instanceCookieResolver)
+        contextOptions.cookieSessionInvalidator = cookieSessionInvalidator
         let worker = try self.currentWorker()
-        let gate = ProviderPluginCompletionGate<UsageSnapshot>()
+        let gate = ProviderPluginCompletionGate<ProviderPluginResult>()
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
             return try await withCheckedThrowingContinuation { continuation in
@@ -211,6 +258,10 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
                 self.discard(worker)
             }
         }
+    }
+
+    func removePersistentStorage() throws {
+        try self.storage?.removeAll()
     }
 
     public func globalType(of name: String) throws -> String {
@@ -356,46 +407,15 @@ private final class ProviderPluginJSValueBox: @unchecked Sendable {
     }
 }
 
-private final class ProviderPluginObjectBox: @unchecked Sendable {
-    let value: [String: Any]
-
-    init(_ value: [String: Any]) {
-        self.value = value
-    }
-}
-
 private struct ProviderPluginHTTPRequestCallbacks: @unchecked Sendable {
     let wantsJSON: Bool
     let resolve: ProviderPluginJSValueBox
     let reject: ProviderPluginJSValueBox
 }
 
-private final class ProviderPluginRedactionValues: @unchecked Sendable {
-    let transportErrors = ProviderPluginHTTPResponse.TransportErrors()
-    private let lock = NSLock()
-    private var values: Set<String>
-
-    init(_ values: some Sequence<String>) {
-        self.values = Set(values.filter { !$0.isEmpty })
-    }
-
-    func insert(_ value: String) {
-        guard !value.isEmpty else { return }
-        _ = self.lock.withLock { self.values.insert(value) }
-    }
-
-    func redact(_ message: String) -> String {
-        self.lock.withLock {
-            self.values.reduce(message) { partial, value in
-                partial.replacingOccurrences(of: value, with: "<redacted>")
-            }
-        }
-    }
-}
-
 final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked Sendable {
     private typealias HTTPBlock = @convention(block) (String, JSValue, String, Bool, JSValue, JSValue) -> Void
-    private typealias CookieBlock = @convention(block) (String, JSValue, JSValue) -> Void
+    private typealias CookieBlock = @convention(block) (String, Bool, JSValue, JSValue) -> Void
 
     let manifest: ProviderPluginManifest
 
@@ -403,6 +423,7 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
     private let context: JSContext
     private let applyPrelude: JSValue
     private let fetchUsage: JSValue
+    private let keyEnumerator: JSValue
     private let transport: any ProviderHTTPTransport
     private let responseSizeLimit: Int
     private let enforcesUserResponsePolicy: Bool
@@ -451,6 +472,10 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         guard let context = JSContext() else {
             throw ProviderPluginError.load("JavaScriptCore could not create a context")
         }
+        guard let keyEnumerator = context.evaluateScript("Reflect.ownKeys") else {
+            throw ProviderPluginError.load("JavaScriptCore key enumeration is unavailable")
+        }
+        self.keyEnumerator = keyEnumerator
         self.queue = queue
         self.context = context
         self.transport = transport
@@ -482,7 +507,7 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         }
         self.fetchUsage = fetchUsage
         self.manifest = try ProviderPluginManifest(
-            definition: JavaScriptCorePluginValue(definition),
+            definition: JavaScriptCorePluginValue(definition, keyEnumerator: self.keyEnumerator),
             allowsDynamicID: allowsDynamicID)
     }
 
@@ -508,7 +533,7 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         contextOptions: ProviderPluginContextOptions,
         cookieResolver: ProviderPluginRuntime.CookieResolver?,
         instanceCookieResolver: ProviderPluginRuntime.InstanceCookieResolver?,
-        completion: @escaping @Sendable (Result<UsageSnapshot, Error>) -> Void)
+        completion: @escaping @Sendable (Result<ProviderPluginResult, Error>) -> Void)
     {
         self.queue.async {
             self.beginFetch(
@@ -532,7 +557,7 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         contextOptions: ProviderPluginContextOptions,
         cookieResolver: ProviderPluginRuntime.CookieResolver?,
         instanceCookieResolver: ProviderPluginRuntime.InstanceCookieResolver?,
-        completion: @escaping @Sendable (Result<UsageSnapshot, Error>) -> Void)
+        completion: @escaping @Sendable (Result<ProviderPluginResult, Error>) -> Void)
     {
         self.context.exception = nil
         let redactionValues = ProviderPluginRedactionValues(secrets.values)
@@ -555,10 +580,11 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             guard let self else { return }
             defer { self.retainedCallbacks[callbackID] = nil }
             do {
-                let snapshot = try ProviderPluginSnapshotMapper.map(
-                    JavaScriptCorePluginValue(value),
+                let snapshot = try ProviderPluginSnapshotMapper.mapResult(
+                    JavaScriptCorePluginValue(value, keyEnumerator: self.keyEnumerator),
                     provider: self.manifest.id,
-                    now: now)
+                    now: now,
+                    allowsProviderExtensions: !self.enforcesUserResponsePolicy)
                 completion(.success(snapshot))
             } catch {
                 completion(.failure(ProviderPluginError
@@ -632,6 +658,24 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         }
         host.setObject(settingGet, forKeyedSubscript: "settingGet" as NSString)
 
+        let storage: @convention(block) (String, JSValue, JSValue) -> JSValue = { [weak self] operation, key, value in
+            guard let self else { return JSValue(undefinedIn: nil) }
+            do {
+                guard let storage = contextOptions.storage,
+                      !self.requestLock.withLock({ self.interrupted })
+                else { throw ProviderPluginError.script("persistent storage is unavailable or not declared") }
+                let result = try storage.access(
+                    operation,
+                    key: JavaScriptCorePluginValue(key, keyEnumerator: self.keyEnumerator),
+                    value: JavaScriptCorePluginValue(value, keyEnumerator: self.keyEnumerator))
+                return result.map { JSValue(object: $0, in: self.context) } ?? JSValue(nullIn: self.context)
+            } catch {
+                self.context.exception = JSValue(newErrorFromMessage: error.localizedDescription, in: self.context)
+                return JSValue(undefinedIn: self.context)
+            }
+        }
+        host.setObject(storage, forKeyedSubscript: "storage" as NSString)
+
         let env = JSValue(newObjectIn: self.context)!
         env.setObject(Self.normalizedTimeZoneIdentifier(timeZone), forKeyedSubscript: "timeZone" as NSString)
         ctx.setObject(env, forKeyedSubscript: "env" as NSString)
@@ -666,7 +710,6 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             }
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = timeZone
-            let now = Date()
             let start = calendar.startOfDay(for: now)
             var candidate = calendar.date(byAdding: .hour, value: Int(rawHour), to: start)!
             if candidate <= now {
@@ -688,7 +731,8 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             do {
                 _ = try self.manifest.cookieDomain(rawDomain)
                 return contextOptions.cookieSource.pluginAvailability(
-                    hasResolver: (self.manifest.id.firstPartyProvider != nil && cookieResolver != nil)
+                    hasResolver: contextOptions.cookieSessionResolver != nil
+                        || (self.manifest.id.firstPartyProvider != nil && cookieResolver != nil)
                         || instanceCookieResolver != nil)
             } catch {
                 self.context.exception = JSValue(newErrorFromMessage: error.localizedDescription, in: self.context)
@@ -697,11 +741,11 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         }
         host.setObject(cookieAvailability, forKeyedSubscript: "cookieAvailability" as NSString)
 
-        let rejectCookie: @convention(block) (String) -> Void = { [weak self] rawDomain in
+        let rejectCookie: @convention(block) (String, String) -> Void = { [weak self] rawDomain, id in
             guard let self else { return }
             do {
                 let domain = try self.manifest.cookieDomain(rawDomain)
-                contextOptions.cookieInvalidator?(domain)
+                contextOptions.rejectCookie(domain: domain, id: id)
             } catch {
                 self.context.exception = JSValue(newErrorFromMessage: error.localizedDescription, in: self.context)
             }
@@ -714,6 +758,13 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             instanceResolver: instanceCookieResolver,
             redactionValues: redactionValues)
         host.setObject(cookieHeader, forKeyedSubscript: "cookieHeader" as NSString)
+        let cookieSession = self.makeCookieBlock(
+            source: contextOptions.cookieSource,
+            resolver: nil,
+            instanceResolver: nil,
+            sessionResolver: contextOptions.cookieSessionResolver,
+            redactionValues: redactionValues)
+        host.setObject(cookieSession, forKeyedSubscript: "cookieSession" as NSString)
 
         let cacheGet: @convention(block) (String) -> JSValue = { [weak self] key in
             guard let self else { return JSValue(undefinedIn: nil) }
@@ -793,15 +844,12 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         beforeAttempt: (@Sendable () async throws -> Void)?,
         callbacks: ProviderPluginHTTPRequestCallbacks)
     {
-        let request: URLRequest
-        let retryPolicy: ProviderHTTPRetryPolicy
+        let request: ProviderPluginHTTPResponse.Request
         do {
-            retryPolicy = try ProviderPluginHTTPResponse.retryPolicy(
-                options.forProperty("retryPolicy").map(JavaScriptCorePluginValue.init))
             guard let dictionary = options.toDictionary() as? [String: Any] else {
                 throw ProviderPluginError.http("request options must be an object")
             }
-            request = try ProviderPluginHTTPResponse.request(
+            request = try ProviderPluginHTTPResponse.Request(
                 rawURL: rawURL,
                 options: dictionary,
                 method: method,
@@ -828,25 +876,14 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         self.requests[requestID] = Task.detached {
             defer { _ = worker.requestLock.withLock { worker.requests.removeValue(forKey: requestID) } }
             do {
-                let response = try await ProviderPluginHTTPResponse.response(
-                    for: request, transport: transport, retryPolicy: retryPolicy, beforeAttempt: beforeAttempt)
-                guard response.data.count <= responseSizeLimit else {
-                    throw ProviderPluginError.http("response exceeded the \(responseSizeLimit)-byte limit")
-                }
-                if worker.rejectsNonSuccessResponses, !(200..<300).contains(response.statusCode) {
-                    throw ProviderPluginHTTPResponse.StatusFailure(
-                        response: response.response, allowsRetry: retryPolicy.maxRetries == 0)
-                }
-                if worker.enforcesUserResponsePolicy,
-                   let encoding = response.response.value(forHTTPHeaderField: "Content-Encoding"),
-                   !encoding.isEmpty,
-                   encoding.caseInsensitiveCompare("identity") != .orderedSame
-                {
-                    throw ProviderPluginError.http("compressed responses are not allowed")
-                }
-                let payload = try ProviderPluginObjectBox(ProviderPluginHTTPResponse.payload(
-                    response,
-                    wantsJSON: callbacks.wantsJSON))
+                let payload = try await ProviderPluginHTTPResponse.fetch(
+                    request,
+                    transport: transport,
+                    wantsJSON: callbacks.wantsJSON,
+                    responseSizeLimit: responseSizeLimit,
+                    enforcesUserResponsePolicy: worker.enforcesUserResponsePolicy,
+                    rejectsNonSuccessResponses: worker.rejectsNonSuccessResponses,
+                    beforeAttempt: beforeAttempt)
                 worker.queue.async {
                     let value = JSValue(object: payload.value, in: worker.context) ?? JSValue(nullIn: worker.context)
                     _ = callbacks.resolve.value.call(withArguments: [value as Any])
@@ -868,9 +905,10 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         source: ProviderCookieSource,
         resolver: ProviderPluginRuntime.CookieResolver?,
         instanceResolver: ProviderPluginRuntime.InstanceCookieResolver?,
+        sessionResolver: ProviderPluginRuntime.CookieSessionResolver? = nil,
         redactionValues: ProviderPluginRedactionValues) -> CookieBlock
     {
-        { [weak self] rawDomain, resolve, reject in
+        { [weak self] rawDomain, cachedOnly, resolve, reject in
             guard let self else { return }
             guard let domain = try? self.manifest.cookieDomain(rawDomain)
             else {
@@ -885,11 +923,22 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
                     error: ProviderPluginError.secretAccess("browser cookies are disabled for this provider"))
                 return
             }
-            let resolveCookie: @Sendable () async throws -> String
-            if let provider = self.manifest.id.firstPartyProvider, let resolver {
-                resolveCookie = { try await resolver(provider, domain) }
+            let resolveCookie: @Sendable () async throws -> (header: String, payload: String)
+            if let sessionResolver {
+                resolveCookie = {
+                    guard let session = try await sessionResolver(domain, cachedOnly) else { return ("", "null") }
+                    guard session.origin == "https://\(domain)" else {
+                        throw ProviderPluginError.secretAccess("cookie session origin does not match its domain")
+                    }
+                    return try (session.header, session.json())
+                }
+            } else if let provider = self.manifest.id.firstPartyProvider, let resolver {
+                resolveCookie = { let header = try await resolver(provider, domain); return (header, header) }
             } else if let instanceResolver {
-                resolveCookie = { try await instanceResolver(self.manifest.id, domain) }
+                resolveCookie = {
+                    let header = try await instanceResolver(self.manifest.id, domain)
+                    return (header, header)
+                }
             } else {
                 self.reject(
                     ProviderPluginJSValueBox(reject),
@@ -901,13 +950,13 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
             let rejectBox = ProviderPluginJSValueBox(reject)
             Task.detached {
                 do {
-                    let header = try await resolveCookie()
+                    let (header, payload) = try await resolveCookie()
                     redactionValues.insert(header)
                     for pair in CookieHeaderNormalizer.pairs(from: header) {
                         redactionValues.insert(pair.value)
                     }
                     worker.queue.async {
-                        _ = resolveBox.value.call(withArguments: [header])
+                        _ = resolveBox.value.call(withArguments: [payload])
                     }
                 } catch {
                     let failure = ProviderPluginError.secretAccess(redactionValues.redact(error.localizedDescription))
@@ -950,7 +999,9 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
         from value: JSValue,
         redactionValues: ProviderPluginRedactionValues) -> Error
     {
-        if let error = redactionValues.transportErrors.error(for: JavaScriptCorePluginValue(value)) { return error }
+        if let error = redactionValues.transportErrors.error(for: JavaScriptCorePluginValue(
+            value,
+            keyEnumerator: self.keyEnumerator)) { return error }
         let message = redactionValues.redact(self.message(from: value))
         if let classified = ProviderPluginClassifiedFailureParser.error(from: message) {
             return classified

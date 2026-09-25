@@ -69,10 +69,10 @@ defineProvider({
 - `auth` (optional): one of the forms below. The named secret must be a declared `secure` setting.
 - `settings`: up to 32 setting definitions. Keys contain 1–64 ASCII letters, digits, or underscores and start with a
   letter. Each entry has `key`, `title`, optional `subtitle`, and `type: "plain" | "secure"` (default `secure`).
-- `capabilities` (optional): `"browser-cookies"` and `"http-status"`. With `"http-status"`, the plugin observes
+- `capabilities` (optional): `"browser-cookies"`, `"http-status"`, and `"persistent-storage"`. With `"http-status"`, the plugin observes
   non-2xx responses itself instead of the host failing the request.
 - `cookieDomains`: required with `browser-cookies`; a non-empty list of normalized DNS host names.
-- `fetchUsage(ctx)`: function returning a snapshot object or a promise for one.
+- `fetchUsage(ctx)`: function returning a snapshot or fetch result envelope, or a promise for one.
 
 Authentication forms:
 
@@ -99,13 +99,22 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
 
 - `await ctx.http.getJSON(url, opts?)` performs GET and returns `{status, headers, json}`.
 - `await ctx.http.get(url, opts?)` performs GET and returns `{status, headers, bodyText}`.
+- `await ctx.http.getWithOptional(url, optionalURL, opts?)` runs two text GETs concurrently through the host,
+  with the same options and declared-origin/authentication checks for both. It returns the primary response with
+  `optional` containing the secondary response or `null`. Optional work has a five-second request limit, no retries,
+  and a shared 200 ms collection budget measured from the first primary attempt's admission. Scheduling waits count
+  against the overall fetch timeout, not this collection budget. A slow primary only collects an already
+  completed secondary; a fast primary can wait for the remainder of that budget. Failed optional work is discarded.
+  Unfinished optional work is cancelled on collection, primary failure, or caller cancellation. This primitive works
+  on both engines without relying on JavaScript promise concurrency. HTTP responses also expose their final `url`.
 - `await ctx.http.postJSON(url, {body, headers?})` performs JSON POST. `body` must be JSON-serializable.
 - `await ctx.http.post(url, {body, headers?})` sends the same JSON POST and returns `{status, headers, bodyText}` so a
   plugin can classify non-JSON error pages before parsing a successful response.
 - `opts.headers` accepts string values. Plugins cannot replace their declared auth header. `opts.timeoutSeconds` sets a
-  hard request deadline from 1 through 30 seconds; the default is 15 seconds. Each attempt’s deadline starts when
+  hard request deadline from 1 through 90 seconds; the default is 15 seconds. Each attempt’s deadline starts when
   its transport task begins, so scheduler delays do not consume the request budget. Queued work remains bounded
-  by the overall fetch deadline and cancellation.
+  by the overall fetch deadline and cancellation. An override does not extend that overall deadline; bundled
+  strategies that need a longer request must also supply a sufficient fetch budget.
 - `opts.retryPolicy: "transientIdempotent"` opts GET into the native single-retry policy: 408, 429, 500, 502, 503, 504,
   timeout, lost connection, connection failure, and DNS failures. The delay is one second or numeric `Retry-After`,
   capped at ten seconds. POST, offline, TLS, and cancellation failures are not retried. This replaces the automatic
@@ -134,12 +143,31 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
   route an origin-less pasted header to one explicitly selected tenant. Missing cookie resolvers report `"off"`.
   `cookieHeader` also enforces Off/API-only policy, even if the plugin skips this check.
 - `await ctx.browser.cookieHeader(domain)` returns a cookie header only with the `browser-cookies` capability and for a
-  declared domain. The app imports from Chrome only. Cookie values are secret-equivalent and redacted.
+  declared domain. User plugins import from Chrome; bundled providers retain their declared browser order.
+  Cookie values are secret-equivalent and redacted.
+- `for await (const session of ctx.browser.sessions(domain))` visits origin-bound candidates in order: the exclusive
+  manual credential, or the cached session followed by browser profiles in the provider's import order. Each candidate
+  has `{id, header, source, origin}`. Enumeration is scoped to one declared domain and stops when candidates are exhausted.
+  Manual regional captures retain their origin through settings projection; an origin-less legacy header is restricted
+  to the selected domain. Qoder's legacy headers select the global site.
+  The optional `{cachedOnly: true}` argument yields manual/cached candidates without importing browser profiles;
+  cached candidates include `cachedAt` as Unix seconds. This lets a regional provider try its newest cached session
+  before importing any fresh cookies, even when that session belongs to its second domain.
+- `ctx.browser.rejectCookie(domain, session)` rejects that candidate after an authentication failure. It conditionally
+  evicts the matching persistent entry without deleting a newer session or another domain's cache. The opaque candidate
+  ID makes late rejections safe. Continuing the iterator visits the next candidate; a successful fetch can return
+  immediately. `cookieHeader` remains available for providers needing only one header.
 - `ctx.html.metaContent(html, name)` returns the first matching quoted meta value or `null`.
 - `ctx.html.matchFirst(html, regexSource, flags?)` returns the first capture/full match or `null`.
 - `ctx.log(...values)` writes to the instance-scoped plugin log. Known secrets and cookie values are redacted.
 - `ctx.cache.get(key)` and `ctx.cache.set(key, value, ttlSeconds)` provide a per-runtime memory cache. TTL is capped at
   24 hours.
+- `ctx.storage.get(key)`, `set(key, value)`, and `remove(key)` provide persistent, non-secret string state with the
+  `persistent-storage` capability. Missing keys return `null`; empty string values are valid. Keys must contain
+  1–128 UTF-8 bytes, each value at most 16 KiB, and each plugin at most 64 entries and 64 KiB of combined key/value
+  UTF-8 bytes. Wrong types and capacity violations throw without changing saved values. Use explicit JSON string
+  encoding for structured state. Storage operations are synchronous and immediately durable, including when a later
+  part of the fetch fails; they are not a transaction with the returned usage snapshot.
 - `ctx.date.now()`, `iso(text)`, `unixSeconds(number)`, and `unixMillis(number)` create JavaScript dates. `now()` uses
   the host refresh clock.
 - `ctx.date.nowMillis()` returns the same host refresh clock as Unix epoch milliseconds — use it for arithmetic that
@@ -156,7 +184,7 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
 - `ctx.isDetailLabel(value)` checks the native provider-detail label rules, including whitespace and Unicode character limits; it performs no I/O and returns false for non-strings.
 
 User-plugin requests run in an ephemeral session with no ambient cookies, credential store, or URL cache. Redirects are
-rejected, the timeout is 15 seconds, `Accept-Encoding: identity` is sent, compressed responses always fail, and response
+rejected, the default request timeout is 15 seconds, `Accept-Encoding: identity` is sent, compressed responses always fail, and response
 bytes are capped at 1 MiB. By default, the host rejects non-2xx responses and automatically retries 408, 429, 500, 502,
 503, and 504 once, using a numeric `Retry-After` delay or 1 second when absent, clamped to 10 seconds. With `http-status`,
 the plugin instead receives `{status, headers, ...}` and owns classification, including any request for the same single
@@ -174,6 +202,13 @@ async fetchUsage(ctx) {
 ```
 
 Declaring `http-status` changes the approval binding, so an installed plugin requires re-approval after adding it.
+The same applies to `persistent-storage`. The host binds storage to the manifest's instance ID; scripts cannot select
+another namespace or file path. App and CLI runtimes share `<resolved config directory>/plugin-storage/<id>.json`.
+Writes are atomic, files use mode `0600`, and each operation reloads under a process-shared lock. A busy lock, corrupt
+or incompatible file, or I/O failure throws; invalid files are never silently overwritten. Removing a plugin through
+the app/CLI manager deletes its state and retires that runtime's storage access. Empty lock files remain for safe
+cross-process locking. Removing the source file manually does not delete state. State is unencrypted: credentials,
+cookies, and tokens belong in secure settings. Storage does not alter `ctx.cache` or the settings `persist` allowlist.
 
 Bundled first-party providers that have cut over to JavaScript use the shared runtime's 20-second hung-script watchdog.
 A timeout fails that refresh and discards the poisoned worker so the next refresh starts with a fresh context; this is
@@ -228,7 +263,44 @@ may return `{empty: true}` with optional identity. This creates no artificial ra
 validated. An empty object, an empty `identity` object, or metadata such as confidence and subscription dates without
 displayable usage or identity remains invalid unless `empty: true` is explicitly declared.
 
+## Fetch result envelope
+
+`fetchUsage` may return a bare snapshot or `{ usage, sourceLabel?, card?, persist? }`. The two forms cannot be mixed;
+unknown result and top-level snapshot keys fail validation. Both engines apply the same mapper before any settings write.
+Session iteration and candidate rejection work with either result form; the Swift `fetchUsage` and `fetchResult` entry
+points both preserve the caller's cookie-session resolver and invalidator.
+`sourceLabel` replaces the strategy's default label for that fetch and must contain 1–256 UTF-8 bytes without control
+characters. `persist` is an object with at most 16 string values of 1–256 bytes; the descriptor must explicitly allow
+every key. Null, arrays, wrong types, unknown keys, and cross-provider requests fail the entire result.
+
+Card payloads are descriptor-owned, never arbitrary Swift decoding. OpenAI's `card.openAIAPIUsage` adapter accepts daily
+cost, token, request, model, and line-item history for the existing native chart. It rejects unknown fields, bounds the
+history to 366 buckets and 10,000 breakdown entries, and validates finite numbers, safe integer counts, names, and dates.
+No other provider or user-installed plugin receives that adapter by declaring a card field.
+
+Fireworks alone allows `persist: { ACCOUNT_SLUG: "discovered-slug" }`. The app/CLI writer rechecks ownership, applies the
+provider's allowlist, and returns saved, unchanged, stale, or failed. Successful usage survives a stale or failed save
+with a diagnostic. The runtime itself never writes config; a missing writer also reports a failed save. There is no
+secret-write capability or arbitrary config-field access.
+
 ## TypeScript
+
+llmman's bundled `llmman.ts` reads a local `llmman serve` daemon's node report for loaded-model memory. Its API key is
+optional, so the plugin sends it itself instead of declaring host-owned `auth`. See [llmman](llmman.md).
+
+Chutes' bundled `chutes.ts` owns subscription usage and best-effort quota detail requests on both engines. It preserves
+subscription context and explicitly permits empty usage responses. Swift supplies credentials and validated API origins.
+See [Chutes](chutes.md).
+
+ai&'s bundled `aiand.ts` follows paired log cursors and sums decimal costs with integer arithmetic before the final
+display conversion. Empty windows omit cost; capped or incomplete pagination retains estimated confidence.
+See [ai&](aiand.md).
+
+DevPass's bundled `devpass.ts` reads the documented LLM Gateway key-status API for billing-cycle and premium weekly
+credits. Swift only registers the provider and its API-key setting. See [DevPass](devpass.md).
+
+xKiro's bundled `xkiro.ts` reads the documented usage API for daily free tokens and the UTC reset. Swift only
+registers the provider and its API-key setting. See [xKiro](xkiro.md).
 
 Moonshot's bundled `moonshot.ts` runs on both engines. Its Swift descriptor resolves the regional credential and passes
 the selected origin as `BASE_URL`; the plugin validates the fixed International/China origins and uses
@@ -263,12 +335,19 @@ change to instance ID, normalized origins, auth mode/header, secure setting name
 invalidates approval before the next request. There is no bulk approval or import path.
 
 Bundled first-party plugins do not use the interactive plugin-approval flow. The private-network HTTP policy is therefore
-accepted for bundled code only for LLM Proxy, LiteLLM, and Bifrost, whose configured gateways permit exactly those
+accepted for bundled code only for LLM Proxy, LiteLLM, Bifrost, and llmman, whose configured endpoints permit exactly those
 targets. Other bundled providers fail manifest validation if they request that policy.
 
 `codexbar plugins list` shows locally discovered plugins. `codexbar plugins fetch <id>` displays the same approval
 fields and can approve only from an interactive terminal; redirected/headless input fails closed. Browser-cookie plugins
 are app-only and fail closed in the CLI.
+
+Every CLI command discovers user plugins before loading config, so `config providers` and `config dump` include
+installed plugins. Unrelated app and CLI config writes preserve unavailable plugin records, including settings and
+secrets, in their original positions. Missing files, discovery failures, and platforms without the plugin runtime do
+not delete saved data. `config providers` labels these entries as `plugin (not loaded)`. Their opaque fields are
+redacted in `config dump` unless `--show-secrets` is explicitly requested.
+After discovery, entries using an unsupported future config format remain unchanged if an edit would lose data.
 
 Delete from Settings with **Delete…**. CodexBar removes the plugin file, matching TypeScript cache output, approval,
 per-instance settings and secrets, and per-instance usage history. Invalid plugin files are listed with their validation
@@ -310,6 +389,20 @@ Call `ctx.browser.rejectCookie(domain)` after the server rejects a session. The 
 evicts only the cached entry observed by that fetch (each domain is pinned for the fetch lifetime); a newer session and other domains remain intact. Manual headers
 are never erased. User plugins have no persistent cookie cache, so rejection is a validated no-op for them.
 
+## API balance bundled providers
+
+[DeepInfra](deepinfra.md) uses its bundled script on both engines. It requires both billing GETs, preserves
+prepaid-balance deductions and monthly cents conversion, and retries transient failures once. The Swift fetcher and
+parser have been removed.
+
+[ZenMux](zenmux.md) uses its bundled script on both engines. It requires subscription quotas and optionally enriches
+them with USD PAYG balance; failed enrichment preserves quotas except for rejected credentials and cancellation. The
+Swift fetcher and parser have been removed.
+
+[Atlas Cloud](atlascloud.md) and [Vercel AI Gateway](vercel.md) use fixed-origin bearer GETs for documented
+account/team balances. Their bundled JavaScript returns generic details without fabricated quota windows;
+Swift provides registration and the shared API-key settings field. Scripts classify HTTP failures and the host bounds retries.
+
 ## GitKraken AI bundled provider
 
 [GitKraken AI](gitkraken.md) uses bearer GET against its declared first-party API origin, with optional
@@ -325,3 +418,7 @@ Swift supplies registration and the shared settings surface.
 
 [Zed](zed.md) uses its bundled script for editor API and opt-in browser billing requests. Swift retains editor settings
 and Keychain credential discovery; browser mode uses a declared `zed.dev` cookie session and never reads editor credentials.
+
+Aixy is a bundled plugin-first provider: its TypeScript owns key-scoped usage and budget mapping, while the host validates its configured gateway origin and supplies the API key. See [Aixy](aixy.md).
+
+Raycast uses declared `raycast.com` / `www.raycast.com` cookie domains and `ctx.browser.sessions` for candidate retries. The shared broker prefers exact-host cookies over parent-domain cookies with the same name and excludes sibling/lookalike hosts. See [Raycast](raycast.md).

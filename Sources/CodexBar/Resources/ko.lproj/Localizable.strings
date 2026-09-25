@@ -494,6 +494,7 @@
 "cost_summary_style_inline_help" = "비용 요약을 기본 메뉴에 직접 표시합니다.";
 "cost_summary_style_submenu_help" = "대신 자세한 비용 하위 메뉴를 표시합니다.";
 "cost_summary_style_both_help" = "기본 메뉴 요약과 자세한 비용 하위 메뉴를 모두 표시합니다.";
+"Month to date" = "이번 달 누계";
 "cost_history_window_title" = "기록 범위";
 "cost_history_window_help" = "메뉴에 표시할 로컬 사용량 로그 일수를 설정합니다.";
 "cost_history_days_title" = "기록 범위: %d일";
@@ -1138,6 +1139,9 @@
 "Open MiMo Balance" = "MiMo 잔액 열기";
 "Open Moonshot Console" = "Moonshot 콘솔 열기";
 "Open Ollama API Keys" = "Ollama API 키 열기";
+"Open llmman" = "llmman 열기";
+"Stored in ~/.codexbar/config.json. Only needed when llmman serve requires API keys." = "~/.codexbar/config.json에 저장됩니다. llmman serve에 API 키가 필요한 경우에만 필요합니다.";
+"Address of llmman serve. Defaults to http://127.0.0.1:17434." = "llmman serve 주소입니다. 기본값은 http://127.0.0.1:17434입니다.";
 "Open StepFun Platform" = "StepFun 플랫폼 열기";
 "Open T3 Chat Settings" = "T3 Chat 설정 열기";
 "Open Volcengine Ark Console" = "Volcengine Ark 콘솔 열기";

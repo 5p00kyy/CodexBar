@@ -506,6 +506,7 @@
 "cost_summary_style_inline_help" = "直接在主菜单中显示费用摘要。";
 "cost_summary_style_submenu_help" = "改为显示详细的费用子菜单。";
 "cost_summary_style_both_help" = "同时显示主菜单摘要和详细的费用子菜单。";
+"Month to date" = "本月至今";
 "cost_history_window_title" = "历史窗口";
 "cost_history_window_help" = "设置菜单中显示多少天的本地使用日志。";
 "cost_history_days_title" = "历史窗口：%d 天";
@@ -1150,6 +1151,9 @@
 "Open MiMo Balance" = "打开 MiMo 余额";
 "Open Moonshot Console" = "打开 Moonshot 控制台";
 "Open Ollama API Keys" = "打开 Ollama API 密钥";
+"Open llmman" = "打开 llmman";
+"Stored in ~/.codexbar/config.json. Only needed when llmman serve requires API keys." = "存储在 ~/.codexbar/config.json 中。仅当 llmman serve 要求 API 密钥时才需要。";
+"Address of llmman serve. Defaults to http://127.0.0.1:17434." = "llmman serve 的地址。默认为 http://127.0.0.1:17434。";
 "Open StepFun Platform" = "打开 StepFun 平台";
 "Open T3 Chat Settings" = "打开 T3 Chat 设置";
 "Open Volcengine Ark Console" = "打开 Volcengine Ark 控制台";

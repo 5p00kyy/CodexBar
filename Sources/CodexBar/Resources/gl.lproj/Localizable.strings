@@ -478,6 +478,7 @@
 "cost_summary_style_inline_help" = "Amosa o resumo de custos directamente no menú principal.";
 "cost_summary_style_submenu_help" = "Amosa no seu lugar o submenú Custo detallado.";
 "cost_summary_style_both_help" = "Amosa o resumo do menú principal e o submenú Custo detallado.";
+"Month to date" = "Mes ata hoxe";
 "cost_history_window_title" = "Xanela do historial";
 "cost_history_window_help" = "Define cantos días de rexistros de uso locais aparecen no menú.";
 "cost_history_days_title" = "Xanela de historial: %d días";
@@ -1015,6 +1016,9 @@
 "Open MiMo Balance" = "Abrir o saldo de MiMo";
 "Open Moonshot Console" = "Abrir a consola de Moonshot";
 "Open Ollama API Keys" = "Abrir as chaves de API de Ollama";
+"Open llmman" = "Abrir llmman";
+"Stored in ~/.codexbar/config.json. Only needed when llmman serve requires API keys." = "Gardado en ~/.codexbar/config.json. Só é necesario cando llmman serve require chaves de API.";
+"Address of llmman serve. Defaults to http://127.0.0.1:17434." = "Enderezo de llmman serve. Por defecto, http://127.0.0.1:17434.";
 "Open StepFun Platform" = "Abrir a plataforma StepFun";
 "Open T3 Chat Settings" = "Abrir os axustes de T3 Chat";
 "Open Volcengine Ark Console" = "Abrir a consola de Volcengine Ark";

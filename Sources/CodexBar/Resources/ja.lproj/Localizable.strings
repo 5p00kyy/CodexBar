@@ -495,6 +495,7 @@
 "cost_summary_style_inline_help" = "コスト概要をメインメニューに直接表示します。";
 "cost_summary_style_submenu_help" = "代わりに詳細なコストサブメニューを表示します。";
 "cost_summary_style_both_help" = "メインメニューの概要と詳細なコストサブメニューの両方を表示します。";
+"Month to date" = "今月の累計";
 "cost_history_window_title" = "履歴期間";
 "cost_history_window_help" = "メニューに表示するローカル使用ログの日数を設定します。";
 "cost_history_days_title" = "履歴期間: %d 日";
@@ -1169,6 +1170,9 @@
 "Open MiMo Balance" = "MiMo 残高を開く";
 "Open Moonshot Console" = "Moonshot コンソールを開く";
 "Open Ollama API Keys" = "Ollama API キーを開く";
+"Open llmman" = "llmman を開く";
+"Stored in ~/.codexbar/config.json. Only needed when llmman serve requires API keys." = "~/.codexbar/config.json に保存されます。llmman serve が API キーを要求する場合のみ必要です。";
+"Address of llmman serve. Defaults to http://127.0.0.1:17434." = "llmman serve のアドレス。既定値は http://127.0.0.1:17434 です。";
 "Open StepFun Platform" = "StepFun プラットフォームを開く";
 "Open T3 Chat Settings" = "T3 Chat 設定を開く";
 "Open Volcengine Ark Console" = "Volcengine Ark コンソールを開く";

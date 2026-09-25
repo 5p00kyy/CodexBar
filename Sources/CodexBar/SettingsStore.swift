@@ -267,6 +267,7 @@ final class SettingsStore {
     @ObservationIgnored var selectedMenuProviderRawStorage: String?
     @ObservationIgnored private nonisolated(unsafe) var lowPowerModeObserver: NSObjectProtocol?
     var defaultsState: SettingsDefaultsState
+    var providerSwitcherShortcuts = ProviderSwitcherShortcuts.defaults
     var configRevision: Int = 0
     var providerDetailSettingsRevision: Int = 0
     var backgroundWorkSettingsRevision: Int = 0
@@ -384,6 +385,9 @@ final class SettingsStore {
             userDefaults: userDefaults,
             hadPreviousInstallationState: hadPreviousInstallationState)
         self.defaultsState = defaultsState
+        self.providerSwitcherShortcuts = (try? ProviderSwitcherShortcuts.validated(
+            userDefaults.dictionary(forKey: "switcherShortcuts") as? [String: String] ?? [:]))
+            ?? ProviderSwitcherShortcuts.defaults
         self.mergedMenuLastSelectedWasOverviewStorage = defaultsState.mergedMenuLastSelectedWasOverview
         self.selectedMenuProviderRawStorage = defaultsState.selectedMenuProviderRaw
         self.updateProviderState(config: config)
@@ -552,8 +556,9 @@ extension SettingsStore {
         let costUsageEnabled = userDefaults.object(forKey: "tokenCostUsageEnabled") as? Bool ?? false
         let codexLocalSessionCostLedgerEnabled = userDefaults.object(
             forKey: "codexLocalSessionCostLedgerEnabled") as? Bool ?? false
-        let rawCostUsageHistoryDays = userDefaults.object(forKey: "tokenCostUsageHistoryDays") as? Int ?? 30
-        let costUsageHistoryDays = max(1, min(365, rawCostUsageHistoryDays))
+        let costReportingPeriod = CostReportingPeriod.migrated(
+            rawValue: userDefaults.string(forKey: CostReportingPeriod.defaultsKey),
+            legacyDays: userDefaults.object(forKey: CostReportingPeriod.legacyDaysKey) as? Int)
         let storedBucketTimeZone = userDefaults.string(forKey: "tokenCostUsageBucketTimeZone") ?? ""
         let costUsageBucketTimeZoneIdentifier = CostUsageBucketTimeZone.isValidIdentifier(storedBucketTimeZone)
             ? storedBucketTimeZone
@@ -664,6 +669,8 @@ extension SettingsStore {
             debugLoadingPatternRaw: debugLoadingPatternRaw,
             debugKeepCLISessionsAlive: debugKeepCLISessionsAlive,
             statusChecksEnabled: notificationDefaults.statusChecksEnabled,
+            stayAwakeEnabled: userDefaults.bool(forKey: "stayAwakeEnabled"),
+            credentialExpiryNotificationsEnabled: userDefaults.bool(forKey: "credentialExpiryNotificationsEnabled"),
             sessionQuotaNotificationsEnabled: notificationDefaults.sessionQuotaNotificationsEnabled,
             quotaWarningNotificationsEnabled: quotaWarnings.notificationsEnabled,
             predictivePaceWarningNotificationsEnabled: notificationDefaults.predictivePaceWarningNotificationsEnabled,
@@ -703,7 +710,7 @@ extension SettingsStore {
             copilotSeatCreditEntitlementRaw: copilotSeatCreditEntitlementRaw,
             costUsageEnabled: costUsageEnabled,
             codexLocalSessionCostLedgerEnabled: codexLocalSessionCostLedgerEnabled,
-            costUsageHistoryDays: costUsageHistoryDays,
+            costReportingPeriod: costReportingPeriod,
             costUsageBucketTimeZoneIdentifier: costUsageBucketTimeZoneIdentifier,
             openCodexUsageLogsEnabled: openCodexUsageLogsEnabled,
             hideNativeCodexCostWhenOpenCodexPresent: hideNativeCodexCostWhenOpenCodexPresent,

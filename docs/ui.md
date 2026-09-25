@@ -39,6 +39,10 @@ read_when:
 - Display → Menu Bar → Layout provides presets plus a token editor. Tokens can be clicked to append, dragged from the
   palette, reordered between one or two lines, dragged out, or removed with Delete. Layouts can be global or overridden
   per provider. Manual edits select the Custom preset.
+- For Codex or Claude weekly usage, select that provider in Layout and add **Weekly %** from Usage.
+  For Antigravity's two independent families, add **Gemini weekly %** and **Claude/GPT weekly %**;
+  both appear when known weekly quota-summary data is available. The separate Gemini provider reports
+  Pro/Flash quotas, not these Antigravity family allowances; it does not synthesize a weekly quota.
 - Layout palette chips use their natural label widths and wrap into rows instead of squeezing longer token names into equal-width columns.
 - Time tokens offer Session and Weekly variants of Resets in and Reset at, including in conditional branches.
   The original unqualified reset tokens continue to follow the automatic window. A selected window that is
@@ -64,7 +68,7 @@ read_when:
 | Usage | Grok Bot % (Cursor) | Named allowance percentage; hidden when the allowance is absent |
 | Usage | Session pace, Weekly pace, Auto pace | Signed pace delta for that window |
 | Time | Resets in, Reset at (automatic, Session, Weekly), Runs out | Selected-window relative reset, absolute reset, or pace estimate |
-| Money | Balance, Cost today, Cost 30d | OpenRouter credit balance, or local cost estimate for the selected period |
+| Money | Balance, Cost today, Cost 30d | Provider balance or remaining credits, or local cost estimate for the selected period |
 | Structure | Separator dot, Space, Line break | Spacing and optional two-line composition |
 
 The pace tokens render the same delta the menu card shows as "in deficit"/"in reserve", in the compact signed form the
@@ -80,7 +84,11 @@ preview, and keeps the signed percentages. Zero and unavailable pace stay neutra
 It colors **Session pace**, **Weekly pace**, and **Auto pace** in the layout editor. Enabling it does not add tokens,
 rewrite stored layouts, or migrate legacy display modes. Existing installs stay monochrome until the option is enabled.
 
-Balance is available only for OpenRouter and renders the same remaining-credit value shown in its menu card. Auto %
+Balance uses the same provider amount as the menu card: Codex credits, OpenRouter remaining credits, MiMo,
+DeepSeek, DeepInfra, Moonshot, Poe points, Hypercredits, Atlas Cloud and Vercel available balances, or OpenCode Go's
+Zen balance. DevPass shows remaining billing-cycle credits (a plan allowance); Mistral shows monthly API spend.
+An explicit Balance token remains available alongside quota percentages. Missing amounts render a dash;
+unrelated spend is never substituted. Conditional balance thresholds remain OpenRouter-only. Auto %
 uses the same provider-aware automatic-window resolution as the legacy menu bar metric setting. For balance-only
 providers, Auto % shows the available money, points, or API spend instead of inventing a quota percentage. Both the
 status item and editor preview preserve real quota percentages when a usable limit exists. When a reset token

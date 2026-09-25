@@ -54,6 +54,7 @@ extension UsageStore {
         guard let header = CookieHeaderNormalizer.normalize(self.settings.cursorCookieHeader) else {
             self.lastTokenFetchAt.removeValue(forKey: provider.instanceID)
             self.lastTokenFetchScope.removeValue(forKey: provider.instanceID)
+            self.tokenFetchFailureCooldowns.removeValue(forKey: provider.instanceID)
             self.clearTokenSnapshot(for: provider)
             self.tokenErrors[provider.instanceID] = "Cursor cost requires a non-empty Manual cookie header."
             self.tokenFailureGates[provider.instanceID]?.reset()
@@ -282,13 +283,7 @@ extension UsageStore {
         accounting: PiSnapshotAccounting?)
     {
         self.tokenSnapshotPublicationRevisions[provider.instanceID, default: 0] &+= 1
-        self.tokenSnapshotPublications[provider.instanceID] = TokenSnapshotPublication(
-            snapshot: snapshot,
-            publicationRevision: self.tokenSnapshotPublicationRevision(for: provider),
-            providerConfigRevision: self.settings.providerConfigRevision(for: provider),
-            scopeSignature: self.tokenSnapshotScopeSignature(for: provider),
-            accounting: accounting)
-        self.warmQuotaProjection(for: snapshot)
+        self.installCachedTokenSnapshot(snapshot, for: provider, accounting: accounting)
         self.synchronizeSharedSpendDashboardAfterTokenPublication(for: provider)
     }
 
@@ -303,12 +298,12 @@ extension UsageStore {
     }
 
     func installCachedTokenSnapshot(
-        _ snapshot: CostUsageTokenSnapshot,
+        _ snapshot: CostUsageTokenSnapshot?,
         for provider: UsageProvider,
         accounting: PiSnapshotAccounting? = nil)
     {
         self.tokenSnapshotPublications[provider.instanceID] = TokenSnapshotPublication(
-            snapshot: snapshot,
+            snapshot: snapshot?.reporting(self.settings.costReportingPeriod),
             publicationRevision: self.tokenSnapshotPublicationRevision(for: provider),
             providerConfigRevision: self.settings.providerConfigRevision(for: provider),
             scopeSignature: self.tokenSnapshotScopeSignature(for: provider),
@@ -387,7 +382,9 @@ extension UsageStore {
             guard let self else { return }
             guard await self.refreshPiHistoryScope(for: .codex) else { return }
             let scope = self.tokenCostScope(for: .codex)
-            let historyDays = self.settings.costUsageHistoryDays
+            let historyDays = self.settings.costReportingPeriod.days(
+                now: now,
+                calendar: self.settings.costUsageBucketCalendar)
             let publicationRevision = self.providerPublicationRevision(for: .codex)
             let providerConfigRevision = self.settings.providerConfigRevision(for: .codex)
             let costUsageSettingsRevision = self.settings.costUsageSettingsRevision
@@ -534,25 +531,23 @@ extension UsageStore {
             base += "|piRows=\(piRowsScope)"
         }
         if includeSettingsRevision {
-            base += "|settingsRevision=\(self.settings.costUsageSettingsRevision)"
+            base += "|settingsRevision=\(self.settings.costUsageSettingsRevision)|"
+                + self.settings.costReportingPeriod.identity(
+                    now: Date(),
+                    calendar: self.settings.costUsageBucketCalendar)
         }
         guard provider == .cursor else {
             return base
         }
 
         let source = self.settings.cursorCookieSource
-        if source == .manual {
-            let headerFingerprint = CookieHeaderNormalizer.normalize(self.settings.cursorCookieHeader)
+        let credentialFingerprint = if source == .manual {
+            CookieHeaderNormalizer.normalize(self.settings.cursorCookieHeader)
                 .map(CookieHeaderCache.credentialFingerprint) ?? "missing"
-            return "\(base)|cursorCookie=manual:\(headerFingerprint)"
+        } else {
+            self.cursorCostCredentialFingerprintForDisplay() ?? "unresolved"
         }
-
-        let credentialFingerprint = self.cursorCostCredentialFingerprintForDisplay() ?? "unresolved"
-        return self.cursorCostScopeSignature(
-            historyDays: historyDays,
-            source: source,
-            credentialFingerprint: credentialFingerprint,
-            includeSettingsRevision: includeSettingsRevision)
+        return "\(base)|cursorCookie=\(source.rawValue):\(credentialFingerprint)"
     }
 
     private func cursorCostCredentialFingerprintForDisplay() -> String? {
@@ -572,7 +567,10 @@ extension UsageStore {
         let scope = self.tokenCostScope(for: .cursor)
         var signature = "\(scope.signature)|historyDays=\(historyDays)"
         if includeSettingsRevision {
-            signature += "|settingsRevision=\(self.settings.costUsageSettingsRevision)"
+            signature += "|settingsRevision=\(self.settings.costUsageSettingsRevision)|"
+                + self.settings.costReportingPeriod.identity(
+                    now: Date(),
+                    calendar: self.settings.costUsageBucketCalendar)
         }
         return "\(signature)|cursorCookie=\(source.rawValue):\(credentialFingerprint)"
     }
@@ -598,6 +596,22 @@ extension UsageStore {
         let costSettingsRevision: UInt64
         let historyDays: Int
         let signature: String
+    }
+
+    struct TokenFetchFailureCooldown {
+        let attemptedAt: Date
+        let retryAfter: Date
+        let scope: TokenRefreshPublicationScope
+    }
+
+    func tokenRefreshFailureIsCoolingDown(provider: UsageProvider, now: Date) -> Bool {
+        guard let failure = self.tokenFetchFailureCooldowns[provider.instanceID],
+              self.tokenFetchTTL != nil,
+              now >= failure.attemptedAt,
+              now < failure.retryAfter
+        else { return false }
+        // A failed query may have no snapshot, but still owns its account, settings, and provider lifecycle scope.
+        return self.tokenRefreshPublicationDisposition(provider: provider, scope: failure.scope) == .current
     }
 
     func tokenRefreshPublicationScope(
@@ -678,28 +692,33 @@ extension UsageStore {
         // Provider-specific by design: snapshot-backed spend sources own their live billing
         // projection. Grok contributes local session tokens only; xAI contributes Management API
         // daily spend only. Neither converts a quota or prepaid balance into dollars.
-        switch provider {
+        let result: CostUsageTokenSnapshot? = switch provider {
         case .openai:
-            return snapshot?.openAIAPIUsage?.toCostUsageTokenSnapshot()
+            snapshot?.openAIAPIUsage?.toCostUsageTokenSnapshot()
         case .mistral:
-            return snapshot?.mistralUsage?.toCostUsageTokenSnapshot(historyDays: windowDays)
+            snapshot?.mistralUsage?.toCostUsageTokenSnapshot(historyDays: windowDays)
         case .opencodego:
             // Web-only source mode and machines with no readable local database leave
             // `opencodegoUsage.daily` empty; a non-nil-but-dataless projection would still
             // surface a Cost row whose history submenu has nothing to render.
-            return snapshot?.opencodegoUsage.flatMap { usage in
+            snapshot?.opencodegoUsage.flatMap { usage in
                 usage.daily.isEmpty ? nil : usage
                     .toCostUsageTokenSnapshot(historyDays: windowDays)
             }
         case .openrouter:
-            return snapshot?.costUsage
+            snapshot?.costUsage
         case .xai:
-            return snapshot.flatMap { XAICostUsageMapping.tokenSnapshot(from: $0, historyDays: windowDays) }
+            snapshot.flatMap { XAICostUsageMapping.tokenSnapshot(from: $0, historyDays: windowDays) }
         case .grok:
-            return self.grokLocalTokenSnapshot(from: snapshot, historyDays: windowDays)
+            self.grokLocalTokenSnapshot(from: snapshot, historyDays: windowDays)
         default:
-            return nil
+            nil
         }
+        guard historyDays == nil else { return result }
+        return result?.selecting(
+            self.settings.costReportingPeriod,
+            now: Date(),
+            calendar: self.settings.costUsageBucketCalendar)
     }
 
     nonisolated static func tokenCostRequiresProviderSnapshot(_ provider: UsageProvider) -> Bool {
@@ -722,22 +741,18 @@ extension UsageStore {
             .appendingPathComponent("cost-usage", isDirectory: true)
     }
 
-    func clearCostUsageCache() async -> String? {
+    func clearCostUsageCache(
+        fileManagerFactory: @escaping @Sendable () -> FileManager = { .default }) async -> String?
+    {
         let errorMessage: String? = await Task.detached(priority: .utility) {
-            let fm = FileManager.default
-            let cacheDirs = [
-                Self.costUsageCacheDirectory(fileManager: fm),
-            ]
-
-            for cacheDir in cacheDirs {
-                do {
-                    try fm.removeItem(at: cacheDir)
-                } catch let error as NSError {
-                    if error.domain == NSCocoaErrorDomain, error.code == NSFileNoSuchFileError {
-                        continue
-                    }
-                    return error.localizedDescription
+            let fileManager = fileManagerFactory()
+            do {
+                try fileManager.removeItem(at: Self.costUsageCacheDirectory(fileManager: fileManager))
+            } catch let error as NSError {
+                if error.domain == NSCocoaErrorDomain, error.code == NSFileNoSuchFileError {
+                    return nil
                 }
+                return error.localizedDescription
             }
             return nil
         }.value
@@ -748,6 +763,7 @@ extension UsageStore {
         self.tokenErrors.removeAll()
         self.lastTokenFetchAt.removeAll()
         self.lastTokenFetchScope.removeAll()
+        self.tokenFetchFailureCooldowns.removeAll()
         self.tokenFailureGates[.codex]?.reset()
         self.tokenFailureGates[.claude]?.reset()
         return nil
@@ -841,6 +857,7 @@ extension UsageStore {
         self.tokenFailureGates[provider.instanceID]?.reset()
         self.lastTokenFetchAt.removeValue(forKey: provider.instanceID)
         self.lastTokenFetchScope.removeValue(forKey: provider.instanceID)
+        self.tokenFetchFailureCooldowns.removeValue(forKey: provider.instanceID)
         self.lastSpendDashboardTokenFetchAt.removeValue(forKey: provider.instanceID)
         self.lastSpendDashboardTokenFetchScope.removeValue(forKey: provider.instanceID)
     }
@@ -857,15 +874,16 @@ extension UsageStore {
         }
         self.lastTokenFetchAt.removeValue(forKey: provider.instanceID)
         self.lastTokenFetchScope.removeValue(forKey: provider.instanceID)
+        self.tokenFetchFailureCooldowns.removeValue(forKey: provider.instanceID)
     }
 
-    /// Fast failures may retry on the next scheduled pass instead of waiting out the fetch
-    /// TTL; timed-out scans keep the TTL so a slow corpus cannot thrash back-to-back rescans.
-    nonisolated static func tokenFetchFailureAllowsEarlyRetry(_ error: Error) -> Bool {
-        if case CostUsageError.timedOut = error {
-            return false
+    /// Timeouts keep the normal cadence; forbidden cost requests wait hours rather than retrying every tick.
+    nonisolated static func tokenFetchFailureRetryDelay(_ error: Error, ttl: TimeInterval?) -> TimeInterval? {
+        switch error {
+        case CostUsageError.timedOut: ttl
+        case CursorStatusProbeError.costRequestForbidden: ttl.map { max($0, 6 * 60 * 60) }
+        default: nil
         }
-        return true
     }
 
     func tokenCostIsAccountAgnostic(for provider: UsageProvider) -> Bool {

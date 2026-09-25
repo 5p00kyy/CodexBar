@@ -74,6 +74,7 @@ extension UsageStore {
                 self.invalidateProviderAvailabilityCache()
                 self.probeLogs = [:]
                 guard self.startupBehavior.automaticallyStartsBackgroundWork else { return }
+                self.retireDisabledCredentialNotifications()
                 self.startTimer()
                 self.updateProviderRuntimes()
                 let enabledNow = Set(self.settings.enabledProvidersOrdered(
@@ -438,6 +439,7 @@ final class UsageStore {
     }
 
     @ObservationIgnored var quotaWarningState: [QuotaWarningStateKey: QuotaWarningState] = [:]
+    @ObservationIgnored var lastClaudeQuotaWarningAccount: String?
     @ObservationIgnored let hookRateLimiter = HookRateLimiter()
     @ObservationIgnored var providerStatusHadIssue: [ProviderInstanceID: Bool] = [:]
     /// Last observed usage fraction (0...1) per account and quota-warning lane, used
@@ -445,9 +447,17 @@ final class UsageStore {
     @ObservationIgnored var quotaLowHookUsage: [QuotaWarningStateKey: Double] = [:]
     @ObservationIgnored var quotaLowHookConfigRevision: Int?
     @ObservationIgnored var predictivePaceWarningNotifiedKeys: Set<PredictivePaceWarningStateKey> = []
+    #if DEBUG
+    @ObservationIgnored var _test_credentialNotificationPost: ((String, @escaping @MainActor (Bool) -> Void) -> Void)?
+    @ObservationIgnored var _test_credentialNotificationRemove: ((String) -> Void)?
+    #endif
+    @ObservationIgnored var claudeCredentialNotificationScopes: [String: String] = [:]
+    @ObservationIgnored var credentialNotificationsStopped = false
+    @ObservationIgnored var credentialNotificationEpisodes: [CredentialNotificationKey: UUID] = [:]
     @ObservationIgnored var lastPermissionPromptNotificationAt: [ProviderInstanceID: Date] = [:]
     @ObservationIgnored var lastTokenFetchAt: [ProviderInstanceID: Date] = [:]
     @ObservationIgnored var lastTokenFetchScope: [ProviderInstanceID: String] = [:]
+    @ObservationIgnored var tokenFetchFailureCooldowns: [ProviderInstanceID: TokenFetchFailureCooldown] = [:]
     @ObservationIgnored var piHistoryScopeFingerprint: String?
     @ObservationIgnored var piHistoryScopeGeneration: UInt64 = 0
     @ObservationIgnored var piHistoryScopeRefreshTask: Task<Bool, Never>?
@@ -1480,12 +1490,7 @@ extension UsageStore {
             return
         }
 
-        guard self.settings.isCostUsageEffectivelyEnabled(for: provider) else {
-            self.resetTokenUsageState(for: provider)
-            return
-        }
-
-        guard self.isEnabled(provider) else {
+        guard self.settings.isCostUsageEffectivelyEnabled(for: provider), self.isEnabled(provider) else {
             self.resetTokenUsageState(for: provider)
             return
         }
@@ -1503,7 +1508,9 @@ extension UsageStore {
         guard !self.tokenRefreshInFlight.contains(provider.instanceID) else { return }
 
         let now = Date()
-        let historyDays = self.settings.costUsageHistoryDays
+        let historyDays = self.settings.costReportingPeriod.days(
+            now: now,
+            calendar: self.settings.costUsageBucketCalendar)
         // Cursor cost reuses the status cookie policy: a Manual source forwards the manual header so
         // cost and status share the same session; other sources fall back to auto resolution.
         guard case let .proceed(cursorCookieHeaderOverride) = self.prepareCursorCostCookie(for: provider) else {
@@ -1513,6 +1520,9 @@ extension UsageStore {
         let costScopeSignature = self.tokenSnapshotScopeSignature(for: provider)
         let publicationScope = self.tokenRefreshPublicationScope(
             for: provider, historyDays: historyDays, costScopeSignature: costScopeSignature)
+        if !force, self.tokenRefreshFailureIsCoolingDown(provider: provider, now: now) {
+            return
+        }
         if !force, self.tokenRefreshCanReuseCurrentSnapshot(
             provider: provider,
             now: now,
@@ -1520,6 +1530,7 @@ extension UsageStore {
         {
             return
         }
+        self.tokenFetchFailureCooldowns.removeValue(forKey: provider.instanceID)
         self.lastTokenFetchAt[provider.instanceID] = now
         self.lastTokenFetchScope[provider.instanceID] = costScopeSignature
         self.tokenRefreshInFlight.insert(provider.instanceID)
@@ -1569,24 +1580,23 @@ extension UsageStore {
                 self.requestTokenRefreshAfterStaleCompletion(for: provider)
                 return
             }
-            if error is CancellationError {
+            let cancelled = Task.isCancelled || error is CancellationError
+            let retryDelay = Self.tokenFetchFailureRetryDelay(error, ttl: self.tokenFetchTTL)
+            if cancelled || retryDelay == nil {
                 self.clearTokenFetchMetadataIfMatching(
                     provider: provider,
                     attemptedAt: now,
                     costScopeSignature: costScopeSignature)
-                return
+            } else if let retryDelay {
+                self.tokenFetchFailureCooldowns[provider.instanceID] = TokenFetchFailureCooldown(
+                    attemptedAt: now, retryAfter: now.addingTimeInterval(retryDelay), scope: publicationScope)
             }
+            if cancelled { return }
             let duration = Date().timeIntervalSince(startedAt)
             let msg = error.localizedDescription
             let durationText = String(format: "%.2f", duration)
             let message = "cost usage failed provider=\(provider.rawValue) duration=\(durationText)s error=\(msg)"
             self.tokenCostLogger.error(message)
-            if Self.tokenFetchFailureAllowsEarlyRetry(error) {
-                self.clearTokenFetchMetadataIfMatching(
-                    provider: provider,
-                    attemptedAt: now,
-                    costScopeSignature: costScopeSignature)
-            }
             let hadPriorData = self.tokenSnapshotPublications[provider.instanceID]?.snapshot != nil
             let shouldSurface = self.tokenFailureGates[provider.instanceID]?
                 .shouldSurfaceError(onFailureWithPriorData: hadPriorData) ?? true
