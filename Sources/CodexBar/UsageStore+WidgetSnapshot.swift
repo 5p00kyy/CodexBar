@@ -554,32 +554,11 @@ extension UsageStore {
                     percentLeft: window.window.remainingPercent)
             })
         }
-        // Provider-specific by design: the Mistral Monthly Plan is a named extraRateWindow picked by its metric.
-        if provider == .mistral {
-            rows = Self.mistralWidgetRows(
-                rows,
-                snapshot: snapshot,
-                preference: self.settings.menuBarMetricPreference(for: provider, snapshot: snapshot))
-        }
-        return rows.filter { $0.percentLeft != nil }
-    }
-
-    /// Widgets follow the Mistral menu bar metric: Automatic shows both allowances, a specific choice only that one.
-    private nonisolated static func mistralWidgetRows(
-        _ rows: [WidgetSnapshot.WidgetUsageRowSnapshot],
-        snapshot: UsageSnapshot,
-        preference: MenuBarMetricPreference) -> [WidgetSnapshot.WidgetUsageRowSnapshot]
-    {
-        guard preference != .primary,
-              let plan = snapshot.extraRateWindows?.first(where: { $0.id == "mistral-monthly-plan" }),
-              plan.usageKnown
-        else { return rows }
-        let planRow = WidgetSnapshot.WidgetUsageRowSnapshot(
-            id: plan.id,
-            title: plan.title,
-            percentLeft: plan.window.remainingPercent,
-            window: plan.window)
-        return preference == .monthlyPlan ? [planRow] : rows + [planRow]
+        return ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRows(
+            rows,
+            snapshot: snapshot,
+            metric: self.settings.menuBarMetricPreference(for: provider, snapshot: snapshot).providerMetric)
+            .filter { $0.percentLeft != nil }
     }
 
     /// Identifier prefix Claude fetchers use for model-scoped weekly carve-outs (for example, Fable).
@@ -617,7 +596,10 @@ extension UsageStore {
     /// Widget rows kept after a failed refresh were picked under the old metric, so drop them until a fetch succeeds.
     func invalidateWidgetUsageForMetricChanges(from old: [String: String], to new: [String: String]) {
         for key in Set(old.keys).union(new.keys) where old[key] != new[key] {
-            UsageProvider(rawValue: key).map(self.invalidateGenericWidgetUsage(for:))
+            guard let provider = UsageProvider(rawValue: key),
+                  ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric
+            else { continue }
+            self.invalidateGenericWidgetUsage(for: provider)
         }
     }
 }

@@ -206,8 +206,9 @@ cross-process locking. Removing the source file manually does not delete state. 
 cookies, and tokens belong in secure settings. Storage does not alter `ctx.cache` or the settings `persist` allowlist.
 
 Bundled first-party providers that have cut over to JavaScript use the shared runtime's 20-second hung-script watchdog.
-A timeout fails that refresh and discards the poisoned worker so the next refresh starts with a fresh context; this is
-production-default and does not depend on `CODEXBAR_JS_PROVIDERS`.
+A timeout fails that refresh and discards the poisoned worker before returning the error, so an immediate retry starts
+with a fresh context. Cancellation retires the worker in the same way. This is production-default and does not depend
+on `CODEXBAR_JS_PROVIDERS`.
 QuickJS enforces the watchdog in-engine with `JS_SetInterruptHandler`, caps the runtime heap at 64 MiB, and caps the
 JavaScript stack at 2 MiB. The interrupt terminates evaluation on its confined thread; timed-out scripts do not leave an
 abandoned evaluation thread behind. On Apple platforms, `CODEXBAR_PLUGIN_ENGINE=jsc` selects the JavaScriptCore rollback

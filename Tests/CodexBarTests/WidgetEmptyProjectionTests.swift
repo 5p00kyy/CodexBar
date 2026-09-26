@@ -265,6 +265,30 @@ struct WidgetEmptyProjectionTests {
         #expect(published.entries.map(\.provider) == (changedProvider == "mistral" ? [] : [.mistral]))
     }
 
+    @Test
+    func `metric changes retain widgets whose rows are independent of the menu metric`() async throws {
+        let (store, settings) = self.makeStore(providers: [.kimi])
+        var saved: WidgetSnapshot?
+        store._test_widgetSnapshotSaveOverride = { saved = $0 }
+        self.seed(store, providers: [.kimi])
+        store.persistWidgetSnapshot(reason: "synthetic-success")
+        await store.widgetSnapshotPersistTask?.value
+        let before = try #require(saved?.entries.first)
+
+        store.snapshots.removeAll()
+        store.errors = [.kimi: "Synthetic offline failure"]
+        let previousMetrics = settings.menuBarMetricPreferencesRaw
+        settings.setMenuBarMetricPreference(.monthlyPlan, for: .kimi)
+        #expect(settings.menuBarMetricPreferencesRaw != previousMetrics)
+        store.invalidateWidgetUsageForMetricChanges(from: previousMetrics, to: settings.menuBarMetricPreferencesRaw)
+        store.persistWidgetSnapshot(reason: "synthetic-unrelated-metric-change")
+        await store.widgetSnapshotPersistTask?.value
+        let after = try #require(saved?.entries.first)
+        #expect(after.provider == before.provider)
+        #expect(after.usageRows == before.usageRows)
+        #expect(after.updatedAt == before.updatedAt)
+    }
+
     private func makeStore(
         providers: Set<UsageProvider> = [.minimax, .deepseek]) -> (UsageStore, SettingsStore)
     {
