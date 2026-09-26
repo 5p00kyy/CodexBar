@@ -188,6 +188,7 @@ extension UsageStore {
     func invalidateGenericWidgetUsage(for provider: UsageProvider) {
         // Provider-specific by design: Claude keeps its existing owner-aware preservation policy.
         guard provider != .claude else { return }
+        self.lastWidgetSourceSnapshots[provider.instanceID] = nil
         self.widgetUsagePreservationBlockedProviders.insert(provider.instanceID)
         // A successful fetch cannot make an older queued account valid again.
         if self.lastQueuedWidgetSnapshot?.entries.contains(where: { $0.provider == provider.instanceID }) == true {
@@ -282,8 +283,11 @@ extension UsageStore {
         let usageRows = snapshot.map {
             self.widgetUsageRows(provider: provider, snapshot: $0, now: now)
         } ?? preservedClaudeUsage?.usageRows ?? []
-        // Preserved entries rebuild their rows from this unfiltered source when a metric changes while offline.
-        self.lastWidgetSourceSnapshots[provider.instanceID] = snapshot
+        if ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric,
+           let snapshot
+        {
+            self.lastWidgetSourceSnapshots[provider.instanceID] = snapshot
+        }
 
         let creditsRemaining: Double?
         let codeReviewRemaining: Double?
@@ -556,32 +560,11 @@ extension UsageStore {
                     percentLeft: window.window.remainingPercent)
             })
         }
-        // Provider-specific by design: the Mistral Monthly Plan is a named extraRateWindow picked by its metric.
-        if provider == .mistral {
-            rows = Self.mistralWidgetRows(
-                rows,
-                snapshot: snapshot,
-                preference: self.settings.menuBarMetricPreference(for: provider, snapshot: snapshot))
-        }
-        return rows.filter { $0.percentLeft != nil }
-    }
-
-    /// Widgets follow the Mistral menu bar metric: Monthly Plan shows the Vibe plan, and every other choice keeps the
-    /// Included API allowance, as the menu bar does.
-    private nonisolated static func mistralWidgetRows(
-        _ rows: [WidgetSnapshot.WidgetUsageRowSnapshot],
-        snapshot: UsageSnapshot,
-        preference: MenuBarMetricPreference) -> [WidgetSnapshot.WidgetUsageRowSnapshot]
-    {
-        guard preference == .monthlyPlan,
-              let plan = snapshot.extraRateWindows?.first(where: { $0.id == "mistral-monthly-plan" }),
-              plan.usageKnown
-        else { return rows }
-        return [WidgetSnapshot.WidgetUsageRowSnapshot(
-            id: plan.id,
-            title: plan.title,
-            percentLeft: plan.window.remainingPercent,
-            window: plan.window)]
+        return ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRows(
+            rows,
+            snapshot: snapshot,
+            metric: self.settings.menuBarMetricPreference(for: provider, snapshot: snapshot).providerMetric)
+            .filter { $0.percentLeft != nil }
     }
 
     /// Identifier prefix Claude fetchers use for model-scoped weekly carve-outs (for example, Fable).
@@ -616,23 +599,21 @@ extension UsageStore {
         }
     }
 
-    /// Rows kept after a failed refresh were picked under the metric of their last publish. Rebuild them from that
-    /// publish's unfiltered snapshot so a later metric change, or several, shows what a fresh publish would.
+    /// Reproject the last published source without changing its measurement time.
     private func preservedWidgetEntryForCurrentMetric(
         _ entry: WidgetSnapshot.ProviderEntry) -> WidgetSnapshot.ProviderEntry
     {
-        // Provider-specific by design: only Mistral widget rows follow a menu bar metric.
-        guard entry.provider == .mistral, let source = self.lastWidgetSourceSnapshots[entry.provider] else {
-            return entry
-        }
-        let kept = self.widgetUsageRows(provider: .mistral, snapshot: source, now: entry.updatedAt)
+        guard let provider = entry.provider.firstPartyProvider,
+              ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric,
+              let snapshot = self.lastWidgetSourceSnapshots[entry.provider]
+        else { return entry }
         return WidgetSnapshot.ProviderEntry(
             instanceID: entry.provider,
             updatedAt: entry.updatedAt,
             primary: entry.primary,
             secondary: entry.secondary,
             tertiary: entry.tertiary,
-            usageRows: kept,
+            usageRows: self.widgetUsageRows(provider: provider, snapshot: snapshot, now: entry.updatedAt),
             creditsRemaining: entry.creditsRemaining,
             codeReviewRemainingPercent: entry.codeReviewRemainingPercent,
             tokenUsage: entry.tokenUsage,

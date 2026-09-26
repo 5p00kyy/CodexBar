@@ -3,46 +3,62 @@ import Foundation
 import Testing
 @testable import CodexBar
 
+@Suite(.serialized, ProviderTransportRegressionFixtures())
 @MainActor
 struct MistralWidgetSnapshotTests {
     @Test(arguments: [
         (MenuBarMetricPreference.automatic, ["primary"]),
         (MenuBarMetricPreference.primary, ["primary"]),
         (MenuBarMetricPreference.monthlyPlan, ["mistral-monthly-plan"]),
-    ])
+    ], ["known", "unknown", "missing"])
     func `widget snapshot follows the Mistral metric for Monthly Plan rows`(
-        preference: MenuBarMetricPreference,
-        expectedIDs: [String]) async throws
+        selection: (MenuBarMetricPreference, [String]),
+        planState: String) async throws
     {
+        let (preference, selectedIDs) = selection
+        let expectedIDs = planState == "known" ? selectedIDs : ["primary"]
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
         let suite = "UsageStoreWidgetSnapshotTests-mistral-monthly-plan-\(preference.rawValue)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-
-        let settings = SettingsStore(
-            userDefaults: defaults,
-            configStore: testConfigStore(suiteName: suite),
-            zaiTokenStore: NoopZaiTokenStore(),
-            syntheticTokenStore: NoopSyntheticTokenStore())
+        let root = ProviderTransportRegressionFixtures.root.appendingPathComponent(UUID().uuidString)
+        let environment = ["HOME": root.path, "CODEX_HOME": root.appendingPathComponent("codex").path]
+        let settings = testSettingsStore(
+            suiteName: suite,
+            userDefaults: InMemoryUserDefaults(),
+            config: testConfigWithAllProvidersDisabled())
+        settings._test_codexReconciliationEnvironment = environment
         settings.statusChecksEnabled = false
+        settings.refreshFrequency = .manual
         settings.setMenuBarMetricPreference(preference, for: .mistral)
-
+        enableTestProviders([.mistral], settings: settings)
         let store = UsageStore(
-            fetcher: UsageFetcher(environment: [:]),
-            browserDetection: BrowserDetection(cacheTTL: 0),
-            settings: settings)
+            fetcher: UsageFetcher(environment: environment),
+            browserDetection: BrowserDetection(homeDirectory: root.path, fileExists: { _ in false }),
+            settings: settings,
+            historicalUsageHistoryStore: HistoricalUsageHistoryStore(fileURL: root
+                .appendingPathComponent("history.json")),
+            planUtilizationHistoryStore: PlanUtilizationHistoryStore(directoryURL: nil),
+            startupBehavior: .testing,
+            environmentBase: environment,
+            widgetSnapshotURL: root.appendingPathComponent("widget.json"),
+            widgetTimelineReloader: {})
         let planWindow = RateWindow(
             usedPercent: 40,
             windowMinutes: nil,
-            resetsAt: Date().addingTimeInterval(5 * 24 * 60 * 60),
+            resetsAt: now.addingTimeInterval(5 * 24 * 60 * 60),
             resetDescription: "€102.00 / €255.00 · €153.00 left")
         store._setSnapshotForTesting(
             UsageSnapshot(
                 primary: RateWindow(usedPercent: 10, windowMinutes: nil, resetsAt: nil, resetDescription: nil),
                 secondary: nil,
-                extraRateWindows: [
-                    NamedRateWindow(id: "mistral-monthly-plan", title: "Monthly Plan", window: planWindow),
+                extraRateWindows: planState == "missing" ? [] : [
+                    NamedRateWindow(
+                        id: "mistral-monthly-plan",
+                        title: "Monthly Plan",
+                        window: planWindow,
+                        usageKnown: planState == "known"),
+                    NamedRateWindow(id: "unrelated", title: "Unrelated", window: planWindow),
                 ],
-                updatedAt: Date()),
+                updatedAt: now),
             provider: .mistral)
 
         var widgetSnapshots: [WidgetSnapshot] = []
@@ -61,5 +77,17 @@ struct MistralWidgetSnapshotTests {
         #expect(rows.compactMap(\.percentLeft) == expectedIDs.compactMap { percents[$0] })
         // The plan row carries its window so widgets can show when the plan resets.
         #expect(rows.last?.window == (expectedIDs.last == "mistral-monthly-plan" ? planWindow : nil))
+    }
+
+    @Test
+    func `providers without a widget row resolver retain their rows`() {
+        let rows = [WidgetSnapshot.WidgetUsageRowSnapshot(id: "custom", title: "Custom", percentLeft: 25)]
+        let snapshot = UsageSnapshot(primary: nil, secondary: nil, updatedAt: Date(timeIntervalSince1970: 1))
+        let presentation = ProviderUsagePresentation()
+        #expect(!presentation.widgetRowsFollowMenuBarMetric)
+        #expect(MistralProviderDescriptor.descriptor.presentation.widgetRowsFollowMenuBarMetric)
+        for metric in [ProviderMenuBarMetric.automatic, .primary, .monthlyPlan] {
+            #expect(presentation.widgetRows(rows, snapshot: snapshot, metric: metric) == rows)
+        }
     }
 }

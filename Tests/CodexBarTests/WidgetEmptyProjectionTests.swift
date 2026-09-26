@@ -255,6 +255,7 @@ struct WidgetEmptyProjectionTests {
         store.persistWidgetSnapshot(reason: "synthetic-success")
         await store.widgetSnapshotPersistTask?.value
         let minimaxRows = try #require(saved?.entries.first { $0.provider == .minimax }?.usageRows)
+        let mistralBefore = try #require(saved?.entries.first { $0.provider == .mistral })
 
         store.snapshots.removeAll()
         store.errors = [.minimax: "Synthetic offline failure", .mistral: "Synthetic offline failure"]
@@ -267,6 +268,43 @@ struct WidgetEmptyProjectionTests {
         let published = try #require(saved)
         #expect(published.entries.first { $0.provider == .minimax }?.usageRows == minimaxRows)
         #expect(published.entries.first { $0.provider == .mistral }?.usageRows?.map(\.id) == expectedMistralRowIDs)
+        #expect(published.entries.first { $0.provider == .mistral }?.updatedAt == mistralBefore.updatedAt)
+        #expect(published.entries.first { $0.provider == .mistral }?.primary == mistralBefore.primary)
+    }
+
+    @Test
+    func `metric changes retain widgets whose rows are independent of the menu metric`() async throws {
+        let (store, settings) = self.makeStore(providers: [.kimi])
+        var saved: WidgetSnapshot?
+        store._test_widgetSnapshotSaveOverride = { saved = $0 }
+        self.seed(store, providers: [.kimi])
+        store.persistWidgetSnapshot(reason: "synthetic-success")
+        await store.widgetSnapshotPersistTask?.value
+        let before = try #require(saved?.entries.first)
+
+        store.snapshots.removeAll()
+        store.errors = [.kimi: "Synthetic offline failure"]
+        let previousMetrics = settings.menuBarMetricPreferencesRaw
+        settings.setMenuBarMetricPreference(.monthlyPlan, for: .kimi)
+        #expect(settings.menuBarMetricPreferencesRaw != previousMetrics)
+        store.persistWidgetSnapshot(reason: "synthetic-unrelated-metric-change")
+        await store.widgetSnapshotPersistTask?.value
+        let after = try #require(saved?.entries.first)
+        #expect(after.provider == before.provider)
+        #expect(after.usageRows == before.usageRows)
+        #expect(after.updatedAt == before.updatedAt)
+    }
+
+    @Test
+    func `retained sources are opt in and cleared with provider ownership`() async {
+        let (store, _) = self.makeStore(providers: [.minimax, .mistral])
+        store._test_widgetSnapshotSaveOverride = { _ in }
+        self.seed(store, providers: [.minimax, .mistral])
+        store.persistWidgetSnapshot(reason: "synthetic-source-ownership")
+        await store.widgetSnapshotPersistTask?.value
+        #expect(Set(store.lastWidgetSourceSnapshots.keys) == Set([UsageProvider.mistral.instanceID]))
+        store.invalidateGenericWidgetUsage(for: .mistral)
+        #expect(store.lastWidgetSourceSnapshots.isEmpty)
     }
 
     private func makeStore(
