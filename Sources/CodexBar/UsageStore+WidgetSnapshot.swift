@@ -188,6 +188,7 @@ extension UsageStore {
     func invalidateGenericWidgetUsage(for provider: UsageProvider) {
         // Provider-specific by design: Claude keeps its existing owner-aware preservation policy.
         guard provider != .claude else { return }
+        self.lastWidgetSourceSnapshots[provider.instanceID] = nil
         self.widgetUsagePreservationBlockedProviders.insert(provider.instanceID)
         // A successful fetch cannot make an older queued account valid again.
         if self.lastQueuedWidgetSnapshot?.entries.contains(where: { $0.provider == provider.instanceID }) == true {
@@ -282,6 +283,11 @@ extension UsageStore {
         let usageRows = snapshot.map {
             self.widgetUsageRows(provider: provider, snapshot: $0, now: now)
         } ?? preservedClaudeUsage?.usageRows ?? []
+        if ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric,
+           let snapshot
+        {
+            self.lastWidgetSourceSnapshots[provider.instanceID] = snapshot
+        }
 
         let creditsRemaining: Double?
         let codeReviewRemaining: Double?
@@ -593,30 +599,21 @@ extension UsageStore {
         }
     }
 
-    /// Reproject retained quota data without making its original measurement look fresh.
+    /// Reproject the last published source without changing its measurement time.
     private func preservedWidgetEntryForCurrentMetric(
         _ entry: WidgetSnapshot.ProviderEntry) -> WidgetSnapshot.ProviderEntry
     {
         guard let provider = entry.provider.firstPartyProvider,
-              ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric
+              ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric,
+              let snapshot = self.lastWidgetSourceSnapshots[entry.provider]
         else { return entry }
-        let snapshot = UsageSnapshot(
-            primary: entry.primary,
-            secondary: entry.secondary,
-            tertiary: entry.tertiary,
-            extraRateWindows: (entry.usageRows ?? []).compactMap { row in
-                row.window.map {
-                    NamedRateWindow(id: row.id, title: row.title, window: $0, usageKnown: row.percentLeft != nil)
-                }
-            },
-            updatedAt: entry.updatedAt)
         return WidgetSnapshot.ProviderEntry(
             instanceID: entry.provider,
             updatedAt: entry.updatedAt,
             primary: entry.primary,
             secondary: entry.secondary,
             tertiary: entry.tertiary,
-            usageRows: self.widgetUsageRows(provider: provider, snapshot: snapshot, now: Date()),
+            usageRows: self.widgetUsageRows(provider: provider, snapshot: snapshot, now: entry.updatedAt),
             creditsRemaining: entry.creditsRemaining,
             codeReviewRemainingPercent: entry.codeReviewRemainingPercent,
             tokenUsage: entry.tokenUsage,
