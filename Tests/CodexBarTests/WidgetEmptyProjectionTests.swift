@@ -227,14 +227,12 @@ struct WidgetEmptyProjectionTests {
         #expect(saved?.entries.contains(where: { $0.providerCost != nil }) == false)
     }
 
-    private static let mistralMetricChanges: [(MenuBarMetricPreference, MenuBarMetricPreference, [String])] = [
-        (.automatic, .monthlyPlan, ["mistral-monthly-plan"]),
-        (.automatic, .primary, ["primary"]),
-        (.primary, .monthlyPlan, ["primary"]),
-        (.monthlyPlan, .primary, []),
-    ]
-
-    @Test(arguments: Self.mistralMetricChanges)
+    @Test(arguments: [
+        (MenuBarMetricPreference.automatic, MenuBarMetricPreference.monthlyPlan, ["mistral-monthly-plan"]),
+        (MenuBarMetricPreference.automatic, MenuBarMetricPreference.primary, ["primary"]),
+        (MenuBarMetricPreference.primary, MenuBarMetricPreference.monthlyPlan, ["primary"]),
+        (MenuBarMetricPreference.monthlyPlan, MenuBarMetricPreference.primary, [String]()),
+    ])
     func `metric change reapplies to preserved Mistral rows only`(
         from: MenuBarMetricPreference,
         to: MenuBarMetricPreference,
