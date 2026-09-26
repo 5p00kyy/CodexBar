@@ -613,4 +613,11 @@ extension UsageStore {
                 percentLeft: namedWindow.usageKnown ? namedWindow.window.remainingPercent : nil)
         }
     }
+
+    /// Widget rows kept after a failed refresh were picked under the old metric, so drop them until a fetch succeeds.
+    func invalidateWidgetUsageForMetricChanges(from old: [String: String], to new: [String: String]) {
+        for key in Set(old.keys).union(new.keys) where old[key] != new[key] {
+            UsageProvider(rawValue: key).map(self.invalidateGenericWidgetUsage(for:))
+        }
+    }
 }

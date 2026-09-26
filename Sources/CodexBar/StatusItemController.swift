@@ -263,6 +263,7 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
     private var lastSwitcherShowsIcons: Bool
     private var lastObservedUsageBarsShowUsed: Bool
     var lastWidgetDisplaySettingsSignature = ""
+    var lastWidgetMetricPreferencesRaw: [String: String] = [:]
     var lastAgentSessionsEnabled: Bool
     var lastAgentSessionsManualHosts: String
     var lastAgentSessionsRefreshFrequency: RefreshFrequency
@@ -425,6 +426,7 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
         self.lastMenuAdjunctReadinessSignature = self.menuAdjunctReadinessSignature()
         self.lastMenuAdjunctReadinessBaselineVersion = self.menuSession.contentVersion
         self.lastWidgetDisplaySettingsSignature = self.widgetDisplaySettingsSignature()
+        self.lastWidgetMetricPreferencesRaw = self.settings.menuBarMetricPreferencesRaw
         self.wireBindings()
         self.wireAgentSessionUpdates()
         if !SettingsStore.isRunningTests {

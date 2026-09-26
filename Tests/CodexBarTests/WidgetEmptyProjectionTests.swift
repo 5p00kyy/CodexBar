@@ -227,6 +227,44 @@ struct WidgetEmptyProjectionTests {
         #expect(saved?.entries.contains(where: { $0.providerCost != nil }) == false)
     }
 
+    @Test(arguments: ["mistral", "codex"])
+    func `metric change drops widget rows preserved under the old metric`(changedProvider: String) async throws {
+        let (store, settings) = self.makeStore(providers: [.mistral])
+        var saved: WidgetSnapshot?
+        store._test_widgetSnapshotSaveOverride = { saved = $0 }
+        settings.setMenuBarMetricPreference(.primary, for: .mistral)
+        store._setSnapshotForTesting(
+            UsageSnapshot(
+                primary: RateWindow(usedPercent: 25, windowMinutes: nil, resetsAt: nil, resetDescription: nil),
+                secondary: nil,
+                extraRateWindows: [NamedRateWindow(
+                    id: "mistral-monthly-plan",
+                    title: "Monthly Plan",
+                    window: RateWindow(usedPercent: 40, windowMinutes: nil, resetsAt: nil, resetDescription: nil))],
+                updatedAt: Date(timeIntervalSince1970: 1_800_000_000)),
+            provider: .mistral)
+        store.persistWidgetSnapshot(reason: "synthetic-success")
+        await store.widgetSnapshotPersistTask?.value
+        #expect(saved?.entries.first?.usageRows?.map(\.id) == ["primary"])
+
+        store.snapshots.removeAll()
+        store.errors = [.mistral: "Synthetic offline failure"]
+        let previousMetrics = settings.menuBarMetricPreferencesRaw
+        if changedProvider == "mistral" {
+            settings.setMenuBarMetricPreference(.monthlyPlan, for: .mistral)
+        } else {
+            settings.setMenuBarMetricPreference(.primary, for: .codex)
+        }
+        store.invalidateWidgetUsageForMetricChanges(
+            from: previousMetrics,
+            to: settings.menuBarMetricPreferencesRaw)
+        store.persistWidgetSnapshot(reason: "synthetic-metric-change")
+        await store.widgetSnapshotPersistTask?.value
+        // Another provider's metric leaves the preserved Mistral rows alone.
+        let published = try #require(saved)
+        #expect(published.entries.map(\.provider) == (changedProvider == "mistral" ? [] : [.mistral]))
+    }
+
     private func makeStore(
         providers: Set<UsageProvider> = [.minimax, .deepseek]) -> (UsageStore, SettingsStore)
     {
