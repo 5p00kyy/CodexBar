@@ -364,6 +364,10 @@ debug settings, and consent are excluded. Import does not enable activity-scan c
 iCloud projection syncs onward; the additional menu settings and switcher shortcuts stay local unless
 explicitly exported and imported. Import does not modify `config.json` or iCloud's remote-update suppression.
 
+### Menu bar controls
+
+In **Settings → Menu Bar**, inactive combined-icon controls use dimmed labels. Their titles and explanations remain readable and available to VoiceOver; label styling follows each control's enabled state, including stacked-icon restrictions. The layout size and gap controls remain independent of Merge Icons.
+
 ### Provider switcher shortcuts
 
 **Settings → General → Provider Switcher Shortcuts…** edits the same mapping as `switcherShortcuts` above.
