@@ -14,6 +14,17 @@ public struct GrokProductUsage: Sendable, Equatable {
     }
 }
 
+extension GrokProductUsage {
+    static let compositionTolerancePercent = 1.0
+
+    static func composing(_ products: [GrokProductUsage], creditUsagePercent: Double) -> [GrokProductUsage] {
+        // Shares must compose this payload's credit percentage; any malformed entry drops the breakdown.
+        guard !products.isEmpty else { return [] }
+        let sum = products.reduce(0) { $0 + $1.usedPercent }
+        return abs(sum - creditUsagePercent) <= Self.compositionTolerancePercent ? products : []
+    }
+}
+
 public struct GrokWebBillingSnapshot: Sendable, Equatable {
     public let usedPercent: Double?
     public let resetsAt: Date?
@@ -306,14 +317,14 @@ public enum GrokWebBillingFetcher {
             scan.merge(Self.scanProtobuf(payload, depth: 0))
         }
 
-        let parsedPercent = scan.fixed32Fields
+        let parsedPercentField = scan.fixed32Fields
             .filter { field in
                 field.path.last == 1 && field.value.isFinite && field.value >= 0 && field.value <= 100
             }
             .min { lhs, rhs in
                 lhs.path.count == rhs.path.count ? lhs.order < rhs.order : lhs.path.count < rhs.path.count
             }
-            .map { Double($0.value) }
+        let parsedPercent = parsedPercentField.map { Double($0.value) }
 
         let resetFields = scan.varintFields.compactMap { field -> (path: [UInt64], date: Date)? in
             let raw = field.value
@@ -344,11 +355,20 @@ public enum GrokWebBillingFetcher {
         guard let percent = parsedPercent ?? (noUsageYet ? 0 : nil) else {
             throw GrokWebBillingError.parseFailed
         }
+        let productUsage: [GrokProductUsage] = if payloads.count == 1, scan.isComplete,
+                                                  let parsedPercent, parsedPercentField?.path == [1, 1]
+        {
+            GrokProductUsage.composing(
+                Self.decodeProductUsage(payloads[0]), creditUsagePercent: parsedPercent)
+        } else {
+            []
+        }
         return GrokWebBillingSnapshot(
             usedPercent: percent,
             resetsAt: reset,
             usedPercentIsWirePublished: parsedPercent != nil,
-            usedPercentIsImplicitZero: noUsageYet && payloads.count == 1 && scan.isComplete && hasActiveCurrentPeriod)
+            usedPercentIsImplicitZero: noUsageYet && payloads.count == 1 && scan.isComplete && hasActiveCurrentPeriod,
+            productUsage: productUsage)
     }
 
     static func looksLikeProtobufPayload(_ data: Data) -> Bool {
@@ -567,6 +587,107 @@ public enum GrokWebBillingFetcher {
             true
         default:
             false
+        }
+    }
+
+    private struct ProductWireField {
+        let number: UInt64
+        let varint: UInt64?
+        let fixed32: Float?
+        let message: [UInt8]?
+    }
+
+    private static func decodeProductUsage(_ payload: Data) -> [GrokProductUsage] {
+        let bytes = [UInt8](payload)
+        var index = 0
+        var config: [UInt8]?
+        while index < bytes.count {
+            guard let field = Self.readProductWireField(bytes, index: &index) else { return [] }
+            if field.number == 1 {
+                guard let message = field.message else { return [] }
+                guard config == nil else { return [] }
+                config = message
+            }
+        }
+        guard let config else { return [] }
+
+        var products: [GrokProductUsage] = []
+        var seenIDs: Set<UInt64> = []
+        index = 0
+        while index < config.count {
+            guard let field = Self.readProductWireField(config, index: &index) else { return [] }
+            guard field.number == 7 else { continue }
+            guard let entry = field.message else { return [] }
+            guard let (id, percent) = Self.decodeProductEntry(entry), seenIDs.insert(id).inserted else {
+                return []
+            }
+            // Only live-verified product IDs are named.
+            let name: String? = switch id {
+            case 2: "GrokBuild"
+            case 4: "GrokChat"
+            default: nil
+            }
+            if let name {
+                products.append(GrokProductUsage(product: name, usedPercent: percent))
+            } else if percent > 0 {
+                return []
+            }
+        }
+        return products
+    }
+
+    private static func decodeProductEntry(_ bytes: [UInt8]) -> (UInt64, Double)? {
+        var index = 0
+        var id: UInt64?
+        var percent = 0.0
+        while index < bytes.count {
+            guard let field = Self.readProductWireField(bytes, index: &index) else { return nil }
+            switch field.number {
+            case 1:
+                guard let value = field.varint else { return nil }
+                id = value
+            case 2:
+                guard let value = field.fixed32 else { return nil }
+                percent = Double(value)
+            default:
+                break
+            }
+        }
+        guard let id, percent.isFinite, percent >= 0 else { return nil }
+        return (id, percent)
+    }
+
+    private static func readProductWireField(_ bytes: [UInt8], index: inout Int) -> ProductWireField? {
+        guard let key = readVarint(bytes, index: &index),
+              key >> 3 > 0, key >> 3 <= 536_870_911
+        else { return nil }
+        let number = key >> 3
+        switch key & 0x07 {
+        case 0:
+            guard let value = Self.readVarint(bytes, index: &index) else { return nil }
+            return ProductWireField(number: number, varint: value, fixed32: nil, message: nil)
+        case 1:
+            guard index + 8 <= bytes.count else { return nil }
+            index += 8
+            return ProductWireField(number: number, varint: nil, fixed32: nil, message: nil)
+        case 2:
+            guard let length = Self.readVarint(bytes, index: &index),
+                  length <= UInt64(bytes.count - index)
+            else { return nil }
+            let end = index + Int(length)
+            let message = Array(bytes[index..<end])
+            index = end
+            return ProductWireField(number: number, varint: nil, fixed32: nil, message: message)
+        case 5:
+            guard index + 4 <= bytes.count else { return nil }
+            let bits = UInt32(bytes[index])
+                | (UInt32(bytes[index + 1]) << 8)
+                | (UInt32(bytes[index + 2]) << 16)
+                | (UInt32(bytes[index + 3]) << 24)
+            index += 4
+            return ProductWireField(number: number, varint: nil, fixed32: Float(bitPattern: bits), message: nil)
+        default:
+            return nil
         }
     }
 
