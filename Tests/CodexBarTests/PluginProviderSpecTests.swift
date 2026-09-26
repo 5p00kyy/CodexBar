@@ -17,12 +17,15 @@ struct PluginProviderSpecTests {
         .zenmux,
         .clinepass,
         .aiand,
+        .synthetic, .chutes, .v0, .elevenlabs, .neuralwatt, .clawrouter,
+        .aixy, .bifrost, .deepgram, .llmproxy, .litellm, .sub2api, .llmman,
     ]
 
     @Test
-    func `pilot registration and settings preserve their baseline`() throws {
+    func `plugin registration and settings preserve their baseline`() async throws {
         let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: "PluginProviderSpecTests")
-        let rows = try Self.providers.map { provider -> [String: Any] in
+        var rows: [[String: Any]] = []
+        for provider in Self.providers {
             let descriptor = ProviderDescriptorRegistry.descriptor(for: provider)
             let metadata = descriptor.metadata
             let implementation = try #require(ProviderCatalog.implementation(for: provider))
@@ -34,6 +37,10 @@ struct PluginProviderSpecTests {
                 "toggle": metadata.toggleTitle,
                 "cli": [descriptor.cli.name] + descriptor.cli.aliases,
                 "dashboard": metadata.dashboardURL ?? "",
+                "subscriptionDashboard": metadata.subscriptionDashboardURL ?? "",
+                "creditsHint": metadata.creditsHint,
+                "planLabels": metadata.sharePlanLabels,
+                "apiKeyDebugLabel": descriptor.credentials?.apiKeyDebugLabel ?? "",
                 "status": [metadata.statusPageURL ?? "", metadata.statusLinkURL ?? ""],
                 "debug": metadata.debugLogUnavailableMessage ?? "",
                 "flags": [
@@ -47,6 +54,8 @@ struct PluginProviderSpecTests {
                     metadata.usesDetailBackedWindow,
                 ],
                 "color": Self.components(descriptor.branding.color),
+                "widgetColor": Self.components(descriptor.branding.widgetColor),
+                "progressColor": String(describing: descriptor.branding.progressColorStyle),
                 "confetti": descriptor.branding.confettiPalette.map(Self.components),
                 "icon": descriptor.branding.iconResourceName,
                 "noData": descriptor.tokenCost.noDataMessage(),
@@ -66,6 +75,8 @@ struct PluginProviderSpecTests {
                     ]
                 },
             ]
+            row["toggles"] = implementation.settingsToggles(context: fixture.settingsContext(provider: provider))
+                .map { ["id": $0.id, "title": $0.title, "subtitle": $0.subtitle] }
             row["availability"] = ["", "  ", "fixture-key"].map { value in
                 fixture.settings[providerConfig: provider, field: .apiKey] = value
                 return implementation.isAvailable(context: .init(
@@ -77,7 +88,44 @@ struct PluginProviderSpecTests {
                 field.binding.wrappedValue = "bound-key"
                 #expect(fixture.settings[providerConfig: provider, field: .apiKey] == "bound-key")
             }
-            return row
+            fixture.settings[providerConfig: provider, field: .apiKey] = ""
+            var config = ProviderConfig(id: provider.instanceID, apiKey: "fixture-key", workspaceID: "fixture-project")
+            config.enterpriseHost = "https://fixture.example.com"
+            config.litellmModelUsageEnabled = true
+            let projected = descriptor.credentials?.applyConfig(base: [:], config: config) ?? [:]
+            row["projections"] = projected
+            row["enterpriseHost"] = descriptor.config.supportsEnterpriseHost
+            row["workspaceOrder"] = descriptor.config.workspaceIDValidationOrder as Any? ?? NSNull()
+            row["projectToken"] = descriptor.credentials?.resolveToken(kind: .projectID, environment: projected)?
+                .token ?? ""
+            let keyOnly = descriptor.credentials?.applyConfig(
+                base: [:], config: ProviderConfig(id: provider.instanceID, apiKey: "fixture-key")) ?? [:]
+            config.enterpriseHost = "http://public.example.com"
+            let invalid = descriptor.credentials?.applyConfig(base: [:], config: config) ?? [:]
+            var availability: [[Bool]] = []
+            for environment in [[:], keyOnly, projected, invalid] {
+                let context = ProviderCutoverTestSupport.context(environment: environment)
+                let strategies = await descriptor.fetchPlan.pipeline.resolveStrategies(context)
+                await availability.append([
+                    implementation.isAvailable(context: .init(
+                        provider: provider, settings: fixture.settings, environment: environment)),
+                    strategies.first?.isAvailable(context) ?? false,
+                ])
+            }
+            row["environmentAvailability"] = availability
+            if let support = descriptor.credentials?.tokenAccountSupport {
+                row["tokenAccounts"] = [
+                    "title": support.title,
+                    "subtitle": support.subtitle,
+                    "placeholder": support.placeholder,
+                    "injection": support.envOverride(token: "fixture-account") ?? [:],
+                    "delay": support.minimumDelayBetweenAccountRefreshes.map(String.init(describing:)) ?? "",
+                ]
+                fixture.settings.addTokenAccount(provider: provider, label: "Fixture", token: "fixture-account")
+                row["accountAvailability"] = implementation.isAvailable(context: .init(
+                    provider: provider, settings: fixture.settings, environment: [:]))
+            }
+            rows.append(row)
         }
         let baseline: [String: Any] = [
             "providers": rows,
