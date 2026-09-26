@@ -282,6 +282,8 @@ extension UsageStore {
         let usageRows = snapshot.map {
             self.widgetUsageRows(provider: provider, snapshot: $0, now: now)
         } ?? preservedClaudeUsage?.usageRows ?? []
+        // Preserved entries rebuild their rows from this unfiltered source when a metric changes while offline.
+        self.lastWidgetSourceSnapshots[provider.instanceID] = snapshot
 
         let creditsRemaining: Double?
         let codeReviewRemaining: Double?
@@ -614,19 +616,16 @@ extension UsageStore {
         }
     }
 
-    /// Rows kept after a failed refresh were picked under the metric of their last publish. Re-apply the current
-    /// metric with the same fallback as a fresh publish: Monthly Plan falls back to the rows that are there.
+    /// Rows kept after a failed refresh were picked under the metric of their last publish. Rebuild them from that
+    /// publish's unfiltered snapshot so a later metric change, or several, shows what a fresh publish would.
     private func preservedWidgetEntryForCurrentMetric(
         _ entry: WidgetSnapshot.ProviderEntry) -> WidgetSnapshot.ProviderEntry
     {
         // Provider-specific by design: only Mistral widget rows follow a menu bar metric.
-        guard entry.provider == .mistral, let rows = entry.usageRows else { return entry }
-        let planRows = rows.filter { $0.id == "mistral-monthly-plan" }
-        let kept = switch self.settings.menuBarMetricPreference(for: .mistral) {
-        case .primary: rows.filter { $0.id != "mistral-monthly-plan" }
-        case .monthlyPlan where !planRows.isEmpty: planRows
-        default: rows
+        guard entry.provider == .mistral, let source = self.lastWidgetSourceSnapshots[entry.provider] else {
+            return entry
         }
+        let kept = self.widgetUsageRows(provider: .mistral, snapshot: source, now: entry.updatedAt)
         return WidgetSnapshot.ProviderEntry(
             instanceID: entry.provider,
             updatedAt: entry.updatedAt,

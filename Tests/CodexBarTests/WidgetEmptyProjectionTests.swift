@@ -228,20 +228,19 @@ struct WidgetEmptyProjectionTests {
     }
 
     @Test(arguments: [
-        (MenuBarMetricPreference.automatic, MenuBarMetricPreference.monthlyPlan, ["mistral-monthly-plan"]),
-        (MenuBarMetricPreference.automatic, MenuBarMetricPreference.primary, ["primary"]),
-        (MenuBarMetricPreference.primary, MenuBarMetricPreference.monthlyPlan, ["primary"]),
-        (MenuBarMetricPreference.monthlyPlan, MenuBarMetricPreference.primary, [String]()),
+        ([MenuBarMetricPreference.automatic, .monthlyPlan], ["mistral-monthly-plan"]),
+        ([MenuBarMetricPreference.automatic, .primary, .automatic], ["primary", "mistral-monthly-plan"]),
+        ([MenuBarMetricPreference.primary, .monthlyPlan], ["mistral-monthly-plan"]),
+        ([MenuBarMetricPreference.monthlyPlan, .primary], ["primary"]),
     ])
-    func `metric change reapplies to preserved Mistral rows only`(
-        from: MenuBarMetricPreference,
-        to: MenuBarMetricPreference,
+    func `offline metric changes rebuild preserved Mistral rows only`(
+        metrics: [MenuBarMetricPreference],
         expectedMistralRowIDs: [String]) async throws
     {
         let (store, settings) = self.makeStore(providers: [.minimax, .mistral])
         var saved: WidgetSnapshot?
         store._test_widgetSnapshotSaveOverride = { saved = $0 }
-        settings.setMenuBarMetricPreference(from, for: .mistral)
+        settings.setMenuBarMetricPreference(metrics[0], for: .mistral)
         self.seed(store, providers: [.minimax])
         store._setSnapshotForTesting(
             UsageSnapshot(
@@ -259,9 +258,11 @@ struct WidgetEmptyProjectionTests {
 
         store.snapshots.removeAll()
         store.errors = [.minimax: "Synthetic offline failure", .mistral: "Synthetic offline failure"]
-        settings.setMenuBarMetricPreference(to, for: .mistral)
-        store.persistWidgetSnapshot(reason: "synthetic-metric-change")
-        await store.widgetSnapshotPersistTask?.value
+        for metric in metrics.dropFirst() {
+            settings.setMenuBarMetricPreference(metric, for: .mistral)
+            store.persistWidgetSnapshot(reason: "synthetic-metric-change")
+            await store.widgetSnapshotPersistTask?.value
+        }
 
         let published = try #require(saved)
         #expect(published.entries.first { $0.provider == .minimax }?.usageRows == minimaxRows)
