@@ -100,7 +100,7 @@ struct ProviderSettingsDescriptorTests {
     @Test
     func `bifrost exposes only a virtual key and a configured gateway URL`() throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-bifrost")
-        let fields = BifrostProviderImplementation()
+        let fields = try (#require(ProviderCatalog.implementation(for: .bifrost)))
             .settingsFields(context: fixture.settingsContext(provider: .bifrost))
         #expect(fields.map(\.id) == ["bifrost-api-key", "bifrost-base-url"])
         #expect(fields.map(\.kind) == [.secure, .plain])
@@ -327,7 +327,7 @@ struct ProviderSettingsDescriptorTests {
     @Test
     func `llmman exposes an optional key and a base URL stored in provider config`() throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-llmman")
-        let fields = LLMManProviderImplementation()
+        let fields = try (#require(ProviderCatalog.implementation(for: .llmman)))
             .settingsFields(context: fixture.settingsContext(provider: .llmman))
         #expect(fields.map(\.id) == ["llmman-api-key", "llmman-base-url"])
         #expect(fields.map(\.kind) == [.secure, .plain])
@@ -769,7 +769,8 @@ struct ProviderSettingsDescriptorTests {
     @Test
     func `aixy exposes key and optional gateway fields`() throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-aixy")
-        let fields = AixyProviderImplementation().settingsFields(context: fixture.settingsContext(provider: .aixy))
+        let fields = try (#require(ProviderCatalog.implementation(for: .aixy)))
+            .settingsFields(context: fixture.settingsContext(provider: .aixy))
         #expect(fields.map(\.id) == ["aixy-api-key", "aixy-base-url"])
         #expect(fields.map(\.title) == ["API key", "Base URL"])
     }
@@ -907,7 +908,7 @@ struct ProviderSettingsDescriptorTests {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-deepgram")
         let context = fixture.settingsContext(provider: .deepgram)
 
-        let implementation = DeepgramProviderImplementation()
+        let implementation = try #require(ProviderCatalog.implementation(for: .deepgram))
         let fields = implementation.settingsFields(context: context)
 
         #expect(fields.contains(where: { $0.id == "deepgram-api-key" }))

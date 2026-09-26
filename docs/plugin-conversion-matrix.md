@@ -30,6 +30,12 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 
 ## Totals
 
+Bundled Swift registration uses `PluginProviderSpec` for the ten pilot providers plus Synthetic, Chutes, v0,
+ElevenLabs, Neuralwatt, ClawRouter, Aixy, Bifrost, Deepgram, LLM Proxy, LiteLLM, sub2api, and llmman. ClawRouter keeps
+its custom app endpoint field. The other twelve additions share app settings builders; provider-owned endpoint
+validation and the bundled scripts remain authoritative. This glue migration does not change the conversion
+classifications or registry count below.
+
 | Status | Count |
 |---|---:|
 | `cut-over` | 29 |

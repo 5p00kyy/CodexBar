@@ -30,6 +30,17 @@ the bundled script still owns requests and parsing. See `XKiroProviderDescriptor
 widget colors, and progress colors retain their provider-owned values. `V0ProviderDescriptor` demonstrates a
 workspace field shared by config projection, plugin settings, and the app's Scope field.
 
+`Endpoint` shares the `enterpriseHost` projection, environment key, Base URL field, and validated URL resolver.
+Its requirement distinguishes a configured override (including invalid values that must reach fetch validation),
+a validated override, and an optional override with a declared default. URL normalization and validation remain in
+the provider-owned reader. Deepgram's environment-only API URL override stays separate from its Project ID field;
+it does not gain an `enterpriseHost` setting.
+
+Typed Boolean toggles share config reads/writes, environment projection, app bindings, and an optional enabled
+fetch timeout; LiteLLM uses this for model activity. Only llmman opts out of requiring an API key for fetching.
+The pre-migration `plugin-provider-specs.json` golden covers settings, registration, CLI help, branding, credential
+projections, token-account metadata, and availability. Extend it before migrating another provider.
+
 Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec with an `apiKeyField` and no separate
 app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
 the provider's availability and detail-line policies explicitly. Providers with extra fields or token-account behavior

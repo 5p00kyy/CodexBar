@@ -20,6 +20,7 @@ public struct PluginProviderSpec: Sendable {
     public struct WorkspaceField: Sendable {
         public let environmentKey: String
         public let field: TextField
+        public var resolvesProjectID = false
     }
 
     public let id: UsageProvider
@@ -47,6 +48,7 @@ public struct PluginProviderSpec: Sendable {
     public var missingCredentialMessage: ProviderCredentialAdapter.MissingCredentialMessage?
     public var additionalProjections: [ProviderCredentialEnvironmentProjection] = []
     public var tokenAccountSupport: TokenAccountSupport?
+    public var configValidator: ProviderCredentialAdapter.ConfigValidator = { _ in [] }
     public var config = ProviderConfigCapabilities()
     public var menuBarMetrics: ProviderMenuBarMetricCapabilities?
     public var presentation = ProviderUsagePresentation()
@@ -56,6 +58,9 @@ public struct PluginProviderSpec: Sendable {
     public var validateContext: ScriptFetchStrategy.ContextValidator = { _ in }
     public var apiKeyField: APIKeyField?
     public var workspaceField: WorkspaceField?
+    public var endpoint: Endpoint?
+    public var toggles: [Toggle] = []
+    public var requiresAPIKeyForFetch = true
     public var showsAPIDetail = false
     public enum Availability: Sendable {
         case always
@@ -78,15 +83,10 @@ public struct PluginProviderSpec: Sendable {
         ProviderDescriptor(
             id: self.id,
             menuBarMetrics: self.menuBarMetrics,
-            credentials: credentials ?? .apiKey(
-                environmentKey: self.environmentKey,
-                apiKeyDebugLabel: self.apiKeyDebugLabel,
-                additionalProjections: self.additionalProjections +
-                    (self.workspaceField.map { [.workspaceID($0.environmentKey)] } ?? []),
-                resolve: self.apiKey,
-                tokenAccountSupport: self.tokenAccountSupport,
-                missingCredentialMessage: self.missingCredentialMessage),
-            config: self.config,
+            credentials: credentials ?? self.makeCredentials(),
+            config: ProviderConfigCapabilities(
+                workspaceIDValidationOrder: self.config.workspaceIDValidationOrder,
+                supportsEnterpriseHost: self.endpoint != nil || self.config.supportsEnterpriseHost),
             metadata: ProviderMetadata(
                 id: self.id,
                 displayName: self.displayName,
@@ -119,30 +119,43 @@ public struct PluginProviderSpec: Sendable {
             presentation: self.presentation,
             fetchPlan: fetchPlan ?? ProviderFetchPlan(
                 sourceModes: [.auto, .api],
-                pipeline: ProviderFetchPipeline(resolveStrategies: { _ in [self.makeStrategy()] })),
+                pipeline: ProviderFetchPipeline(resolveStrategies: { context in
+                    [self.makeStrategy(timeout: self.fetchTimeout(environment: context.env))]
+                })),
             cli: ProviderCLIConfig(name: self.id.rawValue, aliases: self.aliases, versionDetector: nil))
     }
 
     func scriptValues(_ context: ProviderFetchContext) -> ScriptFetchStrategy.Values? {
-        guard let key = self.apiKey(environment: context.env) else { return nil }
+        let key = self.apiKey(environment: context.env)
+        guard !self.requiresAPIKeyForFetch || key != nil,
+              self.endpoint?.isAvailable(environment: context.env) ?? true else { return nil }
         var settings = self.scriptSettings(context)
+        if let endpoint = self.endpoint {
+            settings[endpoint.environmentKey] = endpoint.url(environment: context.env)?.absoluteString ?? ""
+        }
+        for toggle in self.toggles {
+            settings[toggle.environmentKey] = context.env[toggle.environmentKey] ?? "false"
+        }
         if let field = self.workspaceField,
            let value = SettingsValue.cleaned(context.env[field.environmentKey])
         {
             settings[field.environmentKey] = value
         }
-        return .init(settings: settings, secrets: [self.environmentKey: key])
+        return .init(settings: settings, secrets: key.map { [self.environmentKey: $0] } ?? [:])
     }
 
-    func makeStrategy(transport: any ProviderHTTPTransport = ProviderHTTPClient.shared) -> ScriptFetchStrategy {
+    func makeStrategy(
+        transport: any ProviderHTTPTransport = ProviderHTTPClient.shared,
+        timeout: TimeInterval? = nil) -> ScriptFetchStrategy
+    {
         ScriptFetchStrategy(
             id: "\(self.id.rawValue).js",
             provider: self.id,
             bundledPlugin: self.id.rawValue,
-            secretKey: self.environmentKey,
+            secretKey: self.requiresAPIKeyForFetch ? self.environmentKey : nil,
             sourceLabel: "api",
             transport: transport,
-            timeout: self.timeout,
+            timeout: timeout ?? self.timeout,
             validateContext: self.validateContext,
             resolveValues: self.scriptValues,
             isEnabled: { _ in true })
