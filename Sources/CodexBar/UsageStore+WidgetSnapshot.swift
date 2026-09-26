@@ -216,7 +216,7 @@ extension UsageStore {
                    !self.widgetUsagePreservationBlockedProviders.contains(entry.provider)
            })
         {
-            entries = previousSnapshot.entries
+            entries = previousSnapshot.entries.map { self.preservedWidgetEntryForCurrentMetric($0) }
         }
         return WidgetSnapshot(
             entries: entries,
@@ -593,13 +593,36 @@ extension UsageStore {
         }
     }
 
-    /// Widget rows kept after a failed refresh were picked under the old metric, so drop them until a fetch succeeds.
-    func invalidateWidgetUsageForMetricChanges(from old: [String: String], to new: [String: String]) {
-        for key in Set(old.keys).union(new.keys) where old[key] != new[key] {
-            guard let provider = UsageProvider(rawValue: key),
-                  ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric
-            else { continue }
-            self.invalidateGenericWidgetUsage(for: provider)
-        }
+    /// Reproject retained quota data without making its original measurement look fresh.
+    private func preservedWidgetEntryForCurrentMetric(
+        _ entry: WidgetSnapshot.ProviderEntry) -> WidgetSnapshot.ProviderEntry
+    {
+        guard let provider = entry.provider.firstPartyProvider,
+              ProviderDescriptorRegistry.descriptor(for: provider).presentation.widgetRowsFollowMenuBarMetric
+        else { return entry }
+        let snapshot = UsageSnapshot(
+            primary: entry.primary,
+            secondary: entry.secondary,
+            tertiary: entry.tertiary,
+            extraRateWindows: (entry.usageRows ?? []).compactMap { row in
+                row.window.map {
+                    NamedRateWindow(id: row.id, title: row.title, window: $0, usageKnown: row.percentLeft != nil)
+                }
+            },
+            updatedAt: entry.updatedAt)
+        return WidgetSnapshot.ProviderEntry(
+            instanceID: entry.provider,
+            updatedAt: entry.updatedAt,
+            primary: entry.primary,
+            secondary: entry.secondary,
+            tertiary: entry.tertiary,
+            usageRows: self.widgetUsageRows(provider: provider, snapshot: snapshot, now: Date()),
+            creditsRemaining: entry.creditsRemaining,
+            codeReviewRemainingPercent: entry.codeReviewRemainingPercent,
+            tokenUsage: entry.tokenUsage,
+            dailyUsage: entry.dailyUsage,
+            providerCost: entry.providerCost,
+            quotaOwnerKey: entry.quotaOwnerKey,
+            balanceText: entry.balanceText)
     }
 }

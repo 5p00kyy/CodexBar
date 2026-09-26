@@ -72,8 +72,9 @@ Usage widgets follow Mistral's menu bar metric preference:
 - **Monthly Plan** shows only the Vibe allowance, falling back to Included API when the plan is missing or unknown.
 
 Automatic still shows API spend in the menu bar. Changing the metric updates widget rows from the existing snapshot,
-without another request. If a failed refresh has removed that snapshot, rows retained under the previous metric are
-invalidated until a successful refresh. Burn Down eligibility continues to require a known window duration and reset.
+without another request. After a failed refresh, widgets reselect from retained quota data and keep its original
+measurement time. A plan not retained in the previous widget entry falls back to Included API until fresh data arrives.
+Burn Down eligibility continues to require a known window duration and reset.
 
 ## CLI Usage
 
