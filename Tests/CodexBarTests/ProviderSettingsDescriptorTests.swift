@@ -11,7 +11,7 @@ struct ProviderSettingsDescriptorTests {
     @Test
     func `xKiro keeps its API key in provider config`() throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-xkiro")
-        let fields = XKiroProviderImplementation()
+        let fields = try #require(ProviderCatalog.implementation(for: .xkiro))
             .settingsFields(context: fixture.settingsContext(provider: .xkiro))
         #expect(fields.map(\.id) == ["xkiro-api-key"])
         #expect(fields.map(\.kind) == [.secure])
@@ -22,8 +22,7 @@ struct ProviderSettingsDescriptorTests {
     @Test(arguments: [UsageProvider.atlascloud, .vercel])
     func `balance providers keep API keys in their own config`(provider: UsageProvider) throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-\(provider.rawValue)")
-        let implementation: any ProviderImplementation = provider == .atlascloud
-            ? AtlasCloudProviderImplementation() : VercelProviderImplementation()
+        let implementation = try #require(ProviderCatalog.implementation(for: provider))
         let fields = implementation.settingsFields(context: fixture.settingsContext(provider: provider))
         #expect(fields.map(\.id) == ["\(provider.rawValue)-api-key"])
         #expect(fields.map(\.kind) == [.secure])
@@ -34,7 +33,7 @@ struct ProviderSettingsDescriptorTests {
     @Test
     func `DevPass exposes a regular API key stored in provider config`() throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-devpass")
-        let fields = DevPassProviderImplementation()
+        let fields = try #require(ProviderCatalog.implementation(for: .devpass))
             .settingsFields(context: fixture.settingsContext(provider: .devpass))
         #expect(fields.map(\.id) == ["devpass-api-key"])
         #expect(fields.map(\.kind) == [.secure])

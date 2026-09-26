@@ -53,11 +53,14 @@ extension StatusItemController {
             autosaveName: item.autosaveName ?? "", defaults: self.settings.userDefaults)
         {
             if !self.hasPreparedForAppShutdown {
-                // Retire runtime identities before later cleanup can clear the restored position.
+                // Hide under the stable name so menu bar managers never see an unnamed visible item.
+                item.isVisible = false
+            }
+            self.statusBar.removeStatusItem(item)
+            if !self.hasPreparedForAppShutdown {
+                // Retire only after removal; later cleanup must not clear the restored position.
                 item.autosaveName = nil
             }
-            // Renaming immediately before exit can leave Control Center hosting a blank Item-0 slot.
-            self.statusBar.removeStatusItem(item)
         }
     }
 
@@ -92,14 +95,4 @@ extension StatusItemController {
                 onCreated?(item)
             })
     }
-
-    #if DEBUG
-    func _test_vendStatusItem(
-        for provider: UsageProvider,
-        onCreated: @escaping (NSStatusItem) -> Void)
-        -> NSStatusItem
-    {
-        self.lazyStatusItem(for: provider, onCreated: onCreated)
-    }
-    #endif
 }

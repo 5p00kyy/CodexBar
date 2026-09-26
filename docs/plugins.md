@@ -20,6 +20,20 @@ App refreshes are scoped to the installed plugin runtime and its fetch settings.
 reconfiguring a plugin prevents an older refresh from publishing usage or errors. A replacement refresh waits for retired
 work to finish and reads the current configuration when its fetch starts. Display-only preferences do not invalidate usage.
 
+## Bundled API-key provider registration
+
+For a bundled plugin with a simple API-key configuration, declare a public `PluginProviderSpec` named `spec` in its
+provider-owned `*ProviderDescriptor.swift` file, then expose `descriptor = Self.spec.makeDescriptor()`. The spec owns
+metadata, branding, environment-key aliases, the API-key field, and optional presentation and script-settings overrides;
+the bundled script still owns requests and parsing. See `XKiroProviderDescriptor` for a minimal example and
+`ZenMuxProviderDescriptor` for optional usage settings.
+
+Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec with an `apiKeyField` and no separate
+app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
+the provider's availability and detail-line policies explicitly. Providers with extra fields or token-account behavior
+can share the descriptor builder while retaining their app implementation, as GitKraken and DeepInfra do. Keep native
+credential discovery and cookie/session handling outside this API-key-only building block.
+
 ## Minimal plugin
 
 ```js
@@ -131,12 +145,8 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
 - `ctx.fail` creates classified errors for `authenticationExpired`, `missingCredential`, `permissionDenied`,
   `rateLimited`, `providerUnavailable`, `parseFailure`, `networkFailure`, and `apiFailure`. Throw the returned error,
   for example `throw ctx.fail.rateLimited("Provider rate limit reached")`; ordinary errors retain generic mapping.
-  Every plugin automatically gets one delayed retry when a request returns 408, 429, 500, 502, 503, or 504. A numeric
-  `Retry-After` header sets the delay; otherwise the delay is 1 second, and the host clamps it to 10 seconds. A plugin
-  that needs provider-specific handling—such as a non-numeric `Retry-After`, quota data in the error body, or a vendor
-  retry field—declares `http-status`, receives the response, and throws `ctx.fail.rateLimited(message,
-  {retryAfterSeconds})` or another transient classified failure. Both paths share one retry budget and never retry the
-  retry. Cancellation during the delay stops the retry.
+  With `http-status`, classify responses here to request the shared retry described below; use
+  `ctx.fail.rateLimited(message, {retryAfterSeconds})` for a provider-specific delay.
 - `ctx.browser.availability(domain)` returns `"available"`, `"manual"`, or `"off"` for a declared cookie domain.
   It inspects source/cookie policy only, without accessing the broker, Keychain, or browser. It does not promise a
   usable session. API-only (and other non-web) source modes report `"off"`; Manual reports `"manual"`, so plugins can
@@ -170,8 +180,7 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
   part of the fetch fails; they are not a transaction with the returned usage snapshot.
 - `ctx.date.now()`, `iso(text)`, `unixSeconds(number)`, and `unixMillis(number)` create JavaScript dates. `now()` uses
   the host refresh clock.
-- `ctx.date.nowMillis()` returns the same host refresh clock as Unix epoch milliseconds — use it for arithmetic that
-  should stay deterministic under fixture clocks (the z.ai quota-rate row does).
+- `ctx.date.nowMillis()` returns the host refresh clock as Unix epoch milliseconds for deterministic arithmetic.
 - `ctx.date.nextDailyReset(timeZoneIdentifier, hour)` returns the next wall-clock reset in an IANA time zone.
 - `ctx.env.timeZone` is the host's current IANA time-zone identifier; zero-offset GMT aliases are normalized to `UTC`.
 - `ctx.format.number(value, options?)`, `usd(value)`, and `monthDay(date)` provide deterministic formatting on both
@@ -187,8 +196,8 @@ User-plugin requests run in an ephemeral session with no ambient cookies, creden
 rejected, the default request timeout is 15 seconds, `Accept-Encoding: identity` is sent, compressed responses always fail, and response
 bytes are capped at 1 MiB. By default, the host rejects non-2xx responses and automatically retries 408, 429, 500, 502,
 503, and 504 once, using a numeric `Retry-After` delay or 1 second when absent, clamped to 10 seconds. With `http-status`,
-the plugin instead receives `{status, headers, ...}` and owns classification, including any request for the same single
-delayed retry. Request URLs must match a declared, approved origin.
+the plugin receives `{status, headers, ...}` and owns classification, including non-numeric `Retry-After`, quota error bodies,
+and vendor retry fields. Both paths share one delayed retry budget; cancellation stops the delay. Request URLs must match a declared, approved origin.
 
 ```js
 capabilities: ["http-status"],
@@ -211,8 +220,9 @@ cross-process locking. Removing the source file manually does not delete state. 
 cookies, and tokens belong in secure settings. Storage does not alter `ctx.cache` or the settings `persist` allowlist.
 
 Bundled first-party providers that have cut over to JavaScript use the shared runtime's 20-second hung-script watchdog.
-A timeout fails that refresh and discards the poisoned worker so the next refresh starts with a fresh context; this is
-production-default and does not depend on `CODEXBAR_JS_PROVIDERS`.
+A timeout fails that refresh and discards the poisoned worker before returning the error, so an immediate retry starts
+with a fresh context. Cancellation retires the worker in the same way. This is production-default and does not depend
+on `CODEXBAR_JS_PROVIDERS`.
 QuickJS enforces the watchdog in-engine with `JS_SetInterruptHandler`, caps the runtime heap at 64 MiB, and caps the
 JavaScript stack at 2 MiB. The interrupt terminates evaluation on its confined thread; timed-out scripts do not leave an
 abandoned evaluation thread behind. On Apple platforms, `CODEXBAR_PLUGIN_ENGINE=jsc` selects the JavaScriptCore rollback
@@ -285,28 +295,7 @@ secret-write capability or arbitrary config-field access.
 
 ## TypeScript
 
-llmman's bundled `llmman.ts` reads a local `llmman serve` daemon's node report for loaded-model memory. Its API key is
-optional, so the plugin sends it itself instead of declaring host-owned `auth`. See [llmman](llmman.md).
-
-Chutes' bundled `chutes.ts` owns subscription usage and best-effort quota detail requests on both engines. It preserves
-subscription context and explicitly permits empty usage responses. Swift supplies credentials and validated API origins.
-See [Chutes](chutes.md).
-
-ai&'s bundled `aiand.ts` follows paired log cursors and sums decimal costs with integer arithmetic before the final
-display conversion. Empty windows omit cost; capped or incomplete pagination retains estimated confidence.
-See [ai&](aiand.md).
-
-DevPass's bundled `devpass.ts` reads the documented LLM Gateway key-status API for billing-cycle and premium weekly
-credits. Swift only registers the provider and its API-key setting. See [DevPass](devpass.md).
-
-xKiro's bundled `xkiro.ts` reads the documented usage API for daily free tokens and the UTC reset. Swift only
-registers the provider and its API-key setting. See [xKiro](xkiro.md).
-
-Moonshot's bundled `moonshot.ts` runs on both engines. Its Swift descriptor resolves the regional credential and passes
-the selected origin as `BASE_URL`; the plugin validates the fixed International/China origins and uses
-`ctx.format.currency` for identity-only balance and deficit text. See [Moonshot](moonshot.md).
-
-[`codexbar-plugin.d.ts`](../Sources/CodexBarCore/Resources/Plugins/codexbar-plugin.d.ts) is the canonical authoring
+`codexbar-plugin.d.ts` in `Sources/CodexBarCore/Resources/Plugins/` is the canonical authoring
 contract for `defineProvider`, the `ctx` host API, manifests, and usage snapshots. Bundled plugins may use that contract
 directly as `.ts` sources. `Scripts/regenerate-plugin-js.sh` transpiles them with the vendored Sucrase build into
 committed sibling `.js` files; the runtime continues to load only those JavaScript files, so bundled TypeScript has no
@@ -389,36 +378,23 @@ Call `ctx.browser.rejectCookie(domain)` after the server rejects a session. The 
 evicts only the cached entry observed by that fetch (each domain is pinned for the fetch lifetime); a newer session and other domains remain intact. Manual headers
 are never erased. User plugins have no persistent cookie cache, so rejection is a validated no-op for them.
 
-## API balance bundled providers
+## Bundled provider examples
 
-[DeepInfra](deepinfra.md) uses its bundled script on both engines. It requires both billing GETs, preserves
-prepaid-balance deductions and monthly cents conversion, and retries transient failures once. The Swift fetcher and
-parser have been removed.
+Bundled scripts own requests, error classification, and snapshot mapping; Swift supplies registration, settings, and credential/origin validation. These examples illustrate contracts that differ from the minimal plugin:
 
-[ZenMux](zenmux.md) uses its bundled script on both engines. It requires subscription quotas and optionally enriches
-them with USD PAYG balance; failed enrichment preserves quotas except for rejected credentials and cancellation. The
-Swift fetcher and parser have been removed.
-
-[Atlas Cloud](atlascloud.md) and [Vercel AI Gateway](vercel.md) use fixed-origin bearer GETs for documented
-account/team balances. Their bundled JavaScript returns generic details without fabricated quota windows;
-Swift provides registration and the shared API-key settings field. Scripts classify HTTP failures and the host bounds retries.
-
-## GitKraken AI bundled provider
-
-[GitKraken AI](gitkraken.md) uses bearer GET against its declared first-party API origin, with optional
-organization scope and generic weekly windows/details. Swift supplies only registration and config projection.
-
-## Charm Hyper bundled provider
-
-[Charm Hyper](hyper.md) uses declared-domain cookies or a secure API key against its fixed credits endpoint.
-The bundled TypeScript owns session preference, API fallback, error classification, and HC balance parsing;
-Swift supplies registration and the shared settings surface.
-
-## Zed bundled provider
-
-[Zed](zed.md) uses its bundled script for editor API and opt-in browser billing requests. Swift retains editor settings
-and Keychain credential discovery; browser mode uses a declared `zed.dev` cookie session and never reads editor credentials.
-
-Aixy is a bundled plugin-first provider: its TypeScript owns key-scoped usage and budget mapping, while the host validates its configured gateway origin and supplies the API key. See [Aixy](aixy.md).
-
-Raycast uses declared `raycast.com` / `www.raycast.com` cookie domains and `ctx.browser.sessions` for candidate retries. The shared broker prefers exact-host cookies over parent-domain cookies with the same name and excludes sibling/lookalike hosts. See [Raycast](raycast.md).
+| Provider | Contract |
+| --- | --- |
+| [llmman](llmman.md) | `llmman.ts` reads loaded-model memory from the local `llmman serve` node report. Its API key is optional, so the script sends it without host-owned `auth`. |
+| [Chutes](chutes.md) | `chutes.ts` preserves subscription context, allows empty usage, and fetches optional quota details on both engines. Swift supplies credentials and validated API origins. |
+| [ai&](aiand.md) | `aiand.ts` follows paired log cursors and sums decimal costs with integer arithmetic before display conversion. Empty windows omit cost; capped/incomplete pagination is estimated. |
+| [DevPass](devpass.md) | `devpass.ts` reads billing-cycle and premium weekly credits from LLM Gateway's key-status API; Swift registers the provider and API-key setting. |
+| [xKiro](xkiro.md) | `xkiro.ts` reads daily free tokens and UTC reset from the usage API; Swift registers the provider and API-key setting. |
+| [Moonshot](moonshot.md) | `moonshot.ts` runs on both engines. Swift resolves the regional credential and `BASE_URL`; the script validates fixed International/China origins and uses `ctx.format.currency` for identity-only balance/deficit text. |
+| [DeepInfra](deepinfra.md) | Both engines require both billing GETs, preserve prepaid deductions and monthly cents conversion, and retry transient failures once. |
+| [ZenMux](zenmux.md) | Both engines require subscription quotas. Optional USD PAYG enrichment failures preserve quotas except for credential rejection and cancellation. |
+| [Atlas Cloud](atlascloud.md), [Vercel AI Gateway](vercel.md) | Fixed-origin bearer GETs return account/team balances as generic details without quota windows. Scripts classify HTTP failures; the host bounds retries. |
+| [GitKraken AI](gitkraken.md) | First-party bearer GET with optional organization scope returns generic weekly windows/details. |
+| [Charm Hyper](hyper.md) | Declared-domain cookies or a secure API key reach one fixed credits endpoint. TypeScript owns session preference, API fallback, errors, and HC balance parsing. |
+| [Zed](zed.md) | Swift discovers editor settings and Keychain credentials. Opt-in browser billing uses only the declared `zed.dev` cookie session, never editor credentials. |
+| [Aixy](aixy.md) | TypeScript maps key-scoped usage and budgets; the host validates the configured gateway origin and supplies the API key. |
+| [Raycast](raycast.md) | `ctx.browser.sessions` retries candidates for declared `raycast.com` / `www.raycast.com` domains. The broker prefers exact-host cookies over same-name parent cookies and excludes sibling/lookalike hosts. |
