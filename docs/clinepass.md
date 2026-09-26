@@ -18,8 +18,20 @@ cline auth
 
 The CLI accepts `CLINE_API_KEY` or `CLINEPASS_API_KEY` from its environment, in that order, then falls back to the
 `cline` OAuth session in Cline's `providers.json` (`workos:` bearer token, shared by `cline` and `cline-pass`).
-Explicit API keys take precedence over the browser session. Source modes are `auto` and `api`; both use the same
-bundled provider plugin on macOS and Linux.
+CodexBar config and environment API keys take precedence over the session file. Within that file, Cline's own
+[`getApiKey` resolver](https://github.com/cline/cline/blob/main/sdk/packages/core/src/auth/provider-auth-registry.ts)
+prefers `auth.accessToken`, then `apiKey`, then `auth.apiKey`; CodexBar follows the same order. Source modes are
+`auto` and `api`; both use the same bundled provider plugin on macOS and Linux.
+
+The file read is local and read-only: CodexBar never starts a login flow, imports browser cookies, refreshes tokens,
+or copies the session into its config. If Cline's access token expires, the error asks you to run `cline auth` again.
+Keep Cline responsible for signing in and renewing its session. A stored Cline API key is also supported and remains
+labeled **API key**; an OAuth session is labeled **Browser**.
+
+The path follows Cline's overrides, in order: `CLINE_PROVIDER_SETTINGS_PATH` (a file), `CLINE_DATA_DIR`
+(containing `settings/providers.json`), then `CLINE_DIR` (containing `data/settings/providers.json`). Otherwise it uses
+`$HOME/.cline/data/settings/providers.json`. Only the `providers.cline.settings` entry is read; the same Cline entry
+is used upstream for ClinePass. The reader ignores refresh tokens and unrelated providers.
 
 ## Data source
 

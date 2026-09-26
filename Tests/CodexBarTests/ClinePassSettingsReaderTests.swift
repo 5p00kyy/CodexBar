@@ -1,160 +1,122 @@
-import CodexBarCore
 import Foundation
 import Testing
+@testable import CodexBarCore
 
 struct ClinePassSettingsReaderTests {
-    @Test
-    func `api key reads primary then alternate environment keys`() {
-        #expect(ClinePassSettingsReader.apiKey(environment: ["CLINE_API_KEY": "primary"]) == "primary")
-        #expect(ClinePassSettingsReader.apiKey(environment: ["CLINEPASS_API_KEY": "alternate"]) == "alternate")
-        #expect(ClinePassSettingsReader.apiKey(environment: [
-            "CLINE_API_KEY": "primary",
-            "CLINEPASS_API_KEY": "alternate",
-        ]) == "primary")
-        #expect(ClinePassSettingsReader.apiKey(environment: [:]) == nil)
+    @Test(arguments: [
+        (#"{"auth":{"accessToken":" fixture-access "}}"#, "workos:fixture-access", true),
+        (#"{"auth":{"accessToken":"workos:fixture-access"}}"#, "workos:fixture-access", true),
+        (#"{"apiKey":" fixture-key "}"#, "fixture-key", false),
+        (#"{"auth":{"apiKey":"nested-key"}}"#, "nested-key", false),
+        (#"{"apiKey":"old-key","auth":{"accessToken":"new-session"}}"#, "workos:new-session", true),
+        (#"{"apiKey":"fixture-key","auth":{"accessToken":"  "}}"#, "fixture-key", false),
+    ])
+    func `file parsing preserves credential kind`(fixture: (String, String, Bool)) {
+        let (settings, token, isOAuth) = fixture
+        let data = Data("{\"providers\":{\"cline\":{\"settings\":\(settings)},\"unrelated\":false}}".utf8)
+        #expect(ClinePassSettingsReader.parseCredential(data) == .init(token: token, isOAuth: isOAuth))
+    }
+
+    @Test(arguments: [
+        "{bad",
+        "[]",
+        "{}",
+        #"{"providers":{"cline":{"settings":{}}}}"#,
+        #"{"providers":{"cline-pass":{"settings":{"auth":{"accessToken":"other"}}}}}"#,
+        #"{"providers":{"cline":{"settings":{"auth":{"accessToken":123}}}}}"#
+    ])
+    func `invalid and unrelated sessions stay unavailable`(json: String) {
+        #expect(ClinePassSettingsReader.parseCredential(Data(json.utf8)) == nil)
     }
 
     @Test
-    func `resolved token prefers explicit api key over browser session`() throws {
-        let file = try self.writeProvidersFile(contents: """
-        {"version":1,"providers":{"cline":{"settings":{"provider":"cline","auth":{"accessToken":"oauth-access"}},"updatedAt":"2026-01-01T00:00:00Z","tokenSource":"oauth"}}}
-        """)
-        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-
-        let env: [String: String] = [
-            "CLINE_API_KEY": "explicit-key",
-            ClinePassSettingsReader.providerSettingsPathEnvironmentKey: file.path,
+    func `paths follow the Cline overrides and injected home`() {
+        let home = URL(fileURLWithPath: "/synthetic/home")
+        let cases: [([String: String], String)] = [
+            ([:], "/synthetic/home/.cline/data/settings/providers.json"),
+            (["HOME": "/synthetic/other"], "/synthetic/other/.cline/data/settings/providers.json"),
+            (["CLINE_DIR": "~/cline"], "/synthetic/home/cline/data/settings/providers.json"),
+            (["CLINE_DATA_DIR": "/data", "CLINE_DIR": "/unused"], "/data/settings/providers.json"),
+            (
+                ["CLINE_PROVIDER_SETTINGS_PATH": "~/session.json", "CLINE_DATA_DIR": "/unused"],
+                "/synthetic/home/session.json"),
         ]
-        #expect(ClinePassSettingsReader.resolvedToken(environment: env) == "explicit-key")
-        #expect(ClinePassSettingsReader.usesBrowserSession(environment: env) == false)
+        for (environment, expected) in cases {
+            #expect(ClinePassSettingsReader.providersFileURL(environment: environment, homeDirectory: home).path ==
+                expected)
+        }
     }
 
     @Test
-    func `auth token formats workos prefix for browser session`() throws {
-        let file = try self.writeProvidersFile(contents: """
-        {"version":1,"providers":{"cline":{"settings":{"provider":"cline","auth":{"accessToken":"oauth-access","refreshToken":"refresh"}},"updatedAt":"2026-01-01T00:00:00Z","tokenSource":"oauth"}}}
-        """)
-        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-
-        let env = [ClinePassSettingsReader.providerSettingsPathEnvironmentKey: file.path]
-        #expect(ClinePassSettingsReader.authToken(environment: env) == "workos:oauth-access")
-        #expect(ClinePassSettingsReader.resolvedToken(environment: env) == "workos:oauth-access")
-        #expect(ClinePassSettingsReader.usesBrowserSession(environment: env) == true)
+    func `missing file stays unavailable and explicit aliases keep precedence`() {
+        let environment = ["HOME": "/synthetic/missing-cline-home"]
+        let credentials = ClinePassProviderDescriptor.descriptor.credentials
+        #expect(credentials?.resolveToken(environment: environment) == nil)
+        #expect(ClinePassSettingsReader.fileCredential(environment: [:]) == nil)
+        #expect(credentials?.resolveToken(environment: environment.merging([
+            "CLINE_API_KEY": " primary ", "CLINEPASS_API_KEY": "alternate",
+        ]) { _, new in new })?.token == "primary")
+        #expect(credentials?.resolveToken(environment: environment.merging([
+            "CLINE_API_KEY": " ", "CLINEPASS_API_KEY": " alternate ",
+        ]) { _, new in new })?.token == "alternate")
     }
 
     @Test
-    func `auth token does not double prefix workos tokens`() throws {
-        let file = try self.writeProvidersFile(contents: """
-        {"providers":{"cline":{"settings":{"auth":{"accessToken":"workos:already-prefixed"}}}}}
-        """)
-        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-
-        let env = [ClinePassSettingsReader.providerSettingsPathEnvironmentKey: file.path]
-        #expect(ClinePassSettingsReader.authToken(environment: env) == "workos:already-prefixed")
+    func `API source does not require a configured key when file sessions are supported`() {
+        let config = CodexBarConfig(providers: [ProviderConfig(id: .clinepass, source: .api)])
+        #expect(!CodexBarConfigValidator.validate(config).contains { $0.code == "api_key_missing" })
     }
 
     @Test
-    func `auth token falls back to stored api key`() throws {
-        let file = try self.writeProvidersFile(contents: """
-        {"providers":{"cline":{"settings":{"apiKey":"stored-api-key"}}}}
-        """)
-        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-
-        let env = [ClinePassSettingsReader.providerSettingsPathEnvironmentKey: file.path]
-        #expect(ClinePassSettingsReader.authToken(environment: env) == "stored-api-key")
-        #expect(ClinePassSettingsReader.resolvedCredential(environment: env) == .init(
-            token: "stored-api-key",
-            isOAuth: false))
-        #expect(ClinePassSettingsReader.usesBrowserSession(environment: env) == false)
-    }
-
-    @Test
-    func `stored api key in file reports api source not browser`() throws {
-        let file = try self.writeProvidersFile(contents: """
-        {"providers":{"cline":{"settings":{"apiKey":"stored-api-key"}}}}
-        """)
-        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-
-        let credential = ClinePassSettingsReader.resolvedCredential(authFileURL: file)
-        #expect(credential?.token == "stored-api-key")
-        #expect(credential?.isOAuth == false)
-    }
-
-    @Test
-    func `auth token returns nil for missing file`() {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-            .appendingPathComponent("providers.json", isDirectory: false)
-        #expect(ClinePassSettingsReader.authToken(authFileURL: url) == nil)
-        #expect(ClinePassSettingsReader.authToken(environment: [
-            ClinePassSettingsReader.providerSettingsPathEnvironmentKey: url.path,
-        ]) == nil)
-    }
-
-    @Test
-    func `auth token returns nil for malformed json`() throws {
-        let file = try self.writeProvidersFile(contents: "{not-json}")
-        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-        #expect(ClinePassSettingsReader.authToken(authFileURL: file) == nil)
-    }
-
-    @Test
-    func `providers file respects cline data dir and cline dir overrides`() {
-        let home = URL(fileURLWithPath: "/tmp/home-test", isDirectory: true)
-        let dataDirURL = ClinePassSettingsReader.providersFileURL(
-            environment: ["CLINE_DATA_DIR": "/tmp/custom-data"],
-            homeDirectory: home)
-        #expect(dataDirURL.path == "/tmp/custom-data/settings/providers.json")
-
-        let clineDirURL = ClinePassSettingsReader.providersFileURL(
-            environment: ["CLINE_DIR": "/tmp/custom-cline"],
-            homeDirectory: home)
-        #expect(clineDirURL.path == "/tmp/custom-cline/data/settings/providers.json")
-
-        let defaultURL = ClinePassSettingsReader.providersFileURL(environment: [:], homeDirectory: home)
-        #expect(defaultURL.path == "/tmp/home-test/.cline/data/settings/providers.json")
-    }
-
-    @Test
-    func `descriptor resolves browser session through fetch values`() throws {
-        let file = try self.writeProvidersFile(contents: """
-        {"providers":{"cline":{"settings":{"auth":{"accessToken":"browser-token"}}}}}
-        """)
-        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
-
-        let descriptor = ProviderDescriptorRegistry.descriptor(for: .clinepass)
-        let environment = [ClinePassSettingsReader.providerSettingsPathEnvironmentKey: file.path]
-        // Token resolver reports the browser session as an auth-file credential.
-        let resolution = descriptor.credentials?.resolveToken(environment: environment)
-        #expect(resolution?.token == "workos:browser-token")
-        #expect(resolution?.source == .authFile)
-        // Diagnostics report browser sessions as OAuth, not API-key auth.
-        let summary = descriptor.credentials?.diagnosticAuthSummary(
-            account: nil,
-            config: nil,
-            environment: environment,
-            settings: nil)
-        #expect(summary?.configured == true)
-        #expect(summary?.modes == ["oauth"])
-    }
-
-    @Test
-    func `diagnostics report explicit api key as api`() {
-        let descriptor = ProviderDescriptorRegistry.descriptor(for: .clinepass)
-        let summary = descriptor.credentials?.diagnosticAuthSummary(
-            account: nil,
-            config: nil,
-            environment: ["CLINE_API_KEY": "token"],
-            settings: nil)
-        #expect(summary?.modes == ["api"])
-    }
-
-    private func writeProvidersFile(contents: String) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    func `descriptor resolves the existing Cline browser session without persisting it`() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let fileURL = directory.appendingPathComponent("providers.json", isDirectory: false)
-        try contents.write(to: fileURL, atomically: true, encoding: .utf8)
-        return fileURL
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("providers.json")
+        let content = #"{"providers":{"cline":{"settings":{"auth":{"accessToken":"fixture-access"}}}}}"#
+        try content.write(to: file, atomically: true, encoding: .utf8)
+        let descriptor = ProviderDescriptorRegistry.descriptor(for: .clinepass)
+        let resolution = descriptor.credentials?.resolveToken(
+            environment: ["HOME": directory.path], authFileURL: file)
+        #expect(resolution?.token == "workos:fixture-access")
+        #expect(resolution?.source == .authFile)
+        #expect(try String(contentsOf: file, encoding: .utf8) == content)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["providers.json"])
+    }
+
+    @Test(arguments: [true, false])
+    func `file credentials reach plugin auth and diagnostics without changing settings`(oauth: Bool) async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("providers.json")
+        let content = oauth
+            ? #"{"providers":{"cline":{"settings":{"auth":{"accessToken":"fixture-access"}}}}}"#
+            : #"{"providers":{"cline":{"settings":{"apiKey":"fixture-key"}}}}"#
+        try content.write(to: file, atomically: true, encoding: .utf8)
+        let environment = ["CLINE_PROVIDER_SETTINGS_PATH": file.path, "HOME": directory.path]
+        for override in [false, true] {
+            let env = override ? environment.merging(["CLINE_API_KEY": "override-key"]) { _, new in new } : environment
+            let expected = override ? "override-key" : (oauth ? "workos:fixture-access" : "fixture-key")
+            let strategy = ClinePassProviderDescriptor.makeStrategy(transport: ProviderHTTPTransportHandler { request in
+                #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer \(expected)")
+                #expect(request.url?.absoluteString == "https://api.cline.bot/api/v1/users/me/plan/usage-limits")
+                let response = try #require(HTTPURLResponse(
+                    url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil))
+                return (
+                    Data(#"{"success":true,"data":{"limits":[{"type":"weekly","percentUsed":25}]}}"#.utf8),
+                    response)
+            })
+            let context = ProviderCutoverTestSupport.context(environment: env)
+            #expect(await strategy.isAvailable(context))
+            let result = try await strategy.fetch(context)
+            #expect(result.usage.secondary?.usedPercent == 25)
+            #expect(result.usage.identity?.loginMethod == (oauth && !override ? "Browser" : "API key"))
+            let summary = ClinePassProviderDescriptor.descriptor.credentials?.diagnosticAuthSummary(
+                account: nil, config: nil, environment: env, settings: nil)
+            #expect(summary?.modes == [oauth && !override ? "oauth" : "api"])
+        }
+        #expect(try String(contentsOf: file, encoding: .utf8) == content)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["providers.json"])
     }
 }

@@ -7,37 +7,19 @@ read_when:
 
 # Status-item startup diagnostics
 
-Set `CODEXBAR_STATUS_ITEM_DIAGNOSTICS=1` when launching a build containing this diagnostic.
-It writes newline-delimited JSON to stdout, capped at 128 records per process. No logging is enabled by default.
-There is no new UI, permission request, or recovery behavior. The trace does not read credentials or capture pixels.
-Normal application startup still runs normally, including configured provider refreshes.
+Launch with `CODEXBAR_STATUS_ITEM_DIAGNOSTICS=1` to write newline-delimited JSON to stdout, capped at 128 records per process. Logging defaults off. Tracing adds no UI, permission requests, or recovery behavior, reads no credentials, and captures no pixels. Normal startup still includes configured provider refreshes.
 
-The stages are `will-finish-launching`, `did-finish-launching`, `created` (zero width), `named`, `sized`,
-`rendered`, `startup-check` (about two seconds), and `settled` (about 15 seconds). Later creation/recovery can
-produce additional creation records within the cap. Timestamps use system uptime.
+Stages: `will-finish-launching`, `did-finish-launching`, `created` (zero width), `named`, `sized`, `rendered`, `startup-check` (about two seconds), and `settled` (about 15 seconds). Later creation/recovery can add records within the cap. Timestamps use system uptime.
 
-Each record includes the autosave identity, visibility, length, main-thread and application-running state,
-activation policy (`0` regular, `1` accessory, `2` prohibited), AppKit button/window number and frames,
-and screen frames. Rendered/check/settled records also include expected visibility and the `VisibleCC` default.
-Recognized empty SwiftUI Settings windows are listed by number, geometry, and visibility, without titles.
-This lets us identify a reported 900×450 window instead of inferring its purpose from its size.
+Records include autosave identity, visibility, length, main-thread/running state, activation policy (`0` regular, `1` accessory, `2` prohibited), AppKit button/window numbers and frames, and screen frames. Rendered/check/settled records add expected visibility and the `VisibleCC` default. Recognized empty SwiftUI Settings windows include number, geometry, and visibility, without titles; size alone does not identify a window.
 
-`controlCenter` contains the total layer-25 window count, sorted window numbers, unnamed-window count,
-and all candidates matching the item's autosave name (number, Quartz bounds, onscreen state).
-Other applications' window titles and provider/account content are never included. `windowQuerySucceeded=false`
-means the window-server query failed, not that Control Center has zero windows.
+`controlCenter` contains the layer-25 window count, sorted window numbers, unnamed count, and autosave-name candidates (number, Quartz bounds, onscreen state). It excludes other apps' window titles and provider/account content. `windowQuerySucceeded=false` means the query failed, not zero windows.
 
-A named match is a **candidate**, not proof of hosting or rendered pixels: names can collide, window names can
-be redacted, and AppKit and Quartz use different coordinate systems. An empty match must not trigger recovery
-by itself. Compare the whole Control Center window-number set before creation and after settling, and compare
-AppKit geometry to the candidate Quartz geometry. The trace itself queries AppKit and WindowServer, so it can
-perturb a timing-sensitive failure; report if enabling it changes the symptom.
+A named match is only a **candidate**: names can collide or be redacted, and AppKit/Quartz coordinates differ. Do not infer hosting/rendered pixels from a match or trigger recovery from an empty match. Compare the full Control Center window-number set before creation and after settling, plus AppKit and candidate Quartz geometry. AppKit/WindowServer queries can perturb timing-sensitive failures; report if tracing changes the symptom.
 
 ## Reporter capture
 
-Use a maintainer-signed diagnostic app containing this change. For #3377, it must keep the production
-`com.steipete.codexbar` identity and Developer ID; the ordinary debug package has a different bundle identity
-and is only a separate control experiment. Do not reset preferences or move group containers for this capture.
+Use a maintainer-signed diagnostic app. For #3377, preserve the production `com.steipete.codexbar` identity and Developer ID; an ordinary debug package has a different identity and serves only as a control. Do not reset preferences or move group containers.
 
 Quit the existing CodexBar instance once before starting the diagnostic copy, so two instances do not compete
 for the same autosave name. Then run the supplied app executable directly (adjust the app path):

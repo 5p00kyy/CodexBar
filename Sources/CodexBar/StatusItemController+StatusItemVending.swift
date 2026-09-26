@@ -49,15 +49,28 @@ extension StatusItemController {
     /// Removes a status item while keeping its saved menu bar position (see
     /// `MenuBarStatusItemPlacementPreservation`).
     func removeStatusItemPreservingPlacement(_ item: NSStatusItem) {
-        MenuBarStatusItemPlacementPreservation.removeStatusItem(
-            item,
-            from: self.statusBar,
-            defaults: self.settings.userDefaults)
+        MenuBarStatusItemPlacementPreservation.preservingPreferredPosition(
+            autosaveName: item.autosaveName ?? "", defaults: self.settings.userDefaults)
+        {
+            if !self.hasPreparedForAppShutdown {
+                // Hide under the stable name so menu bar managers never see an unnamed visible item.
+                item.isVisible = false
+            }
+            self.statusBar.removeStatusItem(item)
+            if !self.hasPreparedForAppShutdown {
+                // Retire only after removal; later cleanup must not clear the restored position.
+                item.autosaveName = nil
+            }
+        }
     }
 
     /// Shows or hides a status item while keeping its saved menu bar position.
     func setStatusItemVisiblePreservingPlacement(_ item: NSStatusItem, _ isVisible: Bool) {
-        MenuBarStatusItemPlacementPreservation.setVisible(isVisible, for: item, defaults: self.settings.userDefaults)
+        MenuBarStatusItemPlacementPreservation.preservingPreferredPosition(
+            autosaveName: item.autosaveName ?? "", defaults: self.settings.userDefaults)
+        {
+            item.isVisible = isVisible
+        }
     }
 
     /// Lazily retrieves or creates a status item for the given provider.
@@ -82,14 +95,4 @@ extension StatusItemController {
                 onCreated?(item)
             })
     }
-
-    #if DEBUG
-    func _test_vendStatusItem(
-        for provider: UsageProvider,
-        onCreated: @escaping (NSStatusItem) -> Void)
-        -> NSStatusItem
-    {
-        self.lazyStatusItem(for: provider, onCreated: onCreated)
-    }
-    #endif
 }
