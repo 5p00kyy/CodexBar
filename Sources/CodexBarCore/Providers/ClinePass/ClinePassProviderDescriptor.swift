@@ -26,7 +26,7 @@ public enum ClinePassProviderDescriptor {
             subtitle: "Paste an API key, or run cline auth. Reads the existing Cline session without copying it.",
             placeholder: "ClinePass API key..."),
         showsAPIDetail: true,
-        requiresCredentialForAvailability: true)
+        availability: .configuredKey)
 
     private static let credentials = ProviderCredentialAdapter(
         supportsAPIKeyOverride: true,

@@ -26,7 +26,9 @@ For a bundled plugin with a simple API-key configuration, declare a public `Plug
 provider-owned `*ProviderDescriptor.swift` file, then expose `descriptor = Self.spec.makeDescriptor()`. The spec owns
 metadata, branding, environment-key aliases, the API-key field, and optional presentation and script-settings overrides;
 the bundled script still owns requests and parsing. See `XKiroProviderDescriptor` for a minimal example and
-`ZenMuxProviderDescriptor` for optional usage settings.
+`ZenMuxProviderDescriptor` for optional usage settings. Optional dashboards, subscription links, plan labels,
+widget colors, and progress colors retain their provider-owned values. `V0ProviderDescriptor` demonstrates a
+workspace field shared by config projection, plugin settings, and the app's Scope field.
 
 Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec with an `apiKeyField` and no separate
 app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
