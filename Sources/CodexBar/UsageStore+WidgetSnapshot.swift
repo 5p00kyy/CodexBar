@@ -216,7 +216,7 @@ extension UsageStore {
                    !self.widgetUsagePreservationBlockedProviders.contains(entry.provider)
            })
         {
-            entries = previousSnapshot.entries.compactMap { self.preservedWidgetEntryForCurrentMetric($0) }
+            entries = previousSnapshot.entries.map { self.preservedWidgetEntryForCurrentMetric($0) }
         }
         return WidgetSnapshot(
             entries: entries,
@@ -615,20 +615,18 @@ extension UsageStore {
     }
 
     /// Rows kept after a failed refresh were picked under the metric of their last publish. Re-apply the current
-    /// metric to them, and drop the entry when the row it needs was never published.
+    /// metric with the same fallback as a fresh publish: Monthly Plan falls back to the rows that are there.
     private func preservedWidgetEntryForCurrentMetric(
-        _ entry: WidgetSnapshot.ProviderEntry) -> WidgetSnapshot.ProviderEntry?
+        _ entry: WidgetSnapshot.ProviderEntry) -> WidgetSnapshot.ProviderEntry
     {
         // Provider-specific by design: only Mistral widget rows follow a menu bar metric.
         guard entry.provider == .mistral, let rows = entry.usageRows else { return entry }
-        let keptRowID: String? = switch self.settings.menuBarMetricPreference(for: .mistral) {
-        case .primary: "primary"
-        case .monthlyPlan: "mistral-monthly-plan"
-        default: nil
+        let planRows = rows.filter { $0.id == "mistral-monthly-plan" }
+        let kept = switch self.settings.menuBarMetricPreference(for: .mistral) {
+        case .primary: rows.filter { $0.id != "mistral-monthly-plan" }
+        case .monthlyPlan where !planRows.isEmpty: planRows
+        default: rows
         }
-        guard let keptRowID else { return entry }
-        let kept = rows.filter { $0.id == keptRowID }
-        guard !kept.isEmpty else { return nil }
         return WidgetSnapshot.ProviderEntry(
             instanceID: entry.provider,
             updatedAt: entry.updatedAt,
