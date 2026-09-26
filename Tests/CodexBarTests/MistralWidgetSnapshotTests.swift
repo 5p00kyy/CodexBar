@@ -6,7 +6,7 @@ import Testing
 @MainActor
 struct MistralWidgetSnapshotTests {
     @Test(arguments: [
-        (MenuBarMetricPreference.automatic, ["primary", "mistral-monthly-plan"]),
+        (MenuBarMetricPreference.automatic, ["primary"]),
         (MenuBarMetricPreference.primary, ["primary"]),
         (MenuBarMetricPreference.monthlyPlan, ["mistral-monthly-plan"]),
     ])

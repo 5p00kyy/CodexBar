@@ -229,9 +229,9 @@ struct WidgetEmptyProjectionTests {
 
     @Test(arguments: [
         ([MenuBarMetricPreference.automatic, .monthlyPlan], ["mistral-monthly-plan"]),
-        ([MenuBarMetricPreference.automatic, .primary, .automatic], ["primary", "mistral-monthly-plan"]),
+        ([MenuBarMetricPreference.automatic, .monthlyPlan, .automatic], ["primary"]),
         ([MenuBarMetricPreference.primary, .monthlyPlan], ["mistral-monthly-plan"]),
-        ([MenuBarMetricPreference.monthlyPlan, .primary], ["primary"]),
+        ([MenuBarMetricPreference.monthlyPlan, .primary, .monthlyPlan], ["mistral-monthly-plan"]),
     ])
     func `offline metric changes rebuild preserved Mistral rows only`(
         metrics: [MenuBarMetricPreference],

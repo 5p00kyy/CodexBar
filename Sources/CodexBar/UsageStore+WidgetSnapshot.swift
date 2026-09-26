@@ -566,22 +566,22 @@ extension UsageStore {
         return rows.filter { $0.percentLeft != nil }
     }
 
-    /// Widgets follow the Mistral menu bar metric: Automatic shows both allowances, a specific choice only that one.
+    /// Widgets follow the Mistral menu bar metric: Monthly Plan shows the Vibe plan, and every other choice keeps the
+    /// Included API allowance, as the menu bar does.
     private nonisolated static func mistralWidgetRows(
         _ rows: [WidgetSnapshot.WidgetUsageRowSnapshot],
         snapshot: UsageSnapshot,
         preference: MenuBarMetricPreference) -> [WidgetSnapshot.WidgetUsageRowSnapshot]
     {
-        guard preference != .primary,
+        guard preference == .monthlyPlan,
               let plan = snapshot.extraRateWindows?.first(where: { $0.id == "mistral-monthly-plan" }),
               plan.usageKnown
         else { return rows }
-        let planRow = WidgetSnapshot.WidgetUsageRowSnapshot(
+        return [WidgetSnapshot.WidgetUsageRowSnapshot(
             id: plan.id,
             title: plan.title,
             percentLeft: plan.window.remainingPercent,
-            window: plan.window)
-        return preference == .monthlyPlan ? [planRow] : rows + [planRow]
+            window: plan.window)]
     }
 
     /// Identifier prefix Claude fetchers use for model-scoped weekly carve-outs (for example, Fable).
