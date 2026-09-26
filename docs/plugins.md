@@ -500,6 +500,7 @@ Bundled scripts own requests, error classification, and snapshot mapping; Swift 
 | [Zed](zed.md) | Swift discovers editor settings and Keychain credentials. Opt-in browser billing uses only the declared `zed.dev` cookie session, never editor credentials. |
 | [Aixy](aixy.md) | TypeScript maps key-scoped usage and budgets; the host validates the configured gateway origin and supplies the API key. |
 | [Raycast](raycast.md) | `ctx.browser.sessions` retries candidates for declared `raycast.com` / `www.raycast.com` domains. The broker prefers exact-host cookies over same-name parent cookies and excludes sibling/lookalike hosts. |
+| [Muse](museai.md) | `ctx.browser.sessions` for `muse.ai`, with `persistent-storage` holding the deploy-specific server-action ID. A stale ID (`404 Server action not found.`) triggers rediscovery from the signed-in page's chunks. |
 
 ## Native adapters with declarative registration
 

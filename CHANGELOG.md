@@ -8,6 +8,7 @@
 
 ### Added
 
+- Muse: track the muse.ai Free, Power, and Maximum weekly allowance from browser cookies, with tokens left, top-ups, reset, and renewal. The server-action ID is rediscovered after muse.ai deploys. Fixes #3797.
 - Claude: show saved usage-limit resets and their expiry from the Web source in the menu and `codexbar usage` details (#4048). Thanks @enieuwy!
 
 ### Fixed

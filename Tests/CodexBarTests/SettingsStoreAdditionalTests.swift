@@ -226,6 +226,7 @@ struct SettingsStoreAdditionalTests {
             .nous: [.automatic, .primary],
             .xkiro: [.automatic, .primary],
             .raycast: [.automatic, .primary],
+            .museai: [.automatic, .primary],
             .coderabbit: [.automatic],
             .replicate: [.automatic],
             .aixy: [.automatic],

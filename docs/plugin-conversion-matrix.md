@@ -148,3 +148,4 @@ Abacus, Muse, LongCat, Replicate, and TypeSafe unchanged.
 | xkiro | `cut-over` | QuickJS + JavaScriptCore | Documented, unmetered bearer GET for daily free-token counters; separate from paid spend and wallet balances. |
 | aixy | `cut-over` | QuickJS + JavaScriptCore | Plugin-first key-scoped usage and overlapping budgets via bearer GET; both engines preserve reservations and zero-versus-unavailable spend. |
 | raycast | `cut-over` | QuickJS + JavaScriptCore | Declared-domain Chrome/manual cookies, host-over-parent cookie precedence, same-refresh session rejection, and website credit mapping; no native session strategy. |
+| museai | `cut-over` | QuickJS + JavaScriptCore | Declared-domain browser or manual cookies, persisted Next.js server-action ID with settings-chunk rediscovery after deploys, and weekly percent mapping; no native fetcher. |
