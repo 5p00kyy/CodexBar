@@ -15,9 +15,6 @@ extension StatusItemController {
         let signature = self.widgetDisplaySettingsSignature()
         guard signature != self.lastWidgetDisplaySettingsSignature else { return }
         self.lastWidgetDisplaySettingsSignature = signature
-        let metrics = self.settings.menuBarMetricPreferencesRaw
-        self.store.invalidateWidgetUsageForMetricChanges(from: self.lastWidgetMetricPreferencesRaw, to: metrics)
-        self.lastWidgetMetricPreferencesRaw = metrics
         self.store.persistWidgetSnapshot(reason: "settings-display")
     }
 }

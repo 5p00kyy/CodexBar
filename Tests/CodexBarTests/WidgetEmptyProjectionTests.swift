@@ -227,12 +227,24 @@ struct WidgetEmptyProjectionTests {
         #expect(saved?.entries.contains(where: { $0.providerCost != nil }) == false)
     }
 
-    @Test(arguments: ["mistral", "codex"])
-    func `metric change drops widget rows preserved under the old metric`(changedProvider: String) async throws {
-        let (store, settings) = self.makeStore(providers: [.mistral])
+    private static let mistralMetricChanges: [(MenuBarMetricPreference, MenuBarMetricPreference, [String]?)] = [
+        (.automatic, .monthlyPlan, ["mistral-monthly-plan"]),
+        (.automatic, .primary, ["primary"]),
+        (.primary, .monthlyPlan, nil),
+        (.monthlyPlan, .primary, nil),
+    ]
+
+    @Test(arguments: Self.mistralMetricChanges)
+    func `metric change reapplies to preserved Mistral rows only`(
+        from: MenuBarMetricPreference,
+        to: MenuBarMetricPreference,
+        expectedMistralRowIDs: [String]?) async throws
+    {
+        let (store, settings) = self.makeStore(providers: [.minimax, .mistral])
         var saved: WidgetSnapshot?
         store._test_widgetSnapshotSaveOverride = { saved = $0 }
-        settings.setMenuBarMetricPreference(.primary, for: .mistral)
+        settings.setMenuBarMetricPreference(from, for: .mistral)
+        self.seed(store, providers: [.minimax])
         store._setSnapshotForTesting(
             UsageSnapshot(
                 primary: RateWindow(usedPercent: 25, windowMinutes: nil, resetsAt: nil, resetDescription: nil),
@@ -245,24 +257,17 @@ struct WidgetEmptyProjectionTests {
             provider: .mistral)
         store.persistWidgetSnapshot(reason: "synthetic-success")
         await store.widgetSnapshotPersistTask?.value
-        #expect(saved?.entries.first?.usageRows?.map(\.id) == ["primary"])
+        let minimaxRows = try #require(saved?.entries.first { $0.provider == .minimax }?.usageRows)
 
         store.snapshots.removeAll()
-        store.errors = [.mistral: "Synthetic offline failure"]
-        let previousMetrics = settings.menuBarMetricPreferencesRaw
-        if changedProvider == "mistral" {
-            settings.setMenuBarMetricPreference(.monthlyPlan, for: .mistral)
-        } else {
-            settings.setMenuBarMetricPreference(.primary, for: .codex)
-        }
-        store.invalidateWidgetUsageForMetricChanges(
-            from: previousMetrics,
-            to: settings.menuBarMetricPreferencesRaw)
+        store.errors = [.minimax: "Synthetic offline failure", .mistral: "Synthetic offline failure"]
+        settings.setMenuBarMetricPreference(to, for: .mistral)
         store.persistWidgetSnapshot(reason: "synthetic-metric-change")
         await store.widgetSnapshotPersistTask?.value
-        // Another provider's metric leaves the preserved Mistral rows alone.
+
         let published = try #require(saved)
-        #expect(published.entries.map(\.provider) == (changedProvider == "mistral" ? [] : [.mistral]))
+        #expect(published.entries.first { $0.provider == .minimax }?.usageRows == minimaxRows)
+        #expect(published.entries.first { $0.provider == .mistral }?.usageRows?.map(\.id) == expectedMistralRowIDs)
     }
 
     private func makeStore(

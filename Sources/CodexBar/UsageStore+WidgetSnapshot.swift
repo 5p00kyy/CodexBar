@@ -216,7 +216,7 @@ extension UsageStore {
                    !self.widgetUsagePreservationBlockedProviders.contains(entry.provider)
            })
         {
-            entries = previousSnapshot.entries
+            entries = previousSnapshot.entries.compactMap { self.preservedWidgetEntryForCurrentMetric($0) }
         }
         return WidgetSnapshot(
             entries: entries,
@@ -614,10 +614,34 @@ extension UsageStore {
         }
     }
 
-    /// Widget rows kept after a failed refresh were picked under the old metric, so drop them until a fetch succeeds.
-    func invalidateWidgetUsageForMetricChanges(from old: [String: String], to new: [String: String]) {
-        for key in Set(old.keys).union(new.keys) where old[key] != new[key] {
-            UsageProvider(rawValue: key).map(self.invalidateGenericWidgetUsage(for:))
+    /// Rows kept after a failed refresh were picked under the metric of their last publish. Re-apply the current
+    /// metric to them, and drop the entry when the row it needs was never published.
+    private func preservedWidgetEntryForCurrentMetric(
+        _ entry: WidgetSnapshot.ProviderEntry) -> WidgetSnapshot.ProviderEntry?
+    {
+        // Provider-specific by design: only Mistral widget rows follow a menu bar metric.
+        guard entry.provider == .mistral, let rows = entry.usageRows else { return entry }
+        let keptRowID: String? = switch self.settings.menuBarMetricPreference(for: .mistral) {
+        case .primary: "primary"
+        case .monthlyPlan: "mistral-monthly-plan"
+        default: nil
         }
+        guard let keptRowID else { return entry }
+        let kept = rows.filter { $0.id == keptRowID }
+        guard !kept.isEmpty else { return nil }
+        return WidgetSnapshot.ProviderEntry(
+            instanceID: entry.provider,
+            updatedAt: entry.updatedAt,
+            primary: entry.primary,
+            secondary: entry.secondary,
+            tertiary: entry.tertiary,
+            usageRows: kept,
+            creditsRemaining: entry.creditsRemaining,
+            codeReviewRemainingPercent: entry.codeReviewRemainingPercent,
+            tokenUsage: entry.tokenUsage,
+            dailyUsage: entry.dailyUsage,
+            providerCost: entry.providerCost,
+            quotaOwnerKey: entry.quotaOwnerKey,
+            balanceText: entry.balanceText)
     }
 }
