@@ -6,20 +6,16 @@ import Testing
 @MainActor
 struct MenuDescriptorMistralTests {
     @Test(arguments: [nil, Date(timeIntervalSince1970: 1_790_812_800)])
-    func `Monthly Plan amounts show as detail, never as a reset time`(resetsAt: Date?) throws {
+    func `Monthly Plan amounts show as detail, never as a reset time`(resetsAt: Date?) {
         let suite = "MenuDescriptorMistralTests-\(resetsAt == nil ? "undated" : "dated")"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        let settings = SettingsStore(
-            userDefaults: defaults,
-            configStore: testConfigStore(suiteName: suite),
-            zaiTokenStore: NoopZaiTokenStore(),
-            syntheticTokenStore: NoopSyntheticTokenStore())
+        let settings = testSettingsStore(suiteName: suite, userDefaults: InMemoryUserDefaults())
         settings.statusChecksEnabled = false
         let store = UsageStore(
             fetcher: UsageFetcher(environment: [:]),
             browserDetection: BrowserDetection(cacheTTL: 0),
-            settings: settings)
+            settings: settings,
+            startupBehavior: .testing,
+            environmentBase: [:])
         let snapshot = UsageSnapshot(
             primary: nil,
             secondary: nil,

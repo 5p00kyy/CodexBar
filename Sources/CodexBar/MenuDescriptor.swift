@@ -263,31 +263,13 @@ struct MenuDescriptor {
             let paceVisible = settings.paceVisible && ProviderDescriptorRegistry.descriptor(for: provider).pace
                 .allowsPace(dataConfidence: snap.dataConfidence)
             if let primary = snap.primary {
-                let primaryDetail = primary.resetDescription?.trimmingCharacters(in: .whitespacesAndNewlines)
-                let primaryDescriptionIsDetail = presentation.menu.usesPrimaryDescriptionAsDetail(snapshot: snap)
-                let primaryWindow = if primaryDescriptionIsDetail {
-                    // Some providers use resetDescription for non-reset detail
-                    // (e.g., "Unlimited", "X/Y credits"). Avoid rendering it as a "Resets ..." line.
-                    RateWindow(
-                        usedPercent: primary.usedPercent,
-                        windowMinutes: primary.windowMinutes,
-                        resetsAt: primary.resetsAt,
-                        resetDescription: nil)
-                } else {
-                    primary
-                }
                 Self.appendRateWindow(
                     entries: &entries,
                     title: labels.primary,
-                    window: primaryWindow,
+                    window: primary,
                     resetStyle: resetStyle,
-                    showUsed: settings.usageBarsShowUsed)
-                if primaryDescriptionIsDetail,
-                   let primaryDetail,
-                   !primaryDetail.isEmpty
-                {
-                    entries.append(.text(primaryDetail, .secondary))
-                }
+                    showUsed: settings.usageBarsShowUsed,
+                    descriptionIsDetail: presentation.menu.usesPrimaryDescriptionAsDetail(snapshot: snap))
                 if paceVisible,
                    presentation.menu.showsPrimaryWeeklyPace,
                    let pace = store.weeklyPace(provider: provider, window: primary, dataConfidence: snap.dataConfidence)
@@ -349,24 +331,13 @@ struct MenuDescriptor {
                     resetOverride: opusResetOverride)
             }
             for extra in presentation.extraRateWindows(snapshot: snap) {
-                // Match the menu card: a detail-backed window's description is a detail, never a reset time.
-                var detail: String?
-                if presentation.menuCard.extraRateWindowShowsResetDescriptionAsDetail(extra),
-                   let text = extra.window.resetDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
-                   !text.isEmpty
-                {
-                    detail = text
-                }
                 Self.appendRateWindow(
                     entries: &entries,
                     title: extra.title,
                     window: extra.window,
                     resetStyle: resetStyle,
                     showUsed: settings.usageBarsShowUsed,
-                    resetOverride: extra.window.resetsAt == nil ? detail : nil)
-                if extra.window.resetsAt != nil, let detail {
-                    entries.append(.text(detail, .secondary))
-                }
+                    descriptionIsDetail: presentation.menuCard.extraRateWindowShowsResetDescriptionAsDetail(extra))
             }
 
             Self.appendProviderUsageSummaries(
@@ -786,15 +757,24 @@ struct MenuDescriptor {
         window: RateWindow,
         resetStyle: ResetTimeDisplayStyle,
         showUsed: Bool,
-        resetOverride: String? = nil)
+        resetOverride: String? = nil,
+        descriptionIsDetail: Bool = false)
     {
         let line = UsageFormatter
             .usageLine(remaining: window.remainingPercent, used: window.usedPercent, showUsed: showUsed)
         entries.append(.text("\(title): \(line)", .primary))
         if let resetOverride {
             entries.append(.text(resetOverride, .secondary))
-        } else if let reset = UsageFormatter.resetLine(for: window, style: resetStyle) {
+        } else if !descriptionIsDetail || window.resetsAt != nil,
+                  let reset = UsageFormatter.resetLine(for: window, style: resetStyle)
+        {
             entries.append(.text(reset, .secondary))
+        }
+        if descriptionIsDetail,
+           let detail = window.resetDescription?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !detail.isEmpty
+        {
+            entries.append(.text(detail, .secondary))
         }
     }
 }

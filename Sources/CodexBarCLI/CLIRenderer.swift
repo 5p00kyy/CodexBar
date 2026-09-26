@@ -431,7 +431,7 @@ enum CLIRenderer {
         let detailBacked = ProviderDescriptorRegistry.descriptor(for: provider).metadata.usesDetailBackedWindow
         let reset = detailBacked
             ? self.resetLineForDetailBackedWindow(window: rateWindow, style: resetStyle, now: now)
-            : self.resetLine(for: rateWindow, style: resetStyle, now: now)
+            : UsageFormatter.resetLine(for: rateWindow, style: resetStyle, now: now)
         let detailText = detailBacked ? self.detailLineForDetailBackedWindow(window: rateWindow) : nil
         return CLICardMetric(
             label: window.title,
@@ -665,17 +665,12 @@ enum CLIRenderer {
                 ? self.rateLine(title: window.title, window: window.window, useColor: context.useColor)
                 : self.labelValueLine(window.title, value: "Unavailable", useColor: context.useColor)
             lines.append(line)
-            // Match the menu card: a detail-backed window shows its description instead of a reset fallback.
-            let usesDetail = usesResetDescriptionAsDetail(window)
-            let reset = usesDetail
-                ? self.resetLineForDetailBackedWindow(window: window.window, style: context.resetStyle, now: now)
-                : self.resetLine(for: window.window, style: context.resetStyle, now: now)
-            if let reset {
-                lines.append(self.subtleLine(reset, useColor: context.useColor))
-            }
-            if usesDetail, let detail = self.detailLineForDetailBackedWindow(window: window.window) {
-                lines.append(self.subtleLine(detail, useColor: context.useColor))
-            }
+            self.appendResetAndDetailLines(
+                usesDetail: usesResetDescriptionAsDetail(window),
+                window: window.window,
+                context: context,
+                now: now,
+                lines: &lines)
         }
     }
 
@@ -797,7 +792,7 @@ enum CLIRenderer {
             lines.append(pace)
         }
         self.appendResetAndDetailLines(
-            provider: provider,
+            usesDetail: ProviderDescriptorRegistry.descriptor(for: provider).metadata.usesDetailBackedWindow,
             window: window,
             context: context,
             now: now,
@@ -805,13 +800,13 @@ enum CLIRenderer {
     }
 
     private static func appendResetAndDetailLines(
-        provider: UsageProvider,
+        usesDetail: Bool,
         window: RateWindow,
         context: RenderContext,
         now: Date,
         lines: inout [String])
     {
-        if ProviderDescriptorRegistry.descriptor(for: provider).metadata.usesDetailBackedWindow {
+        if usesDetail {
             if let reset = self.resetLineForDetailBackedWindow(window: window, style: context.resetStyle, now: now) {
                 lines.append(self.subtleLine(reset, useColor: context.useColor))
             }
@@ -821,13 +816,9 @@ enum CLIRenderer {
             return
         }
 
-        if let reset = self.resetLine(for: window, style: context.resetStyle, now: now) {
+        if let reset = UsageFormatter.resetLine(for: window, style: context.resetStyle, now: now) {
             lines.append(self.subtleLine(reset, useColor: context.useColor))
         }
-    }
-
-    private static func resetLine(for window: RateWindow, style: ResetTimeDisplayStyle, now: Date) -> String? {
-        UsageFormatter.resetLine(for: window, style: style, now: now)
     }
 
     private static func resetLineForDetailBackedWindow(
