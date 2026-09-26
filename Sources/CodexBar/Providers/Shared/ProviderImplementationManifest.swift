@@ -87,10 +87,10 @@ enum ProviderImplementationManifest {
         TypeSafeProviderImplementation(),
         HyperProviderImplementation(),
         GitKrakenProviderImplementation(),
-        DevPassProviderImplementation(),
-        AtlasCloudProviderImplementation(),
-        VercelProviderImplementation(),
+        PluginAPIKeyProviderImplementation(spec: DevPassProviderDescriptor.spec),
+        PluginAPIKeyProviderImplementation(spec: AtlasCloudProviderDescriptor.spec),
+        PluginAPIKeyProviderImplementation(spec: VercelProviderDescriptor.spec),
         LLMManProviderImplementation(),
-        XKiroProviderImplementation(),
+        PluginAPIKeyProviderImplementation(spec: XKiroProviderDescriptor.spec),
     ]
 }
