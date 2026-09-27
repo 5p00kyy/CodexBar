@@ -96,7 +96,7 @@ enum AntigravityScopedStagingError: LocalizedError, Sendable, Equatable {
 /// single `agy` print invocation. The directory is deleted by the caller's `defer`,
 /// so no account lifecycle tracking, locking, or persistent credential copies exist.
 enum AntigravityScopedAgyStaging {
-    // Provider-specific by design: agy's file token storage path is a fixed external contract.
+    /// Provider-specific by design: agy's file token storage path is a fixed external contract.
     static let tokenRelativePath = [".gemini", "antigravity-cli", "antigravity-oauth-token"]
 
     /// Allowlist environment for the scoped child. Nothing else is inherited:
@@ -159,8 +159,7 @@ enum AntigravityScopedAgyStaging {
             try fileManager.createDirectory(
                 at: tokenURL, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             tokenURL.appendPathComponent(Self.tokenRelativePath.last!)
-            try tokenData.write(to: tokenURL, options: [.atomic])
-            try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: tokenURL.path)
+            try CredentialFileWriter.writePrivate(tokenData, to: tokenURL)
 
             guard let staged = try? Data(contentsOf: tokenURL),
                   let payload = AntigravityAgyFileTokenEncoder.decode(data: staged),
