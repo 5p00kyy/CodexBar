@@ -91,8 +91,7 @@ There is no `codexbar config set` command for `cookieHeader`; use one of the pat
   - `SakanaSettingsReader.swift` — `SAKANA_COOKIE` env key, cookie normalizer
 - `Sources/CodexBarCore/Resources/Plugins/sakana.js` — billing and PAYG parsing into generic usage/details
 - `Sources/CodexBarCore/Plugins/ProviderPluginHTTPResponse.swift` — bounded optional GET collection
-- `Sources/CodexBar/Providers/Sakana/`
-  - `SakanaProviderImplementation.swift` — settings UI, availability check
+- `Sources/CodexBar/Providers/Shared/PluginCookieProviderImplementation.swift` — shared cookie field and availability
 - `Sources/CodexBar/MenuCardView+Costs.swift` — live menu-card balance and usage section
 - `Sources/CodexBar/MenuDescriptor.swift` — text-descriptor balance and usage rows
 - Dashboard: `https://console.sakana.ai/billing` (subscription tab), `https://console.sakana.ai/billing?tab=payAsYouGo`

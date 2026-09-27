@@ -77,7 +77,7 @@ struct ProviderSettingsDescriptorTests {
     func `Hyper exposes session controls and an independent API key`() throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-hyper")
         let context = fixture.settingsContext(provider: .hyper)
-        let implementation = HyperProviderImplementation()
+        let implementation = try #require(ProviderCatalog.implementation(for: .hyper))
         let fields = implementation.settingsFields(context: context)
         let picker = try #require(implementation.settingsPickers(context: context).first)
         #expect(fields.map(\.id) == ["hyper-cookie", "hyper-api-key"])
@@ -746,17 +746,17 @@ struct ProviderSettingsDescriptorTests {
     func `raycast manual cookie uses a single header field`() throws {
         let fixture = try self.makeSettingsFixture(suite: "ProviderSettingsDescriptorTests-raycast-cookie")
         let context = fixture.settingsContext(provider: .raycast)
-        let implementation = RaycastProviderImplementation()
+        let implementation = try #require(ProviderCatalog.implementation(for: .raycast))
         let pickers = implementation.settingsPickers(context: context)
         #expect(pickers.contains(where: { $0.id == "raycast-cookie-source" }))
         #expect(pickers.first?.options.contains(where: { $0.id == "off" }) == true)
 
-        fixture.settings.raycastCookieSource = .auto
+        fixture.settings.setCookieSource(.auto, provider: .raycast)
         let automaticHeader = try #require(
             implementation.settingsFields(context: context).first { $0.id == "raycast-cookie-header" })
         #expect(automaticHeader.isVisible?() == false)
 
-        fixture.settings.raycastCookieSource = .manual
+        fixture.settings.setCookieSource(.manual, provider: .raycast)
         let header = try #require(
             implementation.settingsFields(context: context).first { $0.id == "raycast-cookie-header" })
         #expect(header.isVisible?() ?? true)

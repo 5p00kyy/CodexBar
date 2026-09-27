@@ -58,8 +58,9 @@ extension PluginProviderSpec {
             }
     }
 
-    func makeCredentials() -> ProviderCredentialAdapter {
-        ProviderCredentialAdapter(
+    func makeCredentials() -> ProviderCredentialAdapter? {
+        guard !self.environmentKey.isEmpty else { return nil }
+        return ProviderCredentialAdapter(
             supportsAPIKeyOverride: true,
             apiKeyDebugLabel: self.apiKeyDebugLabel,
             environmentProjections: self.credentialProjections,
