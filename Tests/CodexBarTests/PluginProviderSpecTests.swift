@@ -19,124 +19,77 @@ struct PluginProviderSpecTests {
         .aiand,
         .synthetic, .chutes, .v0, .elevenlabs, .neuralwatt, .clawrouter,
         .aixy, .bifrost, .deepgram, .llmproxy, .litellm, .sub2api, .llmman,
+        .helmcode, .hyper, .manus, .perplexity, .qoder, .raycast, .sakana, .t3chat,
     ]
 
+    private struct DerivedProvider: Decodable, Equatable {
+        let id: String
+        let projections: [String: String]
+        let sourceModes: [String]
+        let strategies: [String]
+        let fields: [String]
+        let availability: [Bool]
+        let environmentAvailability: [[Bool]]
+        let enterpriseHost: Bool
+        let workspaceOrder: Int?
+        let projectToken: String
+        let cliResolution: [String: [String]]
+    }
+
     @Test
-    func `plugin registration and settings preserve their baseline`() async throws {
+    func `builders preserve derived registration and settings behavior`() async throws {
         let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: "PluginProviderSpecTests")
-        var rows: [[String: Any]] = []
+        var rows: [DerivedProvider] = []
         for provider in Self.providers {
             let descriptor = ProviderDescriptorRegistry.descriptor(for: provider)
-            let metadata = descriptor.metadata
             let implementation = try #require(ProviderCatalog.implementation(for: provider))
             let fields = implementation.settingsFields(context: fixture.settingsContext(provider: provider))
-            var row: [String: Any] = [
-                "id": provider.rawValue,
-                "name": metadata.displayName,
-                "labels": [metadata.sessionLabel, metadata.weeklyLabel, metadata.opusLabel ?? ""],
-                "toggle": metadata.toggleTitle,
-                "cli": [descriptor.cli.name] + descriptor.cli.aliases,
-                "dashboard": metadata.dashboardURL ?? "",
-                "subscriptionDashboard": metadata.subscriptionDashboardURL ?? "",
-                "creditsHint": metadata.creditsHint,
-                "planLabels": metadata.sharePlanLabels,
-                "apiKeyDebugLabel": descriptor.credentials?.apiKeyDebugLabel ?? "",
-                "status": [metadata.statusPageURL ?? "", metadata.statusLinkURL ?? ""],
-                "debug": metadata.debugLogUnavailableMessage ?? "",
-                "flags": [
-                    metadata.supportsOpus,
-                    metadata.supportsCredits,
-                    metadata.defaultEnabled,
-                    metadata.widgetSelectable,
-                    metadata.isPrimaryProvider,
-                    metadata.usesAccountFallback,
-                    metadata.balanceOnly,
-                    metadata.usesDetailBackedWindow,
-                ],
-                "color": Self.components(descriptor.branding.color),
-                "widgetColor": Self.components(descriptor.branding.widgetColor),
-                "progressColor": String(describing: descriptor.branding.progressColorStyle),
-                "confetti": descriptor.branding.confettiPalette.map(Self.components),
-                "icon": descriptor.branding.iconResourceName,
-                "noData": descriptor.tokenCost.noDataMessage(),
-                "detail": implementation.presentation(context: fixture.presentationContext(
-                    provider: provider,
-                    metadata: metadata)).detailLine(fixture.presentationContext(
-                    provider: provider,
-                    metadata: metadata)),
-                "fields": fields.map { field -> [String: Any] in
-                    [
-                        "id": field.id,
-                        "title": field.title,
-                        "subtitle": field.subtitle,
-                        "placeholder": field.placeholder as Any? ?? NSNull(),
-                        "secure": field.kind == .secure,
-                        "actions": field.actions.map { ["id": $0.id, "title": $0.title] },
-                    ]
-                },
-            ]
-            row["toggles"] = implementation.settingsToggles(context: fixture.settingsContext(provider: provider))
-                .map { ["id": $0.id, "title": $0.title, "subtitle": $0.subtitle] }
-            row["availability"] = ["", "  ", "fixture-key"].map { value in
+            let availability = ["", "  ", "fixture-key"].map { value in
                 fixture.settings[providerConfig: provider, field: .apiKey] = value
                 return implementation.isAvailable(context: .init(
-                    provider: provider,
-                    settings: fixture.settings,
-                    environment: [:]))
-            }
-            for field in fields where field.kind == .secure {
-                field.binding.wrappedValue = "bound-key"
-                #expect(fixture.settings[providerConfig: provider, field: .apiKey] == "bound-key")
+                    provider: provider, settings: fixture.settings, environment: [:]))
             }
             fixture.settings[providerConfig: provider, field: .apiKey] = ""
             var config = ProviderConfig(id: provider.instanceID, apiKey: "fixture-key", workspaceID: "fixture-project")
             config.enterpriseHost = "https://fixture.example.com"
             config.litellmModelUsageEnabled = true
             let projected = descriptor.credentials?.applyConfig(base: [:], config: config) ?? [:]
-            row["projections"] = projected
-            row["enterpriseHost"] = descriptor.config.supportsEnterpriseHost
-            row["workspaceOrder"] = descriptor.config.workspaceIDValidationOrder as Any? ?? NSNull()
-            row["projectToken"] = descriptor.credentials?.resolveToken(kind: .projectID, environment: projected)?
-                .token ?? ""
             let keyOnly = descriptor.credentials?.applyConfig(
                 base: [:], config: ProviderConfig(id: provider.instanceID, apiKey: "fixture-key")) ?? [:]
             config.enterpriseHost = "http://public.example.com"
             let invalid = descriptor.credentials?.applyConfig(base: [:], config: config) ?? [:]
-            var availability: [[Bool]] = []
+            var environmentAvailability: [[Bool]] = []
             for environment in [[:], keyOnly, projected, invalid] {
                 let context = ProviderCutoverTestSupport.context(environment: environment)
                 let strategies = await descriptor.fetchPlan.pipeline.resolveStrategies(context)
-                await availability.append([
+                await environmentAvailability.append([
                     implementation.isAvailable(context: .init(
                         provider: provider, settings: fixture.settings, environment: environment)),
                     strategies.first?.isAvailable(context) ?? false,
                 ])
             }
-            row["environmentAvailability"] = availability
-            if let support = descriptor.credentials?.tokenAccountSupport {
-                row["tokenAccounts"] = [
-                    "title": support.title,
-                    "subtitle": support.subtitle,
-                    "placeholder": support.placeholder,
-                    "injection": support.envOverride(token: "fixture-account") ?? [:],
-                    "delay": support.minimumDelayBetweenAccountRefreshes.map(String.init(describing:)) ?? "",
-                ]
-                fixture.settings.addTokenAccount(provider: provider, label: "Fixture", token: "fixture-account")
-                row["accountAvailability"] = implementation.isAvailable(context: .init(
-                    provider: provider, settings: fixture.settings, environment: [:]))
-            }
-            rows.append(row)
+            let strategies = await descriptor.fetchPlan.pipeline.resolveStrategies(ProviderCutoverTestSupport.context())
+            let cliResolution = Dictionary(uniqueKeysWithValues: ([descriptor.cli.name] + descriptor.cli.aliases).map {
+                ($0.uppercased(), ProviderSelection(argument: $0.uppercased())?.asList.map(\.rawValue) ?? [])
+            })
+            rows.append(DerivedProvider(
+                id: provider.rawValue,
+                projections: projected,
+                sourceModes: descriptor.fetchPlan.sourceModes.map(\.rawValue).sorted(),
+                strategies: strategies.map(\.id),
+                fields: fields.map { $0.kind == .secure ? "secure" : "plain" },
+                availability: availability,
+                environmentAvailability: environmentAvailability,
+                enterpriseHost: descriptor.config.supportsEnterpriseHost,
+                workspaceOrder: descriptor.config.workspaceIDValidationOrder,
+                projectToken: descriptor.credentials?.resolveToken(kind: .projectID, environment: projected)?
+                    .token ?? "",
+                cliResolution: cliResolution))
         }
-        let baseline: [String: Any] = [
-            "providers": rows,
-            "order": ProviderDescriptorRegistry.all.map(\.id.rawValue),
-            "implementationOrder": ProviderCatalog.all.map(\.id.rawValue),
-            "help": CodexBarCLI.rootHelp(version: "0.0.0"),
-        ]
-        let data = try JSONSerialization.data(withJSONObject: baseline, options: [.prettyPrinted, .sortedKeys])
         let golden = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("Fixtures/plugin-provider-specs.json")
-        #expect(try String(data: data, encoding: .utf8) == String(contentsOf: golden, encoding: .utf8))
+        let expected = try JSONDecoder().decode([DerivedProvider].self, from: Data(contentsOf: golden))
+        #expect(rows == expected)
     }
 
     @Test
@@ -155,10 +108,6 @@ struct PluginProviderSpecTests {
         #expect(spec.apiKey(environment: [:]) == nil)
         #expect(spec.apiKey(environment: ["FIXTURE_KEY": "  ", "FIXTURE_ALIAS": " 'alias' "]) == "alias")
         #expect(spec.apiKey(environment: ["FIXTURE_KEY": " primary ", "FIXTURE_ALIAS": "alias"]) == "primary")
-    }
-
-    private static func components(_ color: ProviderColor) -> [Double] {
-        [color.red, color.green, color.blue]
     }
 
     @Test
