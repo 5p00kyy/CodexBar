@@ -81,6 +81,11 @@ or account ownership is invalidated. Burn Down eligibility still requires a know
 codexbar usage --provider mistral --verbose
 ```
 
+Text output includes both Included API and the optional Monthly Plan, each with its percentage, reset date when
+available, and used / total / remaining amounts. Amounts are shown as detail, never as a reset time. This uses the
+existing snapshot; no additional requests are made. JSON output is unchanged: the Monthly Plan remains in
+`extraRateWindows` with the ID `mistral-monthly-plan`.
+
 ## Troubleshooting
 
 ### "No Mistral session cookies found"

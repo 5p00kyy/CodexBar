@@ -20,6 +20,22 @@ App refreshes are scoped to the installed plugin runtime and its fetch settings.
 reconfiguring a plugin prevents an older refresh from publishing usage or errors. A replacement refresh waits for retired
 work to finish and reads the current configuration when its fetch starts. Display-only preferences do not invalidate usage.
 
+## Bundled API-key provider registration
+
+For a bundled plugin with a simple API-key configuration, declare a public `PluginProviderSpec` named `spec` in its
+provider-owned `*ProviderDescriptor.swift` file, then expose `descriptor = Self.spec.makeDescriptor()`. The spec owns
+metadata, branding, environment-key aliases, the API-key field, and optional presentation and script-settings overrides;
+the bundled script still owns requests and parsing. See `XKiroProviderDescriptor` for a minimal example and
+`ZenMuxProviderDescriptor` for optional usage settings.
+
+Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec with an `apiKeyField` and no separate
+app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
+the provider's availability and detail-line policies explicitly. Providers with extra fields or token-account behavior
+can share the descriptor builder while retaining their app implementation, as GitKraken and DeepInfra do. Keep native
+credential discovery and cookie/session handling outside this API-key-only building block. ClinePass supplies
+provider-owned credential and fetch-plan overrides to `makeDescriptor` for its read-only Cline session file, while
+retaining the spec's API-key path, metadata, and shared settings field.
+
 ## Minimal plugin
 
 ```js
@@ -206,8 +222,9 @@ cross-process locking. Removing the source file manually does not delete state. 
 cookies, and tokens belong in secure settings. Storage does not alter `ctx.cache` or the settings `persist` allowlist.
 
 Bundled first-party providers that have cut over to JavaScript use the shared runtime's 20-second hung-script watchdog.
-A timeout fails that refresh and discards the poisoned worker so the next refresh starts with a fresh context; this is
-production-default and does not depend on `CODEXBAR_JS_PROVIDERS`.
+A timeout fails that refresh and discards the poisoned worker before returning the error, so an immediate retry starts
+with a fresh context. Cancellation retires the worker in the same way. This is production-default and does not depend
+on `CODEXBAR_JS_PROVIDERS`.
 QuickJS enforces the watchdog in-engine with `JS_SetInterruptHandler`, caps the runtime heap at 64 MiB, and caps the
 JavaScript stack at 2 MiB. The interrupt terminates evaluation on its confined thread; timed-out scripts do not leave an
 abandoned evaluation thread behind. On Apple platforms, `CODEXBAR_PLUGIN_ENGINE=jsc` selects the JavaScriptCore rollback
