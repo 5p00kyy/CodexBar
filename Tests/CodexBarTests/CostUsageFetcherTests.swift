@@ -396,21 +396,11 @@ extension CostUsageFetcherTests {
                     "timestamp": env.isoString(for: parentDay),
                     "payload": ["session_id": parentID],
                 ],
-                [
-                    "type": "event_msg",
-                    "timestamp": parentTimestamp,
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": model,
-                            "total_token_usage": [
-                                "input_tokens": 100,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 0,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: parentTimestamp,
+                    model: model,
+                    usageKey: "total_token_usage",
+                    usage: .init(input: 100, cached: 0, output: 0)),
             ]))
         _ = try env.writeCodexSessionFile(
             day: childDay,
@@ -425,21 +415,11 @@ extension CostUsageFetcherTests {
                         "timestamp": parentTimestamp,
                     ],
                 ],
-                [
-                    "type": "event_msg",
-                    "timestamp": childTimestamp,
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": model,
-                            "total_token_usage": [
-                                "input_tokens": 125,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 5,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: childTimestamp,
+                    model: model,
+                    usageKey: "total_token_usage",
+                    usage: .init(input: 125, cached: 0, output: 5)),
             ]))
 
         let options = CostUsageScanner.Options(
@@ -470,42 +450,22 @@ extension CostUsageFetcherTests {
             day: oldDay,
             filename: "old.jsonl",
             contents: env.jsonl([
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: oldDay),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 10,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 0,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: oldDay),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 10, cached: 0, output: 0)),
             ]))
         try FileManager.default.setAttributes([.modificationDate: oldDay], ofItemAtPath: oldURL.path)
         _ = try env.writeCodexSessionFile(
             day: newDay,
             filename: "new.jsonl",
             contents: env.jsonl([
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: newDay),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 30,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 0,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: newDay),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 30, cached: 0, output: 0)),
             ]))
 
         let options = CostUsageScanner.Options(
@@ -541,41 +501,21 @@ extension CostUsageFetcherTests {
             day: oldDay,
             filename: "old.jsonl",
             contents: env.jsonl([
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: oldDay),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 15,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 0,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: oldDay),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 15, cached: 0, output: 0)),
             ]))
         _ = try env.writeCodexSessionFile(
             day: newDay,
             filename: "new.jsonl",
             contents: env.jsonl([
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: newDay),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 30,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 0,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: newDay),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 30, cached: 0, output: 0)),
             ]))
 
         var options = CostUsageScanner.Options(
@@ -630,41 +570,21 @@ extension CostUsageFetcherTests {
             day: oldDay,
             filename: "old.jsonl",
             contents: env.jsonl([
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: oldDay),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 15,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 0,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: oldDay),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 15, cached: 0, output: 0)),
             ]))
         _ = try env.writeCodexSessionFile(
             day: newDay,
             filename: "new.jsonl",
             contents: env.jsonl([
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: newDay),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 30,
-                                "cached_input_tokens": 0,
-                                "output_tokens": 0,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: newDay),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 30, cached: 0, output: 0)),
             ]))
 
         var options = CostUsageScanner.Options(
@@ -709,21 +629,11 @@ extension CostUsageFetcherTests {
                 "timestamp": env.isoString(for: day),
                 "payload": ["session_id": "moved-session"],
             ],
-            [
-                "type": "event_msg",
-                "timestamp": env.isoString(for: day.addingTimeInterval(1)),
-                "payload": [
-                    "type": "token_count",
-                    "info": [
-                        "model": "openai/gpt-5.4",
-                        "last_token_usage": [
-                            "input_tokens": 30,
-                            "cached_input_tokens": 0,
-                            "output_tokens": 0,
-                        ],
-                    ],
-                ],
-            ],
+            Self.codexTokenCount(
+                timestamp: env.isoString(for: day.addingTimeInterval(1)),
+                model: "openai/gpt-5.4",
+                usageKey: "last_token_usage",
+                usage: .init(input: 30, cached: 0, output: 0)),
         ])
         let originalURL = try env.writeCodexSessionFile(day: day, filename: "moved.jsonl", contents: contents)
 
@@ -777,21 +687,11 @@ extension CostUsageFetcherTests {
                 "model": "openai/gpt-5.4",
             ],
         ]
-        let nativeTokenCount: [String: Any] = [
-            "type": "event_msg",
-            "timestamp": iso1,
-            "payload": [
-                "type": "token_count",
-                "info": [
-                    "total_token_usage": [
-                        "input_tokens": 100,
-                        "cached_input_tokens": 20,
-                        "output_tokens": 10,
-                    ],
-                    "model": "openai/gpt-5.4",
-                ],
-            ],
-        ]
+        let nativeTokenCount: [String: Any] = Self.codexTokenCount(
+            timestamp: iso1,
+            model: "openai/gpt-5.4",
+            usageKey: "total_token_usage",
+            usage: .init(input: 100, cached: 20, output: 10))
         _ = try env.writeCodexSessionFile(
             day: day,
             filename: "session.jsonl",
@@ -817,15 +717,7 @@ extension CostUsageFetcherTests {
             relativePath: "2026-04-08T10-00-00-000Z_test.jsonl",
             contents: env.jsonl([piAssistant]))
 
-        let nativeOptions = CostUsageScanner.Options(
-            codexSessionsRoot: env.codexSessionsRoot,
-            claudeProjectsRoots: [env.claudeProjectsRoot],
-            cacheRoot: env.cacheRoot,
-            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"))
-        let piOptions = PiSessionCostScanner.Options(
-            piSessionsRoot: env.piSessionsRoot,
-            cacheRoot: env.cacheRoot,
-            refreshMinIntervalSeconds: 0)
+        let (nativeOptions, piOptions) = Self.scannerOptions(env: env)
 
         let snapshot = try await CostUsageFetcher.loadTokenSnapshot(
             provider: .codex,
@@ -928,15 +820,7 @@ extension CostUsageFetcherTests {
             relativePath: "2026-04-09T10-00-00-000Z_test.jsonl",
             contents: env.jsonl([supportedPiAssistant, unsupportedPiAssistant]))
 
-        let nativeOptions = CostUsageScanner.Options(
-            codexSessionsRoot: env.codexSessionsRoot,
-            claudeProjectsRoots: [env.claudeProjectsRoot],
-            cacheRoot: env.cacheRoot,
-            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"))
-        let piOptions = PiSessionCostScanner.Options(
-            piSessionsRoot: env.piSessionsRoot,
-            cacheRoot: env.cacheRoot,
-            refreshMinIntervalSeconds: 0)
+        let (nativeOptions, piOptions) = Self.scannerOptions(env: env)
 
         let snapshot = try await CostUsageFetcher.loadTokenSnapshot(
             provider: .claude,
@@ -989,35 +873,17 @@ extension CostUsageFetcherTests {
                 "model": "openai/gpt-5.4",
             ],
         ]
-        let nativeTokenCount: [String: Any] = [
-            "type": "event_msg",
-            "timestamp": iso1,
-            "payload": [
-                "type": "token_count",
-                "info": [
-                    "model": "gpt-5",
-                    "total_token_usage": [
-                        "input_tokens": 100,
-                        "cached_input_tokens": 20,
-                        "output_tokens": 10,
-                    ],
-                ],
-            ],
-        ]
+        let nativeTokenCount: [String: Any] = Self.codexTokenCount(
+            timestamp: iso1,
+            model: "gpt-5",
+            usageKey: "total_token_usage",
+            usage: .init(input: 100, cached: 20, output: 10))
         _ = try env.writeCodexSessionFile(
             day: day,
             filename: "session.jsonl",
             contents: env.jsonl([nativeTurnContext, nativeTokenCount]))
 
-        let nativeOptions = CostUsageScanner.Options(
-            codexSessionsRoot: env.codexSessionsRoot,
-            claudeProjectsRoots: [env.claudeProjectsRoot],
-            cacheRoot: env.cacheRoot,
-            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"))
-        let piOptions = PiSessionCostScanner.Options(
-            piSessionsRoot: env.piSessionsRoot,
-            cacheRoot: env.cacheRoot,
-            refreshMinIntervalSeconds: 0)
+        let (nativeOptions, piOptions) = Self.scannerOptions(env: env)
 
         let snapshot = try await CostUsageFetcher.loadTokenSnapshot(
             provider: .codex,
@@ -1055,21 +921,11 @@ extension CostUsageFetcherTests {
             "timestamp": iso0,
             "payload": ["model": model],
         ]
-        let firstTokenCount: [String: Any] = [
-            "type": "event_msg",
-            "timestamp": iso1,
-            "payload": [
-                "type": "token_count",
-                "info": [
-                    "model": model,
-                    "total_token_usage": [
-                        "input_tokens": 100,
-                        "cached_input_tokens": 20,
-                        "output_tokens": 10,
-                    ],
-                ],
-            ],
-        ]
+        let firstTokenCount: [String: Any] = Self.codexTokenCount(
+            timestamp: iso1,
+            model: model,
+            usageKey: "total_token_usage",
+            usage: .init(input: 100, cached: 20, output: 10))
         let fileURL = try env.writeCodexSessionFile(
             day: day,
             filename: "session.jsonl",
@@ -1093,21 +949,11 @@ extension CostUsageFetcherTests {
             piScannerOptions: piOptions)
         #expect(first.daily.first?.totalTokens == 110)
 
-        let appendedTokenCount: [String: Any] = [
-            "type": "event_msg",
-            "timestamp": iso2,
-            "payload": [
-                "type": "token_count",
-                "info": [
-                    "model": model,
-                    "total_token_usage": [
-                        "input_tokens": 160,
-                        "cached_input_tokens": 40,
-                        "output_tokens": 16,
-                    ],
-                ],
-            ],
-        ]
+        let appendedTokenCount: [String: Any] = Self.codexTokenCount(
+            timestamp: iso2,
+            model: model,
+            usageKey: "total_token_usage",
+            usage: .init(input: 160, cached: 40, output: 16))
         try env.jsonl([turnContext, firstTokenCount, appendedTokenCount])
             .write(to: fileURL, atomically: true, encoding: .utf8)
 
@@ -1152,6 +998,44 @@ extension CostUsageFetcherTests {
             configuredDuration: 7) == 7)
     }
 
+    private static func scannerOptions(
+        env: CostUsageTestEnvironment) -> (CostUsageScanner.Options, PiSessionCostScanner.Options)
+    {
+        (
+            CostUsageScanner.Options(
+                codexSessionsRoot: env.codexSessionsRoot,
+                claudeProjectsRoots: [env.claudeProjectsRoot],
+                cacheRoot: env.cacheRoot,
+                codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite")),
+            PiSessionCostScanner.Options(
+                piSessionsRoot: env.piSessionsRoot,
+                cacheRoot: env.cacheRoot,
+                refreshMinIntervalSeconds: 0))
+    }
+
+    private static func codexTokenCount(
+        timestamp: String,
+        model: String,
+        usageKey: String,
+        usage: CostUsageCodexTotals) -> [String: Any]
+    {
+        [
+            "type": "event_msg",
+            "timestamp": timestamp,
+            "payload": [
+                "type": "token_count",
+                "info": [
+                    "model": model,
+                    usageKey: [
+                        "input_tokens": usage.input,
+                        "cached_input_tokens": usage.cached,
+                        "output_tokens": usage.output,
+                    ],
+                ],
+            ],
+        ]
+    }
+
     private static func writeCodexSessionFile(
         homeRoot: URL,
         env: CostUsageTestEnvironment,
@@ -1175,21 +1059,11 @@ extension CostUsageFetcherTests {
                 "timestamp": env.isoString(for: day),
                 "payload": ["model": model],
             ],
-            [
-                "type": "event_msg",
-                "timestamp": env.isoString(for: day.addingTimeInterval(1)),
-                "payload": [
-                    "type": "token_count",
-                    "info": [
-                        "last_token_usage": [
-                            "input_tokens": tokens,
-                            "cached_input_tokens": 0,
-                            "output_tokens": 0,
-                        ],
-                        "model": model,
-                    ],
-                ],
-            ],
+            Self.codexTokenCount(
+                timestamp: env.isoString(for: day.addingTimeInterval(1)),
+                model: model,
+                usageKey: "last_token_usage",
+                usage: .init(input: tokens, cached: 0, output: 0)),
         ]).write(to: url, atomically: true, encoding: .utf8)
     }
 }
@@ -1210,21 +1084,11 @@ extension CostUsageFetcherTests {
                     "timestamp": env.isoString(for: day),
                     "payload": ["session_id": "first-session"],
                 ],
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: day.addingTimeInterval(1)),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 100,
-                                "cached_input_tokens": 20,
-                                "output_tokens": 10,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: day.addingTimeInterval(1)),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 100, cached: 20, output: 10)),
             ]))
         let secondURL = try env.writeCodexSessionFile(
             day: day,
@@ -1235,21 +1099,11 @@ extension CostUsageFetcherTests {
                     "timestamp": env.isoString(for: day),
                     "payload": ["session_id": "second-session"],
                 ],
-                [
-                    "type": "event_msg",
-                    "timestamp": env.isoString(for: day.addingTimeInterval(1)),
-                    "payload": [
-                        "type": "token_count",
-                        "info": [
-                            "model": "openai/gpt-5.4",
-                            "last_token_usage": [
-                                "input_tokens": 40,
-                                "cached_input_tokens": 5,
-                                "output_tokens": 5,
-                            ],
-                        ],
-                    ],
-                ],
+                Self.codexTokenCount(
+                    timestamp: env.isoString(for: day.addingTimeInterval(1)),
+                    model: "openai/gpt-5.4",
+                    usageKey: "last_token_usage",
+                    usage: .init(input: 40, cached: 5, output: 5)),
             ]))
         try FileManager.default.setAttributes(
             [.modificationDate: day.addingTimeInterval(10)],
@@ -1258,15 +1112,7 @@ extension CostUsageFetcherTests {
             [.modificationDate: day.addingTimeInterval(20)],
             ofItemAtPath: secondURL.path)
 
-        let options = CostUsageScanner.Options(
-            codexSessionsRoot: env.codexSessionsRoot,
-            claudeProjectsRoots: [env.claudeProjectsRoot],
-            cacheRoot: env.cacheRoot,
-            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"))
-        let piOptions = PiSessionCostScanner.Options(
-            piSessionsRoot: env.piSessionsRoot,
-            cacheRoot: env.cacheRoot,
-            refreshMinIntervalSeconds: 0)
+        let (options, piOptions) = Self.scannerOptions(env: env)
         let snapshot = try await CostUsageFetcher.loadTokenSnapshot(
             provider: .codex,
             now: day,
@@ -1319,21 +1165,11 @@ extension CostUsageFetcherTests {
                         "timestamp": env.isoString(for: day),
                         "payload": ["session_id": sessionID, "cwd": projectPath],
                     ],
-                    [
-                        "type": "event_msg",
-                        "timestamp": env.isoString(for: day.addingTimeInterval(1)),
-                        "payload": [
-                            "type": "token_count",
-                            "info": [
-                                "model": "openai/gpt-5.4",
-                                "last_token_usage": [
-                                    "input_tokens": 100,
-                                    "cached_input_tokens": 20,
-                                    "output_tokens": 10,
-                                ],
-                            ],
-                        ],
-                    ],
+                    Self.codexTokenCount(
+                        timestamp: env.isoString(for: day.addingTimeInterval(1)),
+                        model: "openai/gpt-5.4",
+                        usageKey: "last_token_usage",
+                        usage: .init(input: 100, cached: 20, output: 10)),
                 ]))
         }
         try #"{"id":"named-session","thread_name":"Fix the icon","updated_at":"2026-04-08T12:00:00Z"}"#
@@ -1343,15 +1179,7 @@ extension CostUsageFetcherTests {
                 atomically: true,
                 encoding: .utf8)
 
-        let options = CostUsageScanner.Options(
-            codexSessionsRoot: env.codexSessionsRoot,
-            claudeProjectsRoots: [env.claudeProjectsRoot],
-            cacheRoot: env.cacheRoot,
-            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"))
-        let piOptions = PiSessionCostScanner.Options(
-            piSessionsRoot: env.piSessionsRoot,
-            cacheRoot: env.cacheRoot,
-            refreshMinIntervalSeconds: 0)
+        let (options, piOptions) = Self.scannerOptions(env: env)
         let snapshot = try await CostUsageFetcher.loadTokenSnapshot(
             provider: .codex,
             now: day,

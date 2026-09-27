@@ -21,7 +21,9 @@ struct PluginAPIKeyProviderImplementation: ProviderImplementation {
 
     @MainActor
     func isAvailable(context: ProviderAvailabilityContext) -> Bool {
-        !self.spec.requiresCredentialForAvailability || self.spec.apiKey(environment: context.environment) != nil ||
+        !self.spec.requiresCredentialForAvailability ||
+            ProviderDescriptorRegistry.descriptor(for: self.id).credentials?
+            .resolveToken(environment: context.environment) != nil ||
             !context.settings[providerConfig: self.id, field: .apiKey]
             .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
