@@ -20,7 +20,7 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
 
     @Test(arguments: CacheScenario.allCases)
     func `automatic refresh retains valid manual credentials while honoring invalidation`(
-        scenario: CacheScenario) throws
+        scenario: CacheScenario) async throws
     {
         let memory = ClaudeOAuthCredentialsStore.MemoryCacheStore()
         let denied = ClaudeOAuthKeychainAccessGate.DeniedUntilStore()
@@ -32,33 +32,38 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         let environment = ["HOME": root.path, "CLAUDE_CONFIG_DIR": root.path]
         let data = self.credentialsData()
 
-        try KeychainCacheStore.withServiceOverrideForTesting(service) {
+        try await KeychainCacheStore.withServiceOverrideForTesting(service) {
             KeychainCacheStore.setTestStoreForTesting(true)
             defer { KeychainCacheStore.setTestStoreForTesting(false) }
-            try KeychainAccessGate.withTaskOverrideForTesting(false) {
-                try ClaudeOAuthDirectKeychainReadConsent.withTaskOverrideForTesting(true) {
-                    try ClaudeOAuthKeychainPromptPreference.withTaskOverrideForTesting(.onlyOnUserAction) {
-                        try ClaudeOAuthKeychainReadStrategyPreference.withTaskOverrideForTesting(.securityFramework) {
-                            try ClaudeOAuthKeychainAccessGate.withDeniedUntilStoreOverrideForTesting(denied) {
-                                try ClaudeOAuthCredentialsStore.withPendingCacheClearStoreOverrideForTesting(pending) {
-                                    try ClaudeOAuthCredentialsStore.withIsolatedCredentialsFileTrackingForTesting {
-                                        try ClaudeOAuthCredentialsStore.withCredentialsURLOverrideForTesting(
-                                            root.appendingPathComponent(".credentials.json"))
-                                        {
-                                            try ClaudeOAuthCredentialsStore.$taskMemoryCacheStoreOverride
-                                                .withValue(memory) {
-                                                    try self.verifyRecovery(
-                                                        scenario: scenario,
-                                                        environment: environment,
-                                                        data: data,
-                                                        memory: memory,
-                                                        pending: pending)
+            try await KeychainAccessGate.withTaskOverrideForTesting(false) {
+                try await ClaudeOAuthDirectKeychainReadConsent.withTaskOverrideForTesting(true) {
+                    try await ClaudeOAuthKeychainPromptPreference.withTaskOverrideForTesting(.onlyOnUserAction) {
+                        try await ClaudeOAuthKeychainReadStrategyPreference
+                            .withTaskOverrideForTesting(.securityFramework) {
+                                try await ClaudeOAuthKeychainAccessGate.withDeniedUntilStoreOverrideForTesting(denied) {
+                                    try await ClaudeOAuthCredentialsStore
+                                        .withPendingCacheClearStoreOverrideForTesting(pending) {
+                                            try await ClaudeOAuthCredentialsStore
+                                                .withIsolatedCredentialsFileTrackingForTesting {
+                                                    try await ClaudeOAuthCredentialsStore
+                                                        .withCredentialsURLOverrideForTesting(
+                                                            root.appendingPathComponent(".credentials.json"))
+                                                        {
+                                                            try await ClaudeOAuthCredentialsStore
+                                                                .$taskMemoryCacheStoreOverride
+                                                                .withValue(memory) {
+                                                                    try await self.verifyRecovery(
+                                                                        scenario: scenario,
+                                                                        environment: environment,
+                                                                        data: data,
+                                                                        memory: memory,
+                                                                        pending: pending)
+                                                                }
+                                                        }
                                                 }
                                         }
-                                    }
                                 }
                             }
-                        }
                     }
                 }
             }
@@ -70,7 +75,7 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         environment: [String: String],
         data: Data,
         memory: ClaudeOAuthCredentialsStore.MemoryCacheStore,
-        pending: ClaudeOAuthCredentialsStore.PendingCacheClearMemoryStore) throws
+        pending: ClaudeOAuthCredentialsStore.PendingCacheClearMemoryStore) async throws
     {
         if scenario == .expiredFile {
             try self.credentialsData(expiresIn: -3600)
@@ -80,11 +85,13 @@ struct ClaudeOAuthBackgroundCacheRecoveryTests {
         let loadFailure: OSStatus? = scenario == .available || scenario == .writeRejected
             ? nil : errSecInteractionNotAllowed
         let interactiveRead: @Sendable () throws -> Data = { data }
-        try KeychainCacheStore.withLoadFailureStatusOverrideForTesting(loadFailure) {
-            try KeychainCacheStore.withStoreFailureStatusOverrideForTesting(
-                scenario == .writeRejected ? errSecInteractionNotAllowed : nil)
+        try await KeychainCacheStore.withLoadFailureStatusOverrideForTesting(loadFailure) {
+            try await ClaudeOAuthCredentialsStore.withInteractiveClaudeKeychainReadOverridesForTesting(
+                read: interactiveRead)
             {
-                try ClaudeOAuthCredentialsStore.$taskInteractiveClaudeKeychainReadOverride.withValue(interactiveRead) {
+                try KeychainCacheStore.withStoreFailureStatusOverrideForTesting(
+                    scenario == .writeRejected ? errSecInteractionNotAllowed : nil)
+                {
                     let manual = try ProviderInteractionContext.$current.withValue(.userInitiated) {
                         try ClaudeOAuthCredentialsStore.loadRecord(
                             environment: environment,
