@@ -76,21 +76,4 @@ struct MistralMonthlyPlanPickerTests {
         #expect(picker.selectionBinding.wrappedValue == .automatic)
         #expect(settings.menuBarLayoutOverrides[.mistral] == nil)
     }
-
-    @Test
-    func `a layout editor percentage overrides a stored Monthly Plan`() {
-        let settings = testSettingsStore(
-            suiteName: "MistralMonthlyPlanPickerTests-layout-editor",
-            userDefaults: InMemoryUserDefaults())
-        settings.setMenuBarMetricPreference(.monthlyPlan, for: .mistral)
-
-        settings.setMenuBarLayout(MenuBarLayout(lines: [[.icon, .percent(window: .automatic)]]), for: .mistral)
-        #expect(settings.menuBarMetricPreference(for: .mistral, snapshot: nil) == .monthlyPlan)
-
-        settings.setMenuBarLayout(MenuBarLayout(lines: [[.icon, .percent(window: .session)]]), for: .mistral)
-        #expect(settings.menuBarMetricPreference(for: .mistral, snapshot: nil) == .automatic)
-
-        settings.setMenuBarLayout(MenuBarLayout(lines: [[.icon]]), for: .mistral)
-        #expect(settings.menuBarMetricPreference(for: .mistral, snapshot: nil) == .monthlyPlan)
-    }
 }

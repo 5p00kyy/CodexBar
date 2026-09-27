@@ -70,8 +70,6 @@ style, so Critters and Meter bars users can still pick the widget allowance:
 
 - **Automatic** and **Included API** show only the API allowance, preserving the existing default.
 - **Monthly Plan** shows only the Vibe allowance, falling back to Included API when the plan is missing or unknown.
-- If the menu bar layout editor later sets every Mistral percentage to Included API, widgets follow it and show Included
-  API; returning the percentage to Auto restores Monthly Plan.
 
 Automatic still shows API spend in the menu bar. Changing the metric updates widget rows from the existing snapshot,
 without another request. After a failed refresh, widgets reselect from the last published usage snapshot and keep its
