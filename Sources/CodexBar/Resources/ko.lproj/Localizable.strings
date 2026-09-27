@@ -584,7 +584,7 @@
 "menu_bar_metric_subtitle" = "메뉴 막대 백분율을 결정할 창을 선택하세요.";
 "menu_bar_metric_subtitle_deepseek" = "메뉴 막대에 DeepSeek 잔액을 표시합니다.";
 "menu_bar_metric_subtitle_moonshot" = "메뉴 막대에 Moonshot / Kimi API 잔액을 표시합니다.";
-"menu_bar_metric_subtitle_mistral" = "메뉴 막대에 이번 달 Mistral API 지출을 표시합니다.";
+"menu_bar_metric_subtitle_mistral" = "메뉴 막대와 위젯에 표시할 Mistral API 지출 또는 Monthly Plan 사용량을 선택합니다.";
 "automatic" = "자동";
 "primary_api_key_limit" = "기본 (API 키 한도)";
 "menu_bar_style_title" = "메뉴 막대 스타일";

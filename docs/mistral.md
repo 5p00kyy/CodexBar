@@ -65,8 +65,8 @@ For the console request, CodexBar forwards only the `csrftoken` and `ory_session
 
 ## Widgets
 
-Usage widgets follow the **Menu bar metric** picker in Mistral's provider settings, which appears when the menu bar
-style is **Icon & percent**:
+Usage widgets follow the **Menu bar metric** picker in Mistral's provider settings. The picker appears in every menu bar
+style, so Critters and Meter bars users can still pick the widget allowance:
 
 - **Automatic** and **Included API** show only the API allowance, preserving the existing default.
 - **Monthly Plan** shows only the Vibe allowance, falling back to Included API when the plan is missing or unknown.

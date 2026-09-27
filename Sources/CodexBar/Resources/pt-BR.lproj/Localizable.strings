@@ -589,7 +589,7 @@
 "menu_bar_metric_subtitle" = "Escolha qual janela define a porcentagem da barra de menus.";
 "menu_bar_metric_subtitle_deepseek" = "Mostra o saldo do DeepSeek na barra de menus.";
 "menu_bar_metric_subtitle_moonshot" = "Mostra o saldo da API Moonshot / Kimi na barra de menus.";
-"menu_bar_metric_subtitle_mistral" = "Mostra o gasto da API Mistral no mês atual na barra de menus.";
+"menu_bar_metric_subtitle_mistral" = "Escolha o gasto da API Mistral ou o uso do Monthly Plan para a barra de menus e os widgets.";
 "automatic" = "Automático";
 "primary_api_key_limit" = "Primário (limite da chave de API)";
 

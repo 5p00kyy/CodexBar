@@ -94,14 +94,15 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
     }
 
     /// The simplified picker controls percent layouts without changing the global icon style.
+    /// Monthly Plan also picks the widget allowance, so it stays reachable in every style and layout.
     static func isVisible(
         iconStyle: MenuBarIconStyle,
         layout: MenuBarLayout,
         available: [Self]) -> Bool
     {
-        iconStyle == .iconAndPercent
-            && self.hasPercentToken(in: layout)
-            && available.count > 1
+        guard available.count > 1 else { return false }
+        if available.contains(.monthlyPlan) { return true }
+        return iconStyle == .iconAndPercent && self.hasPercentToken(in: layout)
     }
 
     static func isVisible(
@@ -117,10 +118,13 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
 
     /// Ordinary percentages own the choice when a custom layout also has an independent tertiary
     /// token. Only layouts without ordinary percentages treat tertiary tokens as the controlled group.
-    /// A Monthly Plan metric turns an all-automatic layout into the Monthly Plan choice.
+    /// A Monthly Plan metric turns an all-automatic layout, or one without percentages, into the Monthly Plan choice.
     static func current(in layout: MenuBarLayout, metric: MenuBarMetricPreference = .automatic) -> Self? {
         let windows = Self.percentWindows(in: layout)
-        guard let first = windows.first else { return self.hasTertiaryPercent(in: layout) ? .tertiary : nil }
+        guard let first = windows.first else {
+            if self.hasTertiaryPercent(in: layout) { return .tertiary }
+            return metric == .monthlyPlan ? .monthlyPlan : nil
+        }
         guard windows.allSatisfy({ $0 == first }) else { return nil }
         if first == .automatic, metric == .monthlyPlan { return .monthlyPlan }
         return Self.allCases.first { $0.percentWindow == first }

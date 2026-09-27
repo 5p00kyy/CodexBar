@@ -592,7 +592,7 @@
 "menu_bar_metric_subtitle" = "Kies welk venster het menubalkpercentage aanstuurt.";
 "menu_bar_metric_subtitle_deepseek" = "Toont het DeepSeek-saldo in de menubalk.";
 "menu_bar_metric_subtitle_moonshot" = "Toont het Moonshot / Kimi API-saldo in de menubalk.";
-"menu_bar_metric_subtitle_mistral" = "Toont de Mistral API-uitgaven van de huidige maand in de menubalk.";
+"menu_bar_metric_subtitle_mistral" = "Kies Mistral API-uitgaven of Monthly Plan-gebruik voor de menubalk en widgets.";
 "automatic" = "Automatisch";
 "primary_api_key_limit" = "Primair (API-sleutellimiet)";
 

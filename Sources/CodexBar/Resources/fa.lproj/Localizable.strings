@@ -598,7 +598,7 @@
 "menu_bar_metric_subtitle" = "انتخاب کنید کدام پنجره درصد نوار منو را تنظیم کند.";
 "menu_bar_metric_subtitle_deepseek" = "تعادل DeepSeek را در نوار منو نشان می دهد.";
 "menu_bar_metric_subtitle_moonshot" = "تعادل Moonshot / Kimi API را در نوار منو نشان می دهد.";
-"menu_bar_metric_subtitle_mistral" = "هزینه های Mistral API ماه جاری را در نوار منو نشان می دهد.";
+"menu_bar_metric_subtitle_mistral" = "هزینه Mistral API یا مصرف Monthly Plan را برای نوار منو و ویجت‌ها انتخاب کنید.";
 "automatic" = "اتوماتیک";
 "primary_api_key_limit" = "کلید اصلی (API حد کلید)";
 

@@ -600,7 +600,7 @@
 "menu_bar_metric_subtitle" = "Wybierz metrykę pokazywaną obok ikony na pasku menu.";
 "menu_bar_metric_subtitle_deepseek" = "Pokazuje saldo DeepSeek na pasku menu.";
 "menu_bar_metric_subtitle_moonshot" = "Pokazuje saldo API Moonshot / Kimi na pasku menu.";
-"menu_bar_metric_subtitle_mistral" = "Pokazuje wydatki Mistral API z bieżącego miesiąca na pasku menu.";
+"menu_bar_metric_subtitle_mistral" = "Wybierz wydatki Mistral API lub użycie Monthly Plan dla paska menu i widżetów.";
 "automatic" = "Automatycznie";
 "primary_api_key_limit" = "Główny (limit klucza API)";
 

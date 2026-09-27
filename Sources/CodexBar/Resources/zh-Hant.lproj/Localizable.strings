@@ -593,7 +593,7 @@
 "menu_bar_metric_subtitle" = "選擇選單列百分比要依據哪個時段。";
 "menu_bar_metric_subtitle_deepseek" = "在選單列顯示 DeepSeek 餘額。";
 "menu_bar_metric_subtitle_moonshot" = "在選單列顯示 Moonshot / Kimi API 餘額。";
-"menu_bar_metric_subtitle_mistral" = "在選單列顯示 Mistral API 本月支出。";
+"menu_bar_metric_subtitle_mistral" = "為選單列和小工具選擇 Mistral API 支出或月租方案用量。";
 "automatic" = "自動";
 "primary_api_key_limit" = "主要（API 金鑰限制）";
 "menu_bar_style_title" = "選單列樣式";

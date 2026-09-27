@@ -600,7 +600,7 @@
 "menu_bar_metric_subtitle" = "Pilih jendela mana yang menggerakkan persentase menu bar.";
 "menu_bar_metric_subtitle_deepseek" = "Menampilkan saldo DeepSeek di menu bar.";
 "menu_bar_metric_subtitle_moonshot" = "Menampilkan saldo API Moonshot / Kimi di menu bar.";
-"menu_bar_metric_subtitle_mistral" = "Menampilkan pengeluaran API Mistral bulan ini di menu bar.";
+"menu_bar_metric_subtitle_mistral" = "Pilih pengeluaran API Mistral atau penggunaan Monthly Plan untuk menu bar dan widget.";
 "automatic" = "Otomatis";
 "primary_api_key_limit" = "Utama (batas kunci API)";
 

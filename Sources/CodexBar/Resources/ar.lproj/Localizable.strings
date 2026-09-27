@@ -598,7 +598,7 @@
 "menu_bar_metric_subtitle" = "اختر أي نافذة تحدد نسبة شريط القوائم.";
 "menu_bar_metric_subtitle_deepseek" = "يظهر توازن DeepSeek في شريط القوائم.";
 "menu_bar_metric_subtitle_moonshot" = "يظهر توازن Moonshot / Kimi API في شريط القوائم.";
-"menu_bar_metric_subtitle_mistral" = "يعرض الإنفاق Mistral API الشهري الحالي في شريط القوائم.";
+"menu_bar_metric_subtitle_mistral" = "اختر إنفاق Mistral API أو استخدام Monthly Plan لشريط القوائم والأدوات.";
 "automatic" = "أوتوماتيكي";
 "primary_api_key_limit" = "الحد الأساسي (API المفاتيح)";
 

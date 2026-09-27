@@ -35,4 +35,32 @@ struct MistralMonthlyPlanPickerTests {
         #expect(settings.menuBarMetricPreference(for: .mistral) == .automatic)
         #expect(picker.selectionBinding.wrappedValue == .automatic)
     }
+
+    @Test
+    func `Monthly Plan stays reachable when the menu bar hides percentages`() {
+        let settings = testSettingsStore(
+            suiteName: "MistralMonthlyPlanPickerTests-critters",
+            userDefaults: InMemoryUserDefaults())
+        settings.menuBarIconStyle = .critters
+        settings.setMenuBarLayout(MenuBarLayout(lines: [[.icon]]), for: nil)
+        let view = ProviderMenuBarPercentWindowSettingsView(provider: .mistral, settings: settings)
+        let picker = ProviderMenuBarPercentWindowPicker(
+            provider: .mistral,
+            iconStyle: settings.menuBarIconStyle,
+            layout: view.layoutBinding,
+            metric: view.metricBinding)
+        #expect(MenuBarPercentWindowPreference.isVisible(
+            iconStyle: .critters,
+            layout: settings.menuBarLayout(for: .mistral),
+            provider: .mistral))
+        #expect(!MenuBarPercentWindowPreference.isVisible(
+            iconStyle: .critters,
+            layout: settings.menuBarLayout(for: .codex),
+            provider: .codex))
+
+        picker.selectionBinding.wrappedValue = .monthlyPlan
+        #expect(settings.menuBarMetricPreference(for: .mistral) == .monthlyPlan)
+        #expect(picker.selectionBinding.wrappedValue == .monthlyPlan)
+        #expect(settings.menuBarLayoutOverrides[.mistral] == nil)
+    }
 }

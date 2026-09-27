@@ -576,7 +576,7 @@
 "menu_bar_metric_subtitle" = "Trieu quina finestra determina el percentatge de la barra de menús.";
 "menu_bar_metric_subtitle_deepseek" = "Mostra el saldo de DeepSeek a la barra de menús.";
 "menu_bar_metric_subtitle_moonshot" = "Mostra el saldo de l'API de Moonshot / Kimi a la barra de menús.";
-"menu_bar_metric_subtitle_mistral" = "Trieu entre la despesa de l'API de Mistral i l'ús del Monthly Plan per a la barra de menús.";
+"menu_bar_metric_subtitle_mistral" = "Trieu entre la despesa de l'API de Mistral i l'ús del Monthly Plan per a la barra de menús i els widgets.";
 "automatic" = "Automàtic";
 "primary_api_key_limit" = "Principal (límit de la clau d'API)";
 

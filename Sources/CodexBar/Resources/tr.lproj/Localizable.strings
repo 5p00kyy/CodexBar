@@ -598,7 +598,7 @@
 "menu_bar_metric_subtitle" = "Menü çubuğu yüzdesini hangi pencerenin belirleyeceğini seçin.";
 "menu_bar_metric_subtitle_deepseek" = "Menü çubuğunda DeepSeek bakiyesini gösterir.";
 "menu_bar_metric_subtitle_moonshot" = "Menü çubuğunda Moonshot / Kimi API bakiyesini gösterir.";
-"menu_bar_metric_subtitle_mistral" = "Menü çubuğunda Mistral API'sinin geçerli ay harcamasını gösterir.";
+"menu_bar_metric_subtitle_mistral" = "Menü çubuğu ve widget'lar için Mistral API harcamasını veya aylık plan kullanımını seçin.";
 "automatic" = "Otomatik";
 "primary_api_key_limit" = "Birincil (API anahtarı limiti)";
 

@@ -62,7 +62,9 @@ struct ProviderMenuBarPercentWindowPicker: View {
                 .pickerStyle(.menu)
                 .listRowSeparator(.hidden)
             } footer: {
-                SettingsSectionFooter(L("menu_bar_metric_subtitle"))
+                SettingsSectionFooter(available.contains(.monthlyPlan)
+                    ? L("menu_bar_metric_subtitle_mistral")
+                    : L("menu_bar_metric_subtitle"))
             }
             .background(FocusResigningBackground())
         }
@@ -81,10 +83,14 @@ struct ProviderMenuBarPercentWindowPicker: View {
                 guard let preference,
                       MenuBarPercentWindowPreference.available(for: self.provider, layout: layout).contains(preference)
                 else { return }
+                let updated = preference.applied(to: layout)
                 if MenuBarPercentWindowPreference.available(for: self.provider).contains(.monthlyPlan) {
                     self.metric.wrappedValue = preference.menuBarMetric
+                    // Without a percentage to change, only the metric is stored, so the layout keeps following
+                    // its source instead of becoming a provider override.
+                    guard updated != layout else { return }
                 }
-                self.layout = preference.applied(to: layout)
+                self.layout = updated
             })
     }
 }
