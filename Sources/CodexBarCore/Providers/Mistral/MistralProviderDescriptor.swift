@@ -68,6 +68,9 @@ public enum MistralProviderDescriptor {
                         tertiary: metadata.opusLabel ?? "Sonnet",
                         showsTertiary: metadata.supportsOpus)
                 },
+                extraRateWindowSelector: { snapshot in
+                    (snapshot.extraRateWindows ?? []).filter { $0.id == "mistral-monthly-plan" }
+                },
                 menuBarLayoutPrimaryLabel: "Included API",
                 menuBarWindowResolver: { context in
                     switch context.metric {
@@ -78,7 +81,9 @@ public enum MistralProviderDescriptor {
                     default:
                         .unhandled
                     }
-                }, menuCard: ProviderMenuCardPresentation(
+                },
+                widgetRowResolver: self.widgetRows,
+                menuCard: ProviderMenuCardPresentation(
                     usesProviderCostHistoryAsPrimaryDashboard: true,
                     primaryCostHistoryResolver: { snapshot, tokenSnapshot in
                         if let projected = snapshot?.mistralUsage?.toCostUsageTokenSnapshot() {
@@ -102,6 +107,22 @@ public enum MistralProviderDescriptor {
                     settings?.mistral?.cookieSource == .manual &&
                         CookieHeaderNormalizer.normalize(settings?.mistral?.manualCookieHeader) != nil
                 }))
+    }
+
+    private static func widgetRows(
+        _ rows: [WidgetSnapshot.WidgetUsageRowSnapshot],
+        snapshot: UsageSnapshot,
+        metric: ProviderMenuBarMetric) -> [WidgetSnapshot.WidgetUsageRowSnapshot]
+    {
+        guard metric == .monthlyPlan,
+              let plan = snapshot.extraRateWindows?.first(where: { $0.id == "mistral-monthly-plan" }),
+              plan.usageKnown
+        else { return rows }
+        return [WidgetSnapshot.WidgetUsageRowSnapshot(
+            id: plan.id,
+            title: plan.title,
+            percentLeft: plan.window.remainingPercent,
+            window: plan.window)]
     }
 }
 

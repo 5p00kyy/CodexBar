@@ -261,7 +261,7 @@ struct ProviderPluginCookieBrokerTests {
 
     @Test
     func `browser batches advance only after earlier candidates are consumed`() throws {
-        try self.isolated {
+        try self.isolated { () throws in
             let batches = BatchCalls()
             let broker = ProviderPluginCookieBroker(
                 provider: .abacus,
@@ -275,7 +275,7 @@ struct ProviderPluginCookieBrokerTests {
                     default: nil
                     }
                 })
-            let chrome = try #require(broker.nextSession(domain: "apps.abacus.ai"))
+            let chrome = try #require(try broker.nextSession(domain: "apps.abacus.ai"))
             #expect(chrome.header == "session=chrome")
             #expect(batches.values == [0])
             broker.rejectCookie(domain: "apps.abacus.ai", id: chrome.id)
@@ -289,7 +289,7 @@ struct ProviderPluginCookieBrokerTests {
 
     @Test
     func `empty first browser batch still reaches later browsers`() throws {
-        try self.isolated {
+        try self.isolated { () throws in
             let broker = ProviderPluginCookieBroker(
                 provider: .abacus,
                 domains: ["apps.abacus.ai"],

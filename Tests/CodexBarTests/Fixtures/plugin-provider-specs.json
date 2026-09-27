@@ -778,7 +778,7 @@
           "id" : "clinepass-api-key",
           "placeholder" : "ClinePass API key...",
           "secure" : true,
-          "subtitle" : "Stored in ~\/.codexbar\/config.json. Paste a ClinePass API key.",
+          "subtitle" : "Paste an API key, or run cline auth. Reads the existing Cline session without copying it.",
           "title" : "API key"
         }
       ],

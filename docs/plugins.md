@@ -32,7 +32,9 @@ Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec
 app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
 the provider's availability and detail-line policies explicitly. Providers with extra fields or token-account behavior
 can share the descriptor builder while retaining their app implementation, as GitKraken and DeepInfra do. Keep native
-credential discovery and cookie/session handling outside this API-key-only building block.
+credential discovery and cookie/session handling outside this API-key-only building block. ClinePass supplies
+provider-owned credential and fetch-plan overrides to `makeDescriptor` for its read-only Cline session file, while
+retaining the spec's API-key path, metadata, and shared settings field.
 
 ## Minimal plugin
 
