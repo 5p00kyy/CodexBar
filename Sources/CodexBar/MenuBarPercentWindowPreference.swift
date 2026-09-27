@@ -8,6 +8,7 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
     case session
     case weekly
     case tertiary
+    case monthlyPlan
 
     var id: String {
         self.rawValue
@@ -18,7 +19,7 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
         case .automatic: .automatic
         case .session: .session
         case .weekly: .weekly
-        case .tertiary: nil
+        case .tertiary, .monthlyPlan: nil
         }
     }
 
@@ -28,11 +29,20 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
         case .session: .percent(window: .session)
         case .weekly: .percent(window: .weekly)
         case .tertiary: .lanePercent(lane: .tertiary)
+        // Mistral's automatic percent reads the per-provider metric, which the picker sets to Monthly Plan.
+        case .monthlyPlan: .percent(window: .automatic)
         }
+    }
+
+    /// The per-provider metric this choice stores for providers that offer Monthly Plan, which the
+    /// automatic percent and widgets read.
+    var menuBarMetric: MenuBarMetricPreference {
+        self == .monthlyPlan ? .monthlyPlan : .automatic
     }
 
     func label(for provider: UsageProvider) -> String {
         guard self != .automatic else { return L("menu_bar_layout_token_auto") }
+        if self == .monthlyPlan { return MenuBarMetricPreference.monthlyPlan.label }
         if self == .tertiary {
             return MenuBarLayoutLaneLabels(provider: provider, snapshot: nil).label(for: .tertiary)
         }
@@ -64,6 +74,9 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
         }
         if metrics.supported.contains(.tertiary), !metrics.tertiaryRequiresWindow {
             options.append(.tertiary)
+        }
+        if metrics.supported.contains(.monthlyPlan) {
+            options.append(.monthlyPlan)
         }
         return options
     }
@@ -104,10 +117,12 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
 
     /// Ordinary percentages own the choice when a custom layout also has an independent tertiary
     /// token. Only layouts without ordinary percentages treat tertiary tokens as the controlled group.
-    static func current(in layout: MenuBarLayout) -> Self? {
+    /// A Monthly Plan metric turns an all-automatic layout into the Monthly Plan choice.
+    static func current(in layout: MenuBarLayout, metric: MenuBarMetricPreference = .automatic) -> Self? {
         let windows = Self.percentWindows(in: layout)
         guard let first = windows.first else { return self.hasTertiaryPercent(in: layout) ? .tertiary : nil }
         guard windows.allSatisfy({ $0 == first }) else { return nil }
+        if first == .automatic, metric == .monthlyPlan { return .monthlyPlan }
         return Self.allCases.first { $0.percentWindow == first }
     }
 

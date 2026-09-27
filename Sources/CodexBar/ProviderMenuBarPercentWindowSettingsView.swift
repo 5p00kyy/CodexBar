@@ -14,13 +14,20 @@ struct ProviderMenuBarPercentWindowSettingsView: View {
         ProviderMenuBarPercentWindowPicker(
             provider: self.provider,
             iconStyle: self.settings.menuBarIconStyle,
-            layout: self.layoutBinding)
+            layout: self.layoutBinding,
+            metric: self.metricBinding)
     }
 
     var layoutBinding: Binding<MenuBarLayout> {
         Binding(
             get: { self.settings.menuBarLayoutResolution(for: self.provider).layout },
             set: { self.settings.setMenuBarLayout($0, for: self.provider) })
+    }
+
+    var metricBinding: Binding<MenuBarMetricPreference> {
+        Binding(
+            get: { self.settings.menuBarMetricPreference(for: self.provider) },
+            set: { self.settings.setMenuBarMetricPreference($0, for: self.provider) })
     }
 }
 
@@ -29,6 +36,7 @@ struct ProviderMenuBarPercentWindowPicker: View {
     let provider: UsageProvider
     let iconStyle: MenuBarIconStyle
     @Binding var layout: MenuBarLayout
+    var metric: Binding<MenuBarMetricPreference> = .constant(.automatic)
 
     var body: some View {
         let layout = self.layout
@@ -65,7 +73,7 @@ struct ProviderMenuBarPercentWindowPicker: View {
             get: {
                 let layout = self.layout
                 let available = MenuBarPercentWindowPreference.available(for: self.provider, layout: layout)
-                return MenuBarPercentWindowPreference.current(in: layout)
+                return MenuBarPercentWindowPreference.current(in: layout, metric: self.metric.wrappedValue)
                     .flatMap { available.contains($0) ? $0 : nil }
             },
             set: { preference in
@@ -73,6 +81,9 @@ struct ProviderMenuBarPercentWindowPicker: View {
                 guard let preference,
                       MenuBarPercentWindowPreference.available(for: self.provider, layout: layout).contains(preference)
                 else { return }
+                if MenuBarPercentWindowPreference.available(for: self.provider).contains(.monthlyPlan) {
+                    self.metric.wrappedValue = preference.menuBarMetric
+                }
                 self.layout = preference.applied(to: layout)
             })
     }
