@@ -207,7 +207,8 @@ the cookie import.
 - API calls (all include `Cookie: sessionKey=<value>`):
   - `GET https://claude.ai/api/organizations` → org UUID.
   - `GET https://claude.ai/api/organizations/{orgId}/usage?cedar_ember=1` → session/weekly/opus, plus limit-reset
-    grants in the `cedar_ember` block. A 400 or 422 answer retries once without `cedar_ember=1`.
+    grants in the `cedar_ember` block. Any answer other than 200, 401, 403, or 429 retries once without
+    `cedar_ember=1`, so a rejected opt-in keeps the usage windows.
   - `GET https://claude.ai/api/organizations/{orgId}/overage_spend_limit` → Extra usage spend/limit.
   - `GET https://claude.ai/api/organizations/{orgId}/prepaid/credits` → remaining Usage credits balance.
   - `GET https://claude.ai/api/account` → email + plan hints.

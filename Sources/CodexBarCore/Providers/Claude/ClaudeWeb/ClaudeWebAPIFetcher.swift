@@ -623,8 +623,9 @@ extension ClaudeWebAPIFetcher {
         renewalTracker?.observe(response: httpResponse)
         logger?("Usage API status: \(httpResponse.statusCode)")
 
-        if [400, 422].contains(httpResponse.statusCode) {
-            // A rejected opt-in must not cost the usage windows; retry once without it.
+        if !Self.usageStatusesKeptWithResetOptIn.contains(httpResponse.statusCode) {
+            // A rejected opt-in must not cost the usage windows; retry once without it. Success, auth, and
+            // rate-limit answers are not caused by the opt-in, so they keep their normal handling.
             (data, httpResponse) = try await self.requestUsage(
                 orgId: orgId,
                 sessionKey: sessionKey,
@@ -638,6 +639,8 @@ extension ClaudeWebAPIFetcher {
         }
         throw self.fetchError(response: httpResponse, data: data)
     }
+
+    private static let usageStatusesKeptWithResetOptIn: Set<Int> = [200, 401, 403, 429]
 
     private static func requestUsage(
         orgId: String,

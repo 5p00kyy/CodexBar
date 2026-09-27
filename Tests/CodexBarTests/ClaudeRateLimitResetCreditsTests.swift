@@ -63,12 +63,16 @@ struct ClaudeRateLimitResetCreditsTests {
     @Test
     func `rejected reset opt-in retries once without it and keeps usage windows`() async throws {
         let now = Self.wholeSecondNow()
-        for status in [400, 422] {
-            let usage = try await Self.fetchWebUsage(
-                cedarEmber: Self.eligibleBlock([Self.grant(id: "grant_a", resetsLeft: 1, endsIn: 86400, now: now)]),
-                optInStatus: status)
+        let block = Self.eligibleBlock([Self.grant(id: "grant_a", resetsLeft: 1, endsIn: 86400, now: now)])
+        for status in [400, 404, 422, 500, 503] {
+            let usage = try await Self.fetchWebUsage(cedarEmber: block, optInStatus: status)
             #expect(usage.primary.usedPercent == 11)
             #expect(usage.resetCredits == nil)
+        }
+
+        // A rate limit is not caused by the opt-in; retrying it would hide the limit and double the request.
+        await #expect(throws: (any Error).self) {
+            try await Self.fetchWebUsage(cedarEmber: block, optInStatus: 429)
         }
     }
 
