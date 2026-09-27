@@ -428,7 +428,11 @@ struct OMPSessionRootResolver: Sendable {
     }
 
     private static func canonicalURL(_ url: URL) -> URL {
-        url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+        let resolved = url.standardizedFileURL.resolvingSymlinksInPath().standardizedFileURL
+        // resolvingSymlinksInPath drops the directory marker for paths that do not exist yet,
+        // which would make a root's canonical URL depend on whether the directory is on disk.
+        guard url.hasDirectoryPath, !resolved.hasDirectoryPath else { return resolved }
+        return URL(fileURLWithPath: resolved.path, isDirectory: true)
     }
 
     private static func isDirectory(_ url: URL, fileManager: FileManager) -> Bool {
