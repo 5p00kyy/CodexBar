@@ -32,13 +32,13 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 
 | Status | Count |
 |---|---:|
-| `cut-over` | 29 |
+| `cut-over` | 30 |
 | `converted` | 0 |
 | `convertible-now` | 0 |
 | `needs-cookie-import` | 7 |
 | `needs-files/subprocess/oauth-broker` | 20 |
 | `needs-pty/webview/native` | 8 |
-| `needs-host-extension` | 5 |
+| `needs-host-extension` | 4 |
 | **Audit total** | **69** |
 | Additional plugin-first providers | 9 |
 | Registered providers not yet classified here | 9 |
@@ -88,7 +88,7 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 | mimo | `needs-files/subprocess/oauth-broker` | No | The canonical pipeline includes the file-based local usage fallback as well as browser sessions; cookies alone cannot preserve it. |
 | doubao | `needs-files/subprocess/oauth-broker` | No | Full parity needs a CLI subprocess or Volcengine HMAC signing and POST-based plan calls. |
 | sakana | `cut-over` | Yes | Both engines use the bundled billing/PAYG parser and generic details. The host runs concurrent GETs with a shared 200 ms collection budget, a five-second optional request limit, and cancellation of unfinished work. The native fetcher and snapshot twin are deleted. |
-| abacus | `needs-host-extension` | No | Form/JSON optional POST and calendar-month arithmetic are available in host-caps-3. Native fetching remains: its configured timeout applies independently to every cookie candidate, while the plugin runtime and QuickJS watchdog share one fixed refresh deadline. A slow rejected candidate can exhaust the budget before a fresh session succeeds; per-candidate deadline semantics need an explicit host contract before cutover. |
+| abacus | `cut-over` | Yes | Both engines use the bundled plugin for required credits GET plus optional billing POST, calendar-month pacing, and Chrome-first session fallback. Each credits request uses the configured timeout; at most five candidates share a refresh budget of timeout × 5 plus the billing budget, capped at 90 seconds. Native fetching and snapshot projection are deleted; the session-validating importer remains. |
 | mistral | `needs-cookie-import` | No | CSRF extraction and dependent GETs fit scripts, but auth rejection iterates alternate browser profiles and preserves session selection. |
 | deepseek | `needs-files/subprocess/oauth-broker` | No | Platform auth/profile selection reads Chromium localStorage, and the result has a bespoke history model. |
 | deepinfra | `cut-over` | Yes | Both engines use fixed-origin bearer GETs for required billing data, preserving cents conversion, balance deductions, suspension, spending limits, and bounded retries. The native fetcher and parser are deleted. |

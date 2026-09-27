@@ -400,6 +400,7 @@ Bundled scripts own requests, error classification, and snapshot mapping; Swift 
 | --- | --- |
 | [llmman](llmman.md) | `llmman.ts` reads loaded-model memory from the local `llmman serve` node report. Its API key is optional, so the script sends it without host-owned `auth`. |
 | [Chutes](chutes.md) | `chutes.ts` preserves subscription context, allows empty usage, and fetches optional quota details on both engines. Swift supplies credentials and validated API origins. |
+| [Abacus AI](abacus.md) | `abacus.ts` runs required credits GET and optional billing POST concurrently, with calendar-month pacing on both engines. Swift supplies Chrome-first validated sessions in lazy batches and a configured refresh budget capped at 90 seconds; at most five candidates are tried. |
 | [ai&](aiand.md) | `aiand.ts` follows paired log cursors and sums decimal costs with integer arithmetic before display conversion. Empty windows omit cost; capped/incomplete pagination is estimated. |
 | [DevPass](devpass.md) | `devpass.ts` reads billing-cycle and premium weekly credits from LLM Gateway's key-status API; Swift registers the provider and API-key setting. |
 | [xKiro](xkiro.md) | `xkiro.ts` reads daily free tokens and UTC reset from the usage API; Swift registers the provider and API-key setting. |
