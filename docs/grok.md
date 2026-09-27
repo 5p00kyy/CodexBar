@@ -256,6 +256,25 @@ The grok.com billing gRPC-web endpoint remains a best-effort fallback.
     entry, or a non-array value, drops the whole breakdown. That way a partial
     list can't pass the sum check as if it were complete. It never changes the
     credit total or period. Reset-credit enrichment preserves the breakdown.
+  - The grok.com `GetGrokCreditsConfig` fallback carries the same shares as
+    repeated `[1, 7]` entries: `{1: product id, 2: float percent}`, where an
+    omitted percent means 0. Browser-cookie and bearer-gRPC answers therefore
+    show the breakdown too, for example when `grok login` has expired and
+    `~/.grok/auth.json` is gone.
+    - Only ids verified against live CLI-proxy samples are named: 2 = `GrokBuild`
+      and 4 = `GrokChat`.
+    - The shares are decoded only when the aggregate is `[1, 1]` and the response
+      is one complete raw message or a single complete, uncompressed data frame.
+      Duplicate config aggregates or repeated id/percentage fields drop the breakdown.
+    - The same all-or-nothing and add-up checks apply. An unnamed id with a
+      nonzero share, a malformed or duplicate entry, or a mismatched sum drops the
+      breakdown. An unnamed id with a zero share is skipped.
+    - Billing, product shares, and reset coupons share one wire reader. Varints
+      stop after ten bytes, reject overflow, and length-delimited reads cannot
+      exceed the enclosing message. Reserved or compressed gRPC frame flags are
+      rejected. Malformed data never qualifies for product shares or implicit zero.
+    - The menu rows and `codexbar usage --json` use the same `usage.details`
+      section; the breakdown adds no secondary quota window.
 - **Usage-limit reset coupons**:
   - From `GetRemainingResets`, not from `/v1/billing?format=credits`.
   - Shown as a `Limit Reset Credits` detail row (`1 available`, next expiry).
