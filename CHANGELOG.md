@@ -2,6 +2,9 @@
 
 ## 0.68.1 — Unreleased
 
+### Fixed
+
+- TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes, using shared balance-label metadata (#4050). Thanks @lg!
 ### Changed
 
 - Menu bar: align the persistent Refresh row with other menu actions by removing its decorative icon, preserving the shortcut and accessibility action (#4057). Thanks @elijahfriedman!
