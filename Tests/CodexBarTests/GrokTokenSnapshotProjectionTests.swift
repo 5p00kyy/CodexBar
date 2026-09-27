@@ -28,6 +28,13 @@ struct GrokTokenSnapshotProjectionTests {
         let published = try #require(await store.loadGrokLocalTokenSnapshot(historyDays: 30))
         #expect(published.last30DaysTokens == 1344)
         #expect(published.last30DaysRequests == nil)
+        let day = try #require(published.daily.first?.date)
+        let rows = CostHistoryChartMenuView._detailRowsForTesting(
+            provider: .grok,
+            daily: published.daily,
+            selectedDateKey: day)
+        #expect(rows.map(\.title) == ["grok-4.6"])
+        #expect(rows.allSatisfy { $0.subtitle == nil })
 
         let providerSnapshot = UsageSnapshot(
             primary: nil,

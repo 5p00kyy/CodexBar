@@ -307,6 +307,11 @@ CodexBar aggregates these into a `GrokLocalSessionSummary` (session count, total
 tokens, last session time, primary model, per-day token buckets) and exposes it for
 diagnostics even when the RPC path is unavailable.
 
+The token-history chart lists the observed models for the selected day. These
+rows contain names only: local signals do not provide a per-model token or cost
+split, so the chart keeps the token total at the day level. The same fallback
+applies to other providers whose daily history contains names without a breakdown.
+
 Those local daily token buckets also feed the shared Usage & Spend catalog so an
 enabled Grok subscription is counted instead of omitted. SuperGrok/X Premium+
 credits remain a quota window on the usage bar; they are never converted into
