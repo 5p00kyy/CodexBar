@@ -2511,10 +2511,12 @@ enum CostUsageScanner {
         calendar: Calendar = .current) -> [String]
     {
         let calendar = CostUsageDayRange.localGregorianCalendar(matching: calendar)
-        guard let since = self.parseDayKey(sinceKey, calendar: calendar),
+        let earliestAllowed = calendar.date(from: DateComponents(year: 2020, month: 1, day: 1)) ?? Date.distantPast
+        guard let parsedSince = self.parseDayKey(sinceKey, calendar: calendar),
               self.parseDayKey(untilKey, calendar: calendar) != nil
         else { return sinceKey <= untilKey ? [sinceKey] : [] }
 
+        let since = max(parsedSince, earliestAllowed)
         var out: [String] = []
         var cursor = since
         while CostUsageDayRange.dayKey(from: cursor, calendar: calendar) <= untilKey {
