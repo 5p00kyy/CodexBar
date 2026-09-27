@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import CodexBar
+@testable import CodexBarCLI
 @testable import CodexBarCore
 
 struct PiInclusiveRefreshTests {
@@ -60,8 +61,8 @@ struct PiInclusiveRefreshTests {
         #expect(forced.historyCoverageIsEstablished)
     }
 
-    @Test
-    func `an incomplete Pi mirror keeps the priced Claude total as a lower bound`() async throws {
+    @Test(arguments: [false, true])
+    func `an incomplete Pi mirror keeps the priced Claude total as a lower bound`(useOMP: Bool) async throws {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
         let day = try env.makeLocalNoon(year: 2026, month: 4, day: 9)
@@ -106,17 +107,19 @@ struct PiInclusiveRefreshTests {
                 "usage": ["input": 20, "output": 5, "totalTokens": 25],
             ],
         ]
-        let piFile = try env.writePiSessionFile(
-            relativePath: "truncated.jsonl",
-            contents: env.jsonl([piRow]))
+        let piFile = useOMP
+            ? ompSessionsRoot.appendingPathComponent("truncated.jsonl")
+            : env.piSessionsRoot.appendingPathComponent("truncated.jsonl")
+        try env.jsonl([piRow]).write(to: piFile, atomically: true, encoding: .utf8)
         let truncated = try String(contentsOf: piFile, encoding: .utf8) + "{\"type\":\"message\""
         try truncated.write(to: piFile, atomically: true, encoding: .utf8)
 
-        func load(includePiSessions: Bool) async throws -> CostUsageTokenSnapshot {
+        func load(includePiSessions: Bool, forceRefresh: Bool = false) async throws -> CostUsageTokenSnapshot {
             try await CostUsageFetcher.loadTokenSnapshot(
                 provider: .claude,
                 environment: ["HOME": env.root.path],
                 now: day,
+                forceRefresh: forceRefresh,
                 historyDays: 1,
                 allowPricingRefresh: false,
                 refreshPricingInBackground: false,
@@ -148,5 +151,20 @@ struct PiInclusiveRefreshTests {
         let text = ShareStatsFormatting.text(payload)
         #expect(text.contains("(partial)"))
         #expect(!text.contains("Spend unavailable"))
+        let overview = OverviewSpendSummary(model: model, providerCount: 1)
+        #expect(overview.primarySpendText == "~" + UsageFormatter.currencyString(nativeCost, currencyCode: "USD"))
+        let cli = CodexBarCLI.makeCostPayload(provider: .claude, snapshot: merged, error: nil)
+        #expect(cli.historyCoverageIsEstablished == false)
+        #expect(cli.totals?.totalCostUSD == nativeCost)
+        let cliText = CodexBarCLI.renderCostText(provider: .claude, snapshot: merged, useColor: false)
+        #expect(cliText.contains("Partial local history"))
+        #expect(cliText.contains(UsageFormatter.currencyString(nativeCost, currencyCode: "USD")))
+
+        // Repairing the mirror must restore complete coverage and include its priced usage.
+        try env.jsonl([piRow]).write(to: piFile, atomically: true, encoding: .utf8)
+        let complete = try await load(includePiSessions: true, forceRefresh: true)
+        #expect(complete.historyCoverageIsEstablished)
+        #expect(!complete.historyScanIsPartial)
+        #expect(try #require(complete.last30DaysCostUSD) > nativeCost)
     }
 }

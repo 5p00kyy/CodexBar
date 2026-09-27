@@ -341,6 +341,43 @@ enum CostUsageClaudeCacheIO {
     /// Reparse records written before proxy completion metadata was retained.
     private static let schemaVersion = 3
 
+    /// NSCache provides synchronized, memory-pressure-aware storage for the four app artifacts.
+    /// This caches decoded bytes only; the scanner still validates source scope and reprices rows.
+    private final class ArtifactMemo: @unchecked Sendable {
+        final class Entry {
+            let stamp: CostUsageClaudeFileStamp
+            let cache: CostUsageClaudeCache
+
+            init(stamp: CostUsageClaudeFileStamp, cache: CostUsageClaudeCache) {
+                self.stamp = stamp
+                self.cache = cache
+            }
+        }
+
+        static let shared = ArtifactMemo()
+        let entries = NSCache<NSURL, Entry>()
+
+        private init() {
+            self.entries.countLimit = 4
+        }
+    }
+
+    /// Mirrors the validation the decode path applied inline, so a memoized artifact is
+    /// accepted or rejected on exactly the same terms as a freshly decoded one.
+    private static func validated(_ cache: CostUsageClaudeCache, calendar: Calendar?) -> CostUsageClaudeCache? {
+        guard cache.usage.version == self.schemaVersion else { return nil }
+        if let calendar, cache.usage.timeZoneIdentifier != calendar.timeZone.identifier {
+            return nil
+        }
+        return cache
+    }
+
+    #if DEBUG
+    static func evictArtifactMemoForTesting(at url: URL) {
+        ArtifactMemo.shared.entries.removeObject(forKey: url.standardizedFileURL.resolvingSymlinksInPath() as NSURL)
+    }
+    #endif
+
     private static func defaultCacheRoot() -> URL {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         return root.appendingPathComponent("CodexBar", isDirectory: true)
@@ -371,17 +408,24 @@ enum CostUsageClaudeCacheIO {
         calendar: Calendar? = nil) -> CostUsageClaudeCache
     {
         let url = self.cacheFileURL(provider: provider, cacheRoot: cacheRoot, reportContext: reportContext)
+        let key = url.standardizedFileURL.resolvingSymlinksInPath() as NSURL
+        let stamp = CostUsageClaudeFileStamp.read(at: url)
+        if let stamp, let memoized = ArtifactMemo.shared.entries.object(forKey: key), memoized.stamp == stamp {
+            return self.validated(memoized.cache, calendar: calendar) ?? CostUsageClaudeCache()
+        }
         guard let data = try? Data(contentsOf: url) else { return CostUsageClaudeCache() }
         #if DEBUG
         CostUsageScanner.recordClaudeScanWork(.cacheDecode)
         #endif
-        guard let cache = try? JSONDecoder().decode(CostUsageClaudeCache.self, from: data),
-              cache.usage.version == self.schemaVersion
-        else { return CostUsageClaudeCache() }
-        if let calendar, cache.usage.timeZoneIdentifier != calendar.timeZone.identifier {
+        guard let cache = try? JSONDecoder().decode(CostUsageClaudeCache.self, from: data) else {
             return CostUsageClaudeCache()
         }
-        return cache
+        // Only memoize a read with stable metadata; a concurrent atomic replacement
+        // must fall through to a fresh decode next time.
+        if let stamp, CostUsageClaudeFileStamp.read(at: url) == stamp {
+            ArtifactMemo.shared.entries.setObject(ArtifactMemo.Entry(stamp: stamp, cache: cache), forKey: key)
+        }
+        return self.validated(cache, calendar: calendar) ?? CostUsageClaudeCache()
     }
 
     static func save(

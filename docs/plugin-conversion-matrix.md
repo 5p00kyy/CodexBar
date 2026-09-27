@@ -36,6 +36,11 @@ its custom app endpoint field. The other twelve additions share app settings bui
 validation and the bundled scripts remain authoritative. This glue migration does not change the conversion
 classifications or registry count below.
 
+Eight cookie/web providers also use the spec: Helmcode, Hyper, Manus, Perplexity, Qoder, Raycast, Sakana, and T3 Chat,
+bringing the declarative total to **31**. Six share the cookie app implementation; Helmcode and Qoder retain small
+provider-owned UI adapters. Replicate and TypeSafe keep their native conditional session-cache strategies. Cookie
+domains, session candidates, regional origins, browser policy, and bundled scripts are unchanged.
+
 | Status | Count |
 |---|---:|
 | `cut-over` | 30 |

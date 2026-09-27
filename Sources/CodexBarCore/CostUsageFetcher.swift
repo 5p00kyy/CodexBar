@@ -768,17 +768,14 @@ public struct CostUsageFetcher: Sendable {
                 reportContext: reportContext)
         }
 
-        // An incomplete Pi mirror keeps its merged rows, but must not erase an established native
-        // subtotal. The partial marker publishes that subtotal as a lower bound.
-        let piMirrorTruncatesEstablishedHistory = scanResult.native.historyCoverageIsEstablished
-            && !scanResult.inclusive.historyCoverageIsEstablished
         let snapshot = Self.tokenSnapshot(
             from: scanResult.inclusive.daily,
             now: now,
             historyDays: clampedHistoryDays,
             calendar: scanOptions.calendar,
             historyCoverageIsEstablished: scanResult.inclusive.historyCoverageIsEstablished,
-            historyScanIsPartial: piMirrorTruncatesEstablishedHistory,
+            historyScanIsPartial: scanResult.native.historyCoverageIsEstablished
+                && !scanResult.inclusive.historyCoverageIsEstablished,
             costProvenance: .listPriceEstimate,
             projects: scanResult.inclusive.projects,
             sessions: scanResult.inclusive.sessions,
