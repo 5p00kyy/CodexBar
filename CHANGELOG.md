@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Mistral: offer Monthly Plan in the provider's Menu bar metric picker, so the menu bar and widgets can show the Vibe allowance without a `defaults write` (#PR). Thanks @T0mSIlver!
+- Mistral: offer Monthly Plan in the provider's Menu bar metric picker, so the menu bar and widgets can show the Vibe allowance without a `defaults write` (#4072). Thanks @T0mSIlver!
 - Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
 - TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes, using shared balance-label metadata (#4050). Thanks @lg!
 ### Changed
