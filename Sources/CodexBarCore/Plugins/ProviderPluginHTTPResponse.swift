@@ -15,6 +15,9 @@ enum ProviderPluginHTTPResponse {
         let optional: URLRequest?
         let retryPolicy: ProviderHTTPRetryPolicy
         let optionalBudget: Duration?
+        let cookieJar: ProviderPluginCookieJar?
+        let primarySession: String?
+        let optionalSession: String?
 
         init(
             rawURL: String,
@@ -24,8 +27,13 @@ enum ProviderPluginHTTPResponse {
             secrets: [String: String],
             manifest: ProviderPluginManifest,
             enforcesUserResponsePolicy: Bool,
-            redactionValues: ProviderPluginRedactionValues? = nil) throws
+            redactionValues: ProviderPluginRedactionValues? = nil,
+            cookieJar: ProviderPluginCookieJar? = nil) throws
         {
+            self.cookieJar = cookieJar
+            self.primarySession = options["cookieSession"] as? String
+            let optionalOptions = (options["optionalRequest"] as? [String: Any])?["options"] as? [String: Any]
+            self.optionalSession = optionalOptions?["cookieSession"] as? String
             Self.redactForm(options, into: redactionValues)
             if let budget = options["optionalBudgetSeconds"] {
                 guard let number = budget as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
@@ -44,7 +52,8 @@ enum ProviderPluginHTTPResponse {
                 settings: settings,
                 secrets: secrets,
                 manifest: manifest,
-                enforcesUserResponsePolicy: enforcesUserResponsePolicy)
+                enforcesUserResponsePolicy: enforcesUserResponsePolicy,
+                cookieJar: cookieJar)
             if let optional = options["optionalRequest"] {
                 guard method == "GET", let value = optional as? [String: Any],
                       let url = value["url"] as? String, let optionalMethod = value["method"] as? String,
@@ -61,12 +70,18 @@ enum ProviderPluginHTTPResponse {
                     settings: settings,
                     secrets: secrets,
                     manifest: manifest,
-                    enforcesUserResponsePolicy: enforcesUserResponsePolicy)
+                    enforcesUserResponsePolicy: enforcesUserResponsePolicy,
+                    cookieJar: cookieJar)
                 request.timeoutInterval = min(request.timeoutInterval, 5)
                 self.optional = request
             } else {
                 self.optional = nil
             }
+        }
+
+        func transport(_ base: any ProviderHTTPTransport, session: String?) -> any ProviderHTTPTransport {
+            guard let cookieJar, let session else { return base }
+            return ProviderPluginCookieTransport(base: base, jar: cookieJar, id: session)
         }
 
         private static func redactForm(_ options: [String: Any], into redactionValues: ProviderPluginRedactionValues?) {
@@ -109,7 +124,7 @@ enum ProviderPluginHTTPResponse {
                 defer { started.finish() }
                 return try await .primary(self.response(
                     for: request.primary,
-                    transport: transport,
+                    transport: request.transport(transport, session: request.primarySession),
                     retryPolicy: request.retryPolicy,
                     beforeAttempt: {
                         try await contextOptions.beforeHTTPAttempt?()
@@ -121,7 +136,7 @@ enum ProviderPluginHTTPResponse {
                 group.addTask {
                     await .optional(try? self.response(
                         for: optional,
-                        transport: transport,
+                        transport: request.transport(transport, session: request.optionalSession),
                         retryPolicy: .disabled,
                         beforeAttempt: contextOptions.beforeHTTPAttempt))
                 }
@@ -208,7 +223,8 @@ enum ProviderPluginHTTPResponse {
         settings: [String: String],
         secrets: [String: String],
         manifest: ProviderPluginManifest,
-        enforcesUserResponsePolicy: Bool) throws -> URLRequest
+        enforcesUserResponsePolicy: Bool,
+        cookieJar: ProviderPluginCookieJar? = nil) throws -> URLRequest
     {
         guard let url = URL(string: rawURL) else {
             throw ProviderPluginError.networkPolicy("request URL is invalid")
@@ -271,6 +287,8 @@ enum ProviderPluginHTTPResponse {
             }
             request.setValue(value, forHTTPHeaderField: auth.header)
         }
+        try ProviderPluginCookieJar.authenticate(
+            &request, sessionID: options["cookieSession"], required: manifest.usesCookieJar, jar: cookieJar)
         return request
     }
 
@@ -362,6 +380,9 @@ enum ProviderPluginHTTPResponse {
         transportErrors: TransportErrors? = nil) -> [String: Any]
     {
         var payload: [String: Any] = ["message": message]
+        if let classified = error as? ProviderFetchClassifiedError {
+            payload["failureKind"] = classified.kind.rawValue
+        }
         if let failure = error as? StatusFailure {
             payload["status"] = failure.response.statusCode
             payload["transportClass"] = "http"
