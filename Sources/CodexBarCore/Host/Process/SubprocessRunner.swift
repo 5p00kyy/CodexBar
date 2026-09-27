@@ -153,6 +153,9 @@ public enum SubprocessRunner {
         standardInput: Any? = nil,
         currentDirectoryURL: URL? = nil,
         acceptsNonZeroExit: Bool = false,
+        /// When set, descendants recorded while the process was alive are signaled after it
+        /// exits. This includes children that called `setsid` and were reparented to launchd.
+        reapDescendants: Bool = false,
         label: String) async throws -> SubprocessResult
     {
         guard FileManager.default.isExecutableFile(atPath: binary) else {
@@ -203,6 +206,15 @@ public enum SubprocessRunner {
 
         let pid = process.processIdentifier
         let processGroup: pid_t? = setpgid(pid, pid) == 0 ? pid : nil
+        let descendantTracker: DescendantTracker? = reapDescendants ? DescendantTracker() : nil
+        descendantTracker?.record(rootPID: pid)
+        let descendantPoll = Task.detached {
+            guard let descendantTracker else { return }
+            while !Task.isCancelled {
+                descendantTracker.record(rootPID: pid)
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+        }
 
         let exitCodeTask = Task<Int32, Never> {
             await termination.wait()
@@ -288,6 +300,9 @@ public enum SubprocessRunner {
                     "status": "\(exitCode)",
                     "duration_ms": "\(Int(duration * 1000))",
                 ])
+            descendantPoll.cancel()
+            descendantTracker?.record(rootPID: pid)
+            descendantTracker?.reap()
             return SubprocessResult(stdout: stdout, stderr: stderr)
         } catch {
             let duration = Date().timeIntervalSince(start)
@@ -299,11 +314,46 @@ public enum SubprocessRunner {
                     "duration_ms": "\(Int(duration * 1000))",
                 ])
             // Safety net: ensure the process is dead (may already be killed by timeout timer).
+            descendantPoll.cancel()
+            descendantTracker?.record(rootPID: pid)
             self.terminateProcess(process, processGroup: processGroup)
+            descendantTracker?.reap()
             exitCodeTask.cancel()
             stdoutCapture.stop()
             stderrCapture.stop()
             throw error
+        }
+    }
+
+    /// Remembers child process identities observed while a root process is still alive.
+    private final class DescendantTracker: @unchecked Sendable {
+        private let lock = NSLock()
+        private var identities: [TTYProcessTreeTerminator.ProcessIdentity] = []
+
+        func record(rootPID: pid_t) {
+            let fresh = TTYProcessTreeTerminator.descendantPIDs(of: rootPID)
+                .compactMap(TTYProcessTreeTerminator.processIdentity(for:))
+            self.lock.withLock {
+                for identity in fresh where !self.identities.contains(identity) {
+                    self.identities.append(identity)
+                }
+            }
+        }
+
+        func reap() {
+            let snapshot = self.lock.withLock { self.identities }
+            guard !snapshot.isEmpty else { return }
+            for identity in snapshot where TTYProcessTreeTerminator.isCurrent(identity) {
+                kill(identity.pid, SIGTERM)
+            }
+            let deadline = Date().addingTimeInterval(0.4)
+            while Date() < deadline {
+                if snapshot.allSatisfy({ !TTYProcessTreeTerminator.isCurrent($0) }) { return }
+                usleep(50_000)
+            }
+            for identity in snapshot where TTYProcessTreeTerminator.isCurrent(identity) {
+                kill(identity.pid, SIGKILL)
+            }
         }
     }
 }

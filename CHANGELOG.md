@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Antigravity: stop MCP servers that `agy -p /usage` leaves running after the quota probe exits, including servers that detach from the process group. They were reparented to launchd and each held a core until killed by hand.
 - Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
 - TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes, using shared balance-label metadata (#4050). Thanks @lg!
 - Grok: retain the product usage breakdown on the grok.com billing fallback, with bounded shared protobuf decoding (#4041). Thanks @olddonkey!
