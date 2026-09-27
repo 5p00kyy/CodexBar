@@ -52,7 +52,10 @@ directory, the staged `id_token` claim is re-read from disk and verified against
 before launch, and the child process receives an allowlist environment (login `PATH`, locale, proxy
 variables) without `ANTIGRAVITY_OAUTH_CREDENTIALS_JSON` or any ambient provider credentials. A non-empty
 `SSH_TTY` forces `agy` onto file-token storage so the scoped run never touches the OS keyring. The
-staging directory is deleted after the run, a report carrying conflicting identity is rejected, and any
+staging directory is deleted after the run, and the report is only attributed to the account after
+the access token `agy` actually used — refreshed in place inside the staged file when expired — is
+resolved through Google's `userinfo` endpoint and its email matches it, so an identity-free report
+can never carry a label its credentials did not prove. Any
 scoped failure preserves the original ambient error — an ambient report is never substituted for a
 selected account, so the pipeline falls through to the account-scoped OAuth fetch exactly as before.
 

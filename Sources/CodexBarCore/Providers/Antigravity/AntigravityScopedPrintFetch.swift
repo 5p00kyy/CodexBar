@@ -182,24 +182,70 @@ enum AntigravityScopedAgyStaging {
         }
         return trimmed.lowercased()
     }
+
+    /// The account whose credential `agy` actually used during a run. After the
+    /// child exits, its staged token file holds the access token that made the
+    /// API calls — refreshed in place when the staged grant was expired — so
+    /// resolving that token through Google's `userinfo` endpoint binds the
+    /// result to the effective credential, not to the `id_token` claim (which
+    /// could disagree with the access/refresh tokens in a corrupted file).
+    static func runEffectiveAccountEmail(
+        home: URL,
+        timeout: TimeInterval,
+        dataLoader: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse),
+        fileManager: FileManager = .default) async -> String?
+    {
+        var tokenURL = home
+        for component in Self.tokenRelativePath {
+            tokenURL.appendPathComponent(component, isDirectory: false)
+        }
+        guard let data = fileManager.contents(atPath: tokenURL.path),
+              let payload = AntigravityAgyFileTokenEncoder.decode(data: data)
+        else {
+            return nil
+        }
+        let accessToken = payload.token.accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !accessToken.isEmpty,
+              let url = URL(string: "https://www.googleapis.com/oauth2/v3/userinfo")
+        else {
+            return nil
+        }
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = min(timeout, 15)
+        guard let (responseData, response) = try? await dataLoader(request),
+              let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any]
+        else {
+            return nil
+        }
+        return self.normalizedEmail(json["email"] as? String)
+    }
 }
 
 // MARK: - Scoped print fetch
 
 #if os(macOS)
 extension AntigravityCLIHTTPSFetchStrategy {
+    private static let scopedPrintLog = CodexBarLog.logger(LogCategories.provider(.antigravity))
+
     /// Runs `agy -p /usage` scoped to the injected token account's credentials:
     /// the account's OAuth tokens are staged into a private per-run `HOME`, the
     /// child receives an allowlist environment, and the staged token's `id_token`
-    /// claim is verified against the selected account before launch, so the
-    /// identity-free report can be attributed to that account. Fails closed:
-    /// any error propagates so the pipeline falls through to the account-scoped
-    /// OAuth strategy; ambient reports are never substituted for a selected
-    /// account.
+    /// claim is verified against the selected account before launch. Because the
+    /// CLI authenticates with the staged access/refresh tokens — which could
+    /// disagree with the `id_token` claim — the access token `agy` actually used
+    /// is resolved through Google's `userinfo` endpoint after the run and must
+    /// match the selected account before the report is labeled with it. Fails
+    /// closed: any error propagates so the pipeline falls through to the
+    /// account-scoped OAuth strategy; ambient reports are never substituted for
+    /// a selected account.
     func fetchScopedPrintUsage(
         binary: String,
         environment: [String: String],
-        timeout: TimeInterval = 90) async throws -> ProviderFetchResult
+        timeout: TimeInterval = 90,
+        dataLoader: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil) async throws
+        -> ProviderFetchResult
     {
         guard let value = environment[AntigravityOAuthCredentialsStore.environmentCredentialsKey],
               let credentials = AntigravityOAuthCredentialsStore.credentials(fromTokenAccountValue: value),
@@ -240,8 +286,26 @@ extension AntigravityCLIHTTPSFetchStrategy {
         if let reportedEmail = AntigravityScopedAgyStaging.normalizedEmail(parsed.accountEmail),
            reportedEmail != AntigravityScopedAgyStaging.normalizedEmail(expectedAccountEmail)
         {
+            Self.scopedPrintLog.info(
+                "Scoped agy usage report rejected: report identity does not match the selected account")
             throw AntigravityStatusProbeError.accountMismatch(
                 expected: expectedAccountEmail, found: parsed.accountEmail)
+        }
+        let loader = dataLoader ?? { request in try await URLSession.shared.data(for: request) }
+        let effectiveEmail = await AntigravityScopedAgyStaging.runEffectiveAccountEmail(
+            home: staged.home,
+            timeout: timeout,
+            dataLoader: loader)
+        guard let effectiveEmail else {
+            Self.scopedPrintLog.info(
+                "Scoped agy usage report rejected: CLI effective account could not be verified")
+            throw AntigravityScopedStagingError.identityUnverifiable
+        }
+        guard effectiveEmail == AntigravityScopedAgyStaging.normalizedEmail(expectedAccountEmail) else {
+            Self.scopedPrintLog.info(
+                "Scoped agy usage report rejected: CLI effective account does not match the selected account")
+            throw AntigravityStatusProbeError.accountMismatch(
+                expected: expectedAccountEmail, found: effectiveEmail)
         }
         let snapshot = parsed.withIdentity(from: AntigravityStatusSnapshot(
             modelQuotas: [], accountEmail: expectedAccountEmail, accountPlan: nil, source: parsed.source))

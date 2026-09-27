@@ -583,6 +583,8 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
                     return try await scopedReportFetch()
                 } catch let scopedError {
                     if scopedError is CancellationError { throw scopedError }
+                    Self.log.info(
+                        "Scoped agy usage fetch failed; preserving ambient error (reason: \(type(of: scopedError)))")
                     throw error
                 }
             }

@@ -215,11 +215,65 @@ struct AntigravityScopedPrintFetchTests {
 
         let preexisting = Set(self.scopedStagingDirectories())
         let result = try await AntigravityCLIHTTPSFetchStrategy().fetchScopedPrintUsage(
-            binary: fixture.binary.path, environment: environment)
+            binary: fixture.binary.path,
+            environment: environment,
+            dataLoader: self.userinfoLoader(mapping: ["scoped-access-token": "scoped@example.com"]))
 
         #expect(result.usage.identity?.accountEmail == "scoped@example.com")
         #expect(abs((result.usage.primary?.usedPercent ?? -1) - 40) < 0.001)
         #expect(Set(self.scopedStagingDirectories()) == preexisting)
+    }
+
+    @Test
+    func `scoped print rejects a report when the effective token belongs to another account`() async throws {
+        let report = try self.reportJSON()
+        // Simulate agy refreshing the staged grant into a different account's
+        // token: the id_token still claims the selected account, but the access
+        // token that made the API calls resolves to a donor account.
+        let fixture = try self.scopedPrintFixture(body: """
+        /usr/bin/sed -i '' 's/scoped-access-token/donor-access-token/' \
+            "$HOME/.gemini/antigravity-cli/antigravity-oauth-token"
+        /bin/cat <<'REPORT'
+        \(report)
+        REPORT
+        """)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+
+        var environment = self.accountEnv(email: "scoped@example.com")
+        environment.merge(fixture.environment) { _, new in new }
+
+        await #expect(throws: AntigravityStatusProbeError.accountMismatch(
+            expected: "scoped@example.com", found: "donor@example.com"))
+        {
+            try await AntigravityCLIHTTPSFetchStrategy().fetchScopedPrintUsage(
+                binary: fixture.binary.path,
+                environment: environment,
+                dataLoader: self.userinfoLoader(mapping: [
+                    "scoped-access-token": "scoped@example.com",
+                    "donor-access-token": "donor@example.com",
+                ]))
+        }
+    }
+
+    @Test
+    func `scoped print rejects a report when the effective account cannot be verified`() async throws {
+        let report = try self.reportJSON()
+        let fixture = try self.scopedPrintFixture(body: """
+        /bin/cat <<'REPORT'
+        \(report)
+        REPORT
+        """)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+
+        var environment = self.accountEnv(email: "scoped@example.com")
+        environment.merge(fixture.environment) { _, new in new }
+
+        await #expect(throws: AntigravityScopedStagingError.identityUnverifiable) {
+            try await AntigravityCLIHTTPSFetchStrategy().fetchScopedPrintUsage(
+                binary: fixture.binary.path,
+                environment: environment,
+                dataLoader: self.userinfoLoader(mapping: [:]))
+        }
     }
 
     @Test
@@ -354,6 +408,29 @@ struct AntigravityScopedPrintFetchTests {
         try (script + body + "\n").write(to: binary, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: binary.path)
         return (directory, binary, ["PATH": "/usr/bin:/bin"])
+    }
+    #endif
+
+    #if os(macOS)
+    private func userinfoLoader(
+        mapping: [String: String]) -> @Sendable (URLRequest) async throws -> (Data, URLResponse)
+    {
+        { request in
+            let token = request.value(forHTTPHeaderField: "Authorization")?
+                .replacingOccurrences(of: "Bearer ", with: "")
+            if let token, let email = mapping[token],
+               let url = request.url
+            {
+                let body = try JSONSerialization.data(withJSONObject: ["email": email])
+                let response = HTTPURLResponse(
+                    url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+                return (body, response)
+            }
+            let url = request.url ?? URL(fileURLWithPath: "/")
+            let response = HTTPURLResponse(
+                url: url, statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (Data(), response)
+        }
     }
     #endif
 
