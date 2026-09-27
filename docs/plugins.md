@@ -20,21 +20,49 @@ App refreshes are scoped to the installed plugin runtime and its fetch settings.
 reconfiguring a plugin prevents an older refresh from publishing usage or errors. A replacement refresh waits for retired
 work to finish and reads the current configuration when its fetch starts. Display-only preferences do not invalidate usage.
 
-## Bundled API-key provider registration
+## Bundled provider registration
 
 For a bundled plugin with a simple API-key configuration, declare a public `PluginProviderSpec` named `spec` in its
 provider-owned `*ProviderDescriptor.swift` file, then expose `descriptor = Self.spec.makeDescriptor()`. The spec owns
 metadata, branding, environment-key aliases, the API-key field, and optional presentation and script-settings overrides;
 the bundled script still owns requests and parsing. See `XKiroProviderDescriptor` for a minimal example and
-`ZenMuxProviderDescriptor` for optional usage settings.
+`ZenMuxProviderDescriptor` for optional usage settings. Optional dashboards, subscription links, plan labels,
+widget colors, and progress colors retain their provider-owned values. `V0ProviderDescriptor` demonstrates a
+workspace field shared by config projection, plugin settings, and the app's Scope field.
+
+`Endpoint` shares the `enterpriseHost` projection, environment key, Base URL field, and validated URL resolver.
+Its requirement distinguishes a configured override (including invalid values that must reach fetch validation),
+a validated override, and an optional override with a declared default. URL normalization and validation remain in
+the provider-owned reader. Deepgram's environment-only API URL override stays separate from its Project ID field;
+it does not gain an `enterpriseHost` setting.
+
+Typed Boolean toggles share config reads/writes, environment projection, app bindings, and an optional enabled
+fetch timeout; LiteLLM uses this for model activity. Only llmman opts out of requiring an API key for fetching.
+The `plugin-provider-specs.json` golden keeps builder-derived credential projections, source modes and strategy IDs,
+field kinds, availability, CLI alias mappings, and config capabilities. Before another migration, capture the full
+pre-migration descriptor and settings output separately and compare it after the change; keep that equivalence proof
+in the PR. Do not expand the committed golden with copied labels, colors, or other spec literals.
 
 Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec with an `apiKeyField` and no separate
 app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
 the provider's availability and detail-line policies explicitly. Providers with extra fields or token-account behavior
 can share the descriptor builder while retaining their app implementation, as GitKraken and DeepInfra do. Keep native
-credential discovery and cookie/session handling outside this API-key-only building block. ClinePass supplies
+credential discovery in provider-owned adapters. ClinePass supplies
 provider-owned credential and fetch-plan overrides to `makeDescriptor` for its read-only Cline session file, while
 retaining the spec's API-key path, metadata, and shared settings field.
+
+`WebSource` adds typed web-only or session/API source modes, browser import order, settings registration, timeout
+policy, and manual-cookie fields. `PluginCookieProviderImplementation` shares the picker, field, observation,
+login link, and manual token-account behavior. The existing `ProviderSettingsSectionRegistration` passes each
+provider's typed cookie snapshot to the broker, including the manual origin used for regional session candidates.
+Cookie domains and session capabilities remain authoritative in the unchanged bundled manifest; the shared
+`ScriptFetchStrategy` passes those declarations through to the broker without widening them.
+
+Manus, Perplexity, Hyper, Raycast, Sakana, and T3 Chat use the shared app implementation. Helmcode retains its tenant
+picker/snapshot, and Qoder retains its regional dashboard action and source-label adapter while sharing cookie UI.
+Provider-owned values resolvers retain token normalization and captured-header allowlists. Replicate and TypeSafe
+remain outside this spec migration: their native strategies publish cookies conditionally after a successful fetch,
+honor pinned-account fallback, and enforce their existing redirect policies.
 
 ## Minimal plugin
 
@@ -115,17 +143,26 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
 
 - `await ctx.http.getJSON(url, opts?)` performs GET and returns `{status, headers, json}`.
 - `await ctx.http.get(url, opts?)` performs GET and returns `{status, headers, bodyText}`.
-- `await ctx.http.getWithOptional(url, optionalURL, opts?)` runs two text GETs concurrently through the host,
-  with the same options and declared-origin/authentication checks for both. It returns the primary response with
-  `optional` containing the secondary response or `null`. Optional work has a five-second request limit, no retries,
-  and a shared 200 ms collection budget measured from the first primary attempt's admission. Scheduling waits count
-  against the overall fetch timeout, not this collection budget. A slow primary only collects an already
-  completed secondary; a fast primary can wait for the remainder of that budget. Failed optional work is discarded.
-  Unfinished optional work is cancelled on collection, primary failure, or caller cancellation. This primitive works
-  on both engines without relying on JavaScript promise concurrency. HTTP responses also expose their final `url`.
+- `await ctx.http.getWithOptional(url, optional, opts?)` runs a required text GET concurrently with an optional
+  request through the host. A string `optional` is a GET URL that shares `opts`; an object
+  `{url, method: "POST", body, headers?, timeoutSeconds?}` supplies an independent JSON POST, or use `form` instead
+  of `body` for a host-encoded form POST. Both requests pass declared-origin/authentication checks before either starts.
+  The result is the primary response with `optional` containing the secondary response or `null`.
+  Optional work has a five-second request limit and no retries. `opts.optionalBudgetSeconds` selects a shared
+  collection budget from zero through five seconds (default 0.2), measured from the first primary attempt's
+  admission. Scheduling waits count against the overall fetch timeout, not this collection budget. A slow primary
+  only collects an already completed secondary; a fast primary can wait for the remainder of that budget.
+  Failed optional work is discarded. Unfinished optional work is cancelled on collection, primary failure, or caller
+  cancellation. This works on both engines without JavaScript promise concurrency. HTTP responses expose their final `url`.
 - `await ctx.http.postJSON(url, {body, headers?})` performs JSON POST. `body` must be JSON-serializable.
 - `await ctx.http.post(url, {body, headers?})` sends the same JSON POST and returns `{status, headers, bodyText}` so a
   plugin can classify non-JSON error pages before parsing a successful response.
+- `await ctx.http.post(url, {form: {key: "value"}, headers?})` sends `application/x-www-form-urlencoded` data and
+  returns the text response, including its final `url`. The host encodes a string-to-string map; raw form strings,
+  non-string values, and combining `form` with `body` are rejected. Form requests use the same declared-origin,
+  authentication, deadline, response-size, and retry rules as JSON POST. Form values, their percent-encoded values,
+  and their JSON-escaped values join the fetch's log/error redaction set before transport starts. Do not log
+  credentials before submitting the request; values discovered by the script are not known to the host yet.
 - `opts.headers` accepts string values. Plugins cannot replace their declared auth header. `opts.timeoutSeconds` sets a
   hard request deadline from 1 through 90 seconds; the default is 15 seconds. Each attempt’s deadline starts when
   its transport task begins, so scheduler delays do not consume the request budget. Queued work remains bounded
@@ -184,6 +221,11 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
   the host refresh clock.
 - `ctx.date.nowMillis()` returns the host refresh clock as Unix epoch milliseconds for deterministic arithmetic.
 - `ctx.date.nextDailyReset(timeZoneIdentifier, hour)` returns the next wall-clock reset in an IANA time zone.
+- `ctx.date.addMonths(date, months, timeZoneIdentifier)` adds an integer number of Gregorian calendar months to a
+  valid JavaScript `Date`; use negative months to subtract. Both engines call Foundation Calendar with the specified
+  IANA time zone, preserving local wall-clock time across DST and clamping month ends (January 31 plus one month is
+  February 28, or February 29 in a leap year). Offsets are limited to ±120,000 months, and invalid dates, time zones,
+  fractional offsets, or results outside JavaScript's Date range throw.
 - `ctx.env.timeZone` is the host's current IANA time-zone identifier; zero-offset GMT aliases are normalized to `UTC`.
 - `ctx.format.number(value, options?)`, `usd(value)`, and `monthDay(date)` provide deterministic formatting on both
   engines. Number options support `minimumFractionDigits` and `maximumFractionDigits`.
@@ -388,6 +430,7 @@ Bundled scripts own requests, error classification, and snapshot mapping; Swift 
 | --- | --- |
 | [llmman](llmman.md) | `llmman.ts` reads loaded-model memory from the local `llmman serve` node report. Its API key is optional, so the script sends it without host-owned `auth`. |
 | [Chutes](chutes.md) | `chutes.ts` preserves subscription context, allows empty usage, and fetches optional quota details on both engines. Swift supplies credentials and validated API origins. |
+| [Abacus AI](abacus.md) | `abacus.ts` runs required credits GET and optional billing POST concurrently, with calendar-month pacing on both engines. Swift supplies Chrome-first validated sessions in lazy batches and a configured refresh budget capped at 90 seconds; at most five candidates are tried. |
 | [ai&](aiand.md) | `aiand.ts` follows paired log cursors and sums decimal costs with integer arithmetic before display conversion. Empty windows omit cost; capped/incomplete pagination is estimated. |
 | [DevPass](devpass.md) | `devpass.ts` reads billing-cycle and premium weekly credits from LLM Gateway's key-status API; Swift registers the provider and API-key setting. |
 | [xKiro](xkiro.md) | `xkiro.ts` reads daily free tokens and UTC reset from the usage API; Swift registers the provider and API-key setting. |

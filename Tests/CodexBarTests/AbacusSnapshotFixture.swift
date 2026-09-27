@@ -1,4 +1,5 @@
 import Foundation
+@testable import CodexBarCore
 
 // MARK: - Abacus Usage Snapshot
 
