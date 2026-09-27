@@ -11,7 +11,7 @@ This matrix evaluates 69 providers in the current capability audit against the p
 [`plugin-prototype.md`](plugin-prototype.md). Each provider has one primary blocker. This pass re-audits the remaining convertible and cookie rows;
 other legacy classifications still need their own parity audit.
 
-`convertible-now` means the canonical first-party flow fits the current HTTP GET/JSON POST, declared-origin,
+`convertible-now` means the canonical first-party flow fits the current HTTP GET/JSON or form POST, declared-origin,
 authentication, and generic snapshot capabilities. Text decoding and dependent requests can be implemented in the
 script. Settings-derived origins include the private-network HTTP policy for LLM Proxy and LiteLLM.
 
@@ -57,9 +57,9 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 | cursor | `needs-files/subprocess/oauth-broker` | No | Native app-auth SQLite discovery and local CSV usage remain required; domain cookies do not replace those sources. |
 | opencode | `needs-cookie-import` | No | Same-refresh candidate rejection is supported, but native import merges two cookie domains into one cache entry; domain-scoped plugin imports can stage two writes, which interactive refresh cannot commit atomically (#3982). |
 | opencodego | `needs-files/subprocess/oauth-broker` | No | Local auth/SQLite state and browser sessions are required, with an additional bespoke usage model. |
-| alibaba | `needs-host-extension` | No | Console auth still requires form-encoded POST and CSRF/sec-token discovery; the host only sends JSON POST. |
-| alibabatokenplan | `needs-host-extension` | No | Console requests require form-encoded POST and redirect-aware cookie forwarding, which domain-scoped headers do not supply. |
-| qwencloud | `needs-host-extension` | No | CSRF plus form-encoded POST and redirect-aware routing remain outside the JSON-only POST broker. |
+| alibaba | `needs-host-extension` | No | Form POST is available in host-caps-3; CSRF/sec-token parsing stays in the script. Cookie-jar lane host-caps-4 owns redirect-scoped cookies and the remaining session parity audit; not yet convertible. |
+| alibabatokenplan | `needs-host-extension` | No | Form POST is available in host-caps-3. Cookie-jar lane host-caps-4 must preserve domain/path metadata through redirects and define legacy-header migration before cutover. |
+| qwencloud | `needs-host-extension` | No | Form POST is available in host-caps-3. Cookie-jar lane host-caps-4 owns declared-origin redirects, dashboard/API domain/path routing, final-URL proof, and migration of the native paired-header cache; no cutover here. |
 | factory | `needs-files/subprocess/oauth-broker` | No | The canonical fallback recovers WorkOS tokens from browser localStorage and persists sessions; cookie headers cover only part of auth. |
 | gemini | `needs-files/subprocess/oauth-broker` | No | Gemini CLI credential/config files, Google OAuth refresh, and a curl fallback own the current flow. |
 | antigravity | `needs-pty/webview/native` | No | Process/port discovery, localhost IDE RPC, OAuth files, and a persistent PTY make this a native integration. |
@@ -88,7 +88,7 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 | mimo | `needs-files/subprocess/oauth-broker` | No | The canonical pipeline includes the file-based local usage fallback as well as browser sessions; cookies alone cannot preserve it. |
 | doubao | `needs-files/subprocess/oauth-broker` | No | Full parity needs a CLI subprocess or Volcengine HMAC signing and POST-based plan calls. |
 | sakana | `cut-over` | Yes | Both engines use the bundled billing/PAYG parser and generic details. The host runs concurrent GETs with a shared 200 ms collection budget, a five-second optional request limit, and cancellation of unfinished work. The native fetcher and snapshot twin are deleted. |
-| abacus | `needs-host-extension` | No | Billing duration subtracts one Calendar.current month; the host exposes daily resets but no calendar/month subtraction with timezone parity. |
+| abacus | `needs-host-extension` | No | Form/JSON optional POST and calendar-month arithmetic are available in host-caps-3. Native fetching remains: its configured timeout applies independently to every cookie candidate, while the plugin runtime and QuickJS watchdog share one fixed refresh deadline. A slow rejected candidate can exhaust the budget before a fresh session succeeds; per-candidate deadline semantics need an explicit host contract before cutover. |
 | mistral | `needs-cookie-import` | No | CSRF extraction and dependent GETs fit scripts, but auth rejection iterates alternate browser profiles and preserves session selection. |
 | deepseek | `needs-files/subprocess/oauth-broker` | No | Platform auth/profile selection reads Chromium localStorage, and the result has a bespoke history model. |
 | deepinfra | `cut-over` | Yes | Both engines use fixed-origin bearer GETs for required billing data, preserving cents conversion, balance deductions, suspension, spending limits, and bounded retries. The native fetcher and parser are deleted. |
