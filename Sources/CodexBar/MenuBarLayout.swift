@@ -621,7 +621,7 @@ enum MenuBarLayoutBalanceResolver {
                       let value = balanceDetail.split(separator: " ", maxSplits: 1).first
             else { return nil }
             return (balanceDetail.contains(" owed") ? "-" : "") + String(value)
-        case .moonshot, .poe:
+        case .moonshot, .poe, .typesafe:
             let value = self.displayValue(
                 from: snapshot?.loginMethod(for: provider), prefix: "Balance:", removingSuffix: "")
             return provider == .moonshot

@@ -17,6 +17,7 @@
 - Nous Portal: include Nous-billed OpenCodex ledger activity in Usage & Spend, preserving estimated or unpriced costs separately from Portal credits. Fixes #4008. Thanks @Reztahla!
 - Muse Code: optionally show the explicitly selected dev.meta.ai browser team’s quota when the login omits quotas, with cookies Off by default and team choices in settings (#4011). Fixes #4002. Thanks @enieuwy!
 - Cursor: keep all-history cost requests within the dashboard API's supported date range so Usage & Spend can refresh (#4028). Thanks @Yuxin-Qiao!
+- TypeSafe: show the credit balance in the menu bar instead of a missing-value placeholder.
 ### Added
 
 - Plugins: support host-encoded form POST, optional POST enrichment with bounded collection, and time-zone-aware calendar month arithmetic on both engines.
