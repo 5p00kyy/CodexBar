@@ -385,6 +385,7 @@ public enum GrokWebBillingFetcher {
         while index < bytes.count {
             guard index + 5 <= bytes.count else { return [] }
             let flags = bytes[index]
+            guard flags == 0 || flags == 0x80 else { return [] }
             let length =
                 (Int(bytes[index + 1]) << 24)
                 | (Int(bytes[index + 2]) << 16)
@@ -507,70 +508,21 @@ public enum GrokWebBillingFetcher {
         var nextOrder = order
 
         while index < bytes.count {
-            let fieldStart = index
-            guard let key = Self.readVarint(bytes, index: &index), key >> 3 > 0, key >> 3 <= 536_870_911 else {
+            guard let field = GrokProtobufField.read(bytes, index: &index) else {
                 scan.isComplete = false
-                index = fieldStart + 1
-                continue
+                return (scan, nextOrder)
             }
-            let fieldNumber = key >> 3
-            let wireType = key & 0x07
-            let fieldPath = path + [fieldNumber]
-
-            switch wireType {
-            case 0:
-                if let value = Self.readVarint(bytes, index: &index) {
-                    scan.varintFields.append(ProtobufScan.VarintField(path: fieldPath, value: value))
-                } else {
-                    scan.isComplete = false
-                    index = fieldStart + 1
-                }
-            case 1:
-                guard index + 8 <= bytes.count else {
-                    scan.isComplete = false
-                    return (scan, nextOrder)
-                }
-                index += 8
-            case 2:
-                guard let length = Self.readVarint(bytes, index: &index),
-                      length <= UInt64(bytes.count - index)
-                else {
-                    scan.isComplete = false
-                    index = fieldStart + 1
-                    continue
-                }
-                let start = index
-                let end = index + Int(length)
-                if depth < 4, Self.isKnownBillingMessage(path: fieldPath) {
-                    let nested = Self.scanProtobuf(
-                        Data(bytes[start..<end]),
-                        depth: depth + 1,
-                        path: fieldPath,
-                        order: nextOrder)
-                    scan.merge(nested.scan)
-                    nextOrder = nested.order
-                }
-                index = end
-            case 5:
-                guard index + 4 <= bytes.count else {
-                    scan.isComplete = false
-                    return (scan, nextOrder)
-                }
-                let bitPattern =
-                    UInt32(bytes[index])
-                    | (UInt32(bytes[index + 1]) << 8)
-                    | (UInt32(bytes[index + 2]) << 16)
-                    | (UInt32(bytes[index + 3]) << 24)
-                scan.fixed32Fields.append(
-                    ProtobufScan.Fixed32Field(
-                        path: fieldPath,
-                        value: Float(bitPattern: bitPattern),
-                        order: nextOrder))
+            let fieldPath = path + [field.number]
+            if let value = field.varint {
+                scan.varintFields.append(ProtobufScan.VarintField(path: fieldPath, value: value))
+            } else if let message = field.message, depth < 4, Self.isKnownBillingMessage(path: fieldPath) {
+                let nested = Self.scanProtobuf(
+                    Data(message), depth: depth + 1, path: fieldPath, order: nextOrder)
+                scan.merge(nested.scan)
+                nextOrder = nested.order
+            } else if let value = field.fixed32 {
+                scan.fixed32Fields.append(ProtobufScan.Fixed32Field(path: fieldPath, value: value, order: nextOrder))
                 nextOrder += 1
-                index += 4
-            default:
-                scan.isComplete = false
-                index = fieldStart + 1
             }
         }
 
@@ -590,37 +542,17 @@ public enum GrokWebBillingFetcher {
         }
     }
 
-    private struct ProductWireField {
-        let number: UInt64
-        let varint: UInt64?
-        let fixed32: Float?
-        let message: [UInt8]?
-    }
-
     private static func decodeProductUsage(_ payload: Data) -> [GrokProductUsage] {
-        let bytes = [UInt8](payload)
-        var index = 0
-        var config: [UInt8]?
-        while index < bytes.count {
-            guard let field = Self.readProductWireField(bytes, index: &index) else { return [] }
-            if field.number == 1 {
-                guard let message = field.message else { return [] }
-                guard config == nil else { return [] }
-                config = message
-            }
-        }
-        guard let config else { return [] }
-
+        guard let root = GrokProtobufField.fields(in: Array(payload)) else { return [] }
+        let configs = root.filter { $0.number == 1 }
+        guard configs.count == 1, let message = configs[0].message,
+              let config = GrokProtobufField.fields(in: message),
+              config.filter({ $0.number == 1 }).count == 1 else { return [] }
         var products: [GrokProductUsage] = []
         var seenIDs: Set<UInt64> = []
-        index = 0
-        while index < config.count {
-            guard let field = Self.readProductWireField(config, index: &index) else { return [] }
-            guard field.number == 7 else { continue }
-            guard let entry = field.message else { return [] }
-            guard let (id, percent) = Self.decodeProductEntry(entry), seenIDs.insert(id).inserted else {
-                return []
-            }
+        for field in config where field.number == 7 {
+            guard let entry = field.message,
+                  let (id, percent) = Self.decodeProductEntry(entry), seenIDs.insert(id).inserted else { return [] }
             // Only live-verified product IDs are named.
             let name: String? = switch id {
             case 2: "GrokBuild"
@@ -637,73 +569,13 @@ public enum GrokWebBillingFetcher {
     }
 
     private static func decodeProductEntry(_ bytes: [UInt8]) -> (UInt64, Double)? {
-        var index = 0
-        var id: UInt64?
-        var percent = 0.0
-        while index < bytes.count {
-            guard let field = Self.readProductWireField(bytes, index: &index) else { return nil }
-            switch field.number {
-            case 1:
-                guard let value = field.varint else { return nil }
-                id = value
-            case 2:
-                guard let value = field.fixed32 else { return nil }
-                percent = Double(value)
-            default:
-                break
-            }
-        }
-        guard let id, percent.isFinite, percent >= 0 else { return nil }
+        guard let fields = GrokProtobufField.fields(in: bytes) else { return nil }
+        let ids = fields.filter { $0.number == 1 }
+        let percentages = fields.filter { $0.number == 2 }
+        guard ids.count == 1, let id = ids[0].varint, percentages.count <= 1,
+              percentages.isEmpty || percentages[0].fixed32 != nil else { return nil }
+        let percent = Double(percentages.first?.fixed32 ?? 0)
+        guard percent.isFinite, percent >= 0 else { return nil }
         return (id, percent)
-    }
-
-    private static func readProductWireField(_ bytes: [UInt8], index: inout Int) -> ProductWireField? {
-        guard let key = readVarint(bytes, index: &index),
-              key >> 3 > 0, key >> 3 <= 536_870_911
-        else { return nil }
-        let number = key >> 3
-        switch key & 0x07 {
-        case 0:
-            guard let value = Self.readVarint(bytes, index: &index) else { return nil }
-            return ProductWireField(number: number, varint: value, fixed32: nil, message: nil)
-        case 1:
-            guard index + 8 <= bytes.count else { return nil }
-            index += 8
-            return ProductWireField(number: number, varint: nil, fixed32: nil, message: nil)
-        case 2:
-            guard let length = Self.readVarint(bytes, index: &index),
-                  length <= UInt64(bytes.count - index)
-            else { return nil }
-            let end = index + Int(length)
-            let message = Array(bytes[index..<end])
-            index = end
-            return ProductWireField(number: number, varint: nil, fixed32: nil, message: message)
-        case 5:
-            guard index + 4 <= bytes.count else { return nil }
-            let bits = UInt32(bytes[index])
-                | (UInt32(bytes[index + 1]) << 8)
-                | (UInt32(bytes[index + 2]) << 16)
-                | (UInt32(bytes[index + 3]) << 24)
-            index += 4
-            return ProductWireField(number: number, varint: nil, fixed32: Float(bitPattern: bits), message: nil)
-        default:
-            return nil
-        }
-    }
-
-    private static func readVarint(_ bytes: [UInt8], index: inout Int) -> UInt64? {
-        var value: UInt64 = 0
-        var shift: UInt64 = 0
-        while index < bytes.count, shift < 64 {
-            let byte = bytes[index]
-            index += 1
-            if shift == 63, byte > 1 { return nil }
-            value |= UInt64(byte & 0x7F) << shift
-            if byte & 0x80 == 0 {
-                return value
-            }
-            shift += 7
-        }
-        return nil
     }
 }

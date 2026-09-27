@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import CodexBarCLI
 @testable import CodexBarCore
 
 struct GrokWebBillingProductUsageTests {
@@ -40,6 +41,25 @@ struct GrokWebBillingProductUsageTests {
         #expect(section.rows.allSatisfy { $0.progress == nil })
         #expect(usage.secondary == nil)
         #expect(usage.tertiary == nil)
+
+        let payload = ProviderPayload(
+            provider: .grok,
+            account: nil,
+            version: nil,
+            source: "fixture",
+            status: nil,
+            usage: usage,
+            credits: nil,
+            antigravityPlanInfo: nil,
+            openaiDashboard: nil,
+            error: nil)
+        let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(payload)) as? [String: Any])
+        let encodedUsage = try #require(object["usage"] as? [String: Any])
+        let details = try #require(encodedUsage["details"] as? [[String: Any]])
+        let rows = try #require(details.first?["rows"] as? [[String: Any]])
+        #expect(details.first?["title"] as? String == "Usage breakdown")
+        #expect(rows.compactMap { $0["label"] as? String } == ["Grok Chat", "Grok Build"])
+        #expect(rows.compactMap { $0["value"] as? String } == ["4%", "2%"])
     }
 
     @Test
@@ -193,6 +213,47 @@ struct GrokWebBillingProductUsageTests {
         #expect(result.usage.details.first?.title == "Usage breakdown")
         #expect(result.usage.details.first?.rows.map(\.label) == ["Grok Chat", "Grok Build"])
         #expect(result.usage.details.first?.rows.map(\.value) == ["4%", "2%"])
+    }
+
+    @Test
+    func `duplicate scalar fields cannot relabel or reweight product shares`() throws {
+        let baseline = Self.frame(Self.payload(aggregate: 6))
+        let duplicatedID = Self.entry(id: 2, percent: 6) + Self.varintField(1, 4)
+        let duplicatedPercent = Self.entry(id: 4, percent: 1) + Self.fixed32(2, 6)
+        for entry in [duplicatedID, duplicatedPercent] {
+            try Self.expectSameBilling(
+                Self.frame(Self.payload(aggregate: 6, entries: [entry])), baseline: baseline, products: [])
+        }
+        let repeatedAggregate = Self.frame(Self.payload(
+            aggregate: 6, entries: [Self.entry(id: 4, percent: 6)], extra: Self.fixed32(1, 6)))
+        #expect(try GrokWebBillingFetcher.parseGRPCWebResponse(repeatedAggregate, now: Self.now).productUsage.isEmpty)
+    }
+
+    @Test(arguments: [UInt8(1), 2, 3, 0x81])
+    func `compressed or reserved frame flags fail closed`(flag: UInt8) {
+        var frame = Self.frame(Self.payload(aggregate: 6, entries: [Self.entry(id: 4, percent: 6)]))
+        frame[0] = flag
+        #expect(throws: GrokWebBillingError.self) {
+            try GrokWebBillingFetcher.parseGRPCWebResponse(frame, now: Self.now)
+        }
+    }
+
+    @Test
+    func `truncated framing and overflowing product values cannot supply shares`() throws {
+        let valid = Self.frame(Self.payload(aggregate: 6, entries: [Self.entry(id: 4, percent: 6)]))
+        for suffix in [Data([0]), Data([0, 0xFF, 0xFF, 0xFF, 0xFF])] {
+            #expect(throws: GrokWebBillingError.self) {
+                try GrokWebBillingFetcher.parseGRPCWebResponse(valid + suffix, now: Self.now)
+            }
+        }
+        let overflow = Data([0x08] + Array(repeating: UInt8(0xFF), count: 9) + [0x02])
+        let oversizedLength = Data([0x12]) + Self.varint(.max)
+        for entry in [overflow, oversizedLength] {
+            let parsed = try GrokWebBillingFetcher.parseGRPCWebResponse(
+                Self.frame(Self.payload(aggregate: 6, entries: [entry])), now: Self.now)
+            #expect(parsed.usedPercent == 6)
+            #expect(parsed.productUsage.isEmpty)
+        }
     }
 
     private static func expectSameBilling(
