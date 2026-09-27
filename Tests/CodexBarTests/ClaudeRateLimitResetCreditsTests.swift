@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import SwiftUI
 import Testing
 @testable import CodexBar
 @testable import CodexBarCore
@@ -64,16 +65,69 @@ struct ClaudeRateLimitResetCreditsTests {
     func `rejected reset opt-in retries once without it and keeps usage windows`() async throws {
         let now = Self.wholeSecondNow()
         let block = Self.eligibleBlock([Self.grant(id: "grant_a", resetsLeft: 1, endsIn: 86400, now: now)])
-        for status in [400, 404, 422, 500, 503] {
-            let usage = try await Self.fetchWebUsage(cedarEmber: block, optInStatus: status)
+        for status in [400, 403, 404, 422, 500, 503] {
+            let queries = UsageRequestLog()
+            let usage = try await Self.fetchWebUsage(cedarEmber: block, optInStatus: status, usageRequests: queries)
             #expect(usage.primary.usedPercent == 11)
             #expect(usage.resetCredits == nil)
+            #expect(await queries.values == ["cedar_ember=1", ""])
         }
 
         // A rate limit is not caused by the opt-in; retrying it would hide the limit and double the request.
         await #expect(throws: (any Error).self) {
             try await Self.fetchWebUsage(cedarEmber: block, optInStatus: 429)
         }
+    }
+
+    @Test
+    func `rejected opt-in cannot replace the authenticated session cookie`() async throws {
+        let cookies = UsageRequestLog()
+        let fallback = Self.webTransport(cedarEmber: "null", optInStatus: 422)
+        let transport = ProviderHTTPTransportHandler { request in
+            let url = try #require(request.url)
+            if url.path.hasSuffix("/usage") {
+                await cookies.append(request.value(forHTTPHeaderField: "Cookie") ?? "")
+                if url.query != nil {
+                    let response = try #require(HTTPURLResponse(
+                        url: url,
+                        statusCode: 422,
+                        httpVersion: nil,
+                        headerFields: ["Set-Cookie": "sessionKey=sk-ant-renewed-fixture; Path=/; Secure"]))
+                    return (Data("{}".utf8), response)
+                }
+            }
+            return try await fallback.data(for: request)
+        }
+        let usage = try await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
+            try await ClaudeWebAPIFetcher.fetchUsage(cookieHeader: "sessionKey=sk-ant-fixture-token")
+        }
+        #expect(usage.sessionPercentUsed == 11)
+        #expect(await cookies.values == ["sessionKey=sk-ant-fixture-token", "sessionKey=sk-ant-fixture-token"])
+    }
+
+    @Test(arguments: [401, 403, 429])
+    func `authentication rate limit and Cloudflare failures are not retried`(status: Int) async throws {
+        let queries = UsageRequestLog()
+        let fallback = Self.webTransport(cedarEmber: "null", optInStatus: 200)
+        let transport = ProviderHTTPTransportHandler { request in
+            let url = try #require(request.url)
+            if url.path.hasSuffix("/usage") {
+                await queries.append(url.query ?? "")
+                let response = try #require(HTTPURLResponse(
+                    url: url,
+                    statusCode: status,
+                    httpVersion: nil,
+                    headerFields: status == 403 ? ["cf-mitigated": "challenge"] : [:]))
+                return (Data("{}".utf8), response)
+            }
+            return try await fallback.data(for: request)
+        }
+        await #expect(throws: (any Error).self) {
+            try await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
+                try await ClaudeWebAPIFetcher.fetchUsage(cookieHeader: "sessionKey=sk-ant-fixture-token")
+            }
+        }
+        #expect(await queries.values == ["cedar_ember=1"])
     }
 
     @Test
@@ -230,6 +284,39 @@ struct ClaudeRateLimitResetCreditsTests {
 
     // MARK: - Fixtures
 
+    @Test
+    func `render synthetic Claude reset credits before and after when requested`() throws {
+        guard let path = ProcessInfo.processInfo.environment["CODEXBAR_CLAUDE_RESET_PROOF_DIR"] else { return }
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let now = Self.wholeSecondNow()
+        let grants = [
+            Self.grant(id: "fixture_a", resetsLeft: 1, endsIn: 2 * 86400, now: now),
+            Self.grant(id: "fixture_b", resetsLeft: 1, endsIn: 6 * 86400, now: now),
+        ]
+        try CodexBarLocalizationOverride.$appLanguage.withValue("en") {
+            for (name, values) in [("before", [String]()), ("after", grants)] {
+                let model = try Self.model(now: now, grants: values)
+                let hosting = NSHostingView(rootView: UsageMenuCardView(model: model, width: 360)
+                    .environment(\.locale, Locale(identifier: "en_US_POSIX"))
+                    .environment(\.colorScheme, .light)
+                    .environment(\.displayScale, 2)
+                    .background(Color(nsColor: .windowBackgroundColor)))
+                hosting.appearance = NSAppearance(named: .aqua)
+                try #require(MenuLayoutScreenshotRenderTests.pngDataWithWindow(hosting: hosting))
+                    .write(to: directory.appendingPathComponent("claude-resets-\(name).png"))
+            }
+        }
+    }
+
+    private actor UsageRequestLog {
+        var values: [String] = []
+
+        func append(_ value: String) {
+            self.values.append(value)
+        }
+    }
+
     /// Wire timestamps carry whole seconds; parse happens at the real clock.
     private static func wholeSecondNow() -> Date {
         Date(timeIntervalSince1970: Date().timeIntervalSince1970.rounded(.down))
@@ -271,9 +358,16 @@ struct ClaudeRateLimitResetCreditsTests {
         ISO8601DateFormatter().string(from: date)
     }
 
-    private static func webTransport(cedarEmber: String, optInStatus: Int) -> ProviderHTTPTransportHandler {
+    private static func webTransport(
+        cedarEmber: String,
+        optInStatus: Int,
+        usageRequests: UsageRequestLog? = nil) -> ProviderHTTPTransportHandler
+    {
         ProviderHTTPTransportHandler { request in
             let url = try #require(request.url)
+            if url.path.hasSuffix("/usage") {
+                await usageRequests?.append(url.query ?? "")
+            }
             // Only the opted-in usage request carries grants.
             let optedIn = url.query == "cedar_ember=1"
             let block = optedIn ? cedarEmber : "null"
@@ -297,12 +391,19 @@ struct ClaudeRateLimitResetCreditsTests {
         }
     }
 
-    private static func fetchWebUsage(cedarEmber: String, optInStatus: Int = 200) async throws -> ClaudeUsageSnapshot {
+    private static func fetchWebUsage(
+        cedarEmber: String,
+        optInStatus: Int = 200,
+        usageRequests: UsageRequestLog? = nil) async throws -> ClaudeUsageSnapshot
+    {
         let fetcher = ClaudeUsageFetcher(
             browserDetection: BrowserDetection(cacheTTL: 0),
             dataSource: .web,
             manualCookieHeader: "sessionKey=sk-ant-fixture-token")
-        let transport = Self.webTransport(cedarEmber: cedarEmber, optInStatus: optInStatus)
+        let transport = Self.webTransport(
+            cedarEmber: cedarEmber,
+            optInStatus: optInStatus,
+            usageRequests: usageRequests)
         return try await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
             try await fetcher.loadLatestUsage()
         }
@@ -314,10 +415,18 @@ struct ClaudeRateLimitResetCreditsTests {
         displayAt: Date? = nil,
         showOptionalCreditsAndExtraUsage: Bool = true) throws -> UsageMenuCardView.Model
     {
-        let resetCredits = try #require(Self.parse(Self.eligibleBlock(grants)))
+        let resetCredits = Self.parse(Self.eligibleBlock(grants))
         let snapshot = ClaudeOAuthFetchStrategy._snapshotForTesting(from: ClaudeUsageSnapshot(
-            primary: RateWindow(usedPercent: 12, windowMinutes: 300, resetsAt: nil, resetDescription: nil),
-            secondary: nil,
+            primary: RateWindow(
+                usedPercent: 12,
+                windowMinutes: 300,
+                resetsAt: now.addingTimeInterval(3600),
+                resetDescription: nil),
+            secondary: RateWindow(
+                usedPercent: 34,
+                windowMinutes: 10080,
+                resetsAt: now.addingTimeInterval(4 * 86400),
+                resetDescription: nil),
             opus: nil,
             resetCredits: resetCredits,
             updatedAt: now,
@@ -343,6 +452,7 @@ struct ClaudeRateLimitResetCreditsTests {
             tokenCostUsageEnabled: false,
             showOptionalCreditsAndExtraUsage: showOptionalCreditsAndExtraUsage,
             hidePersonalInfo: false,
+            usesLiveSubtitle: false,
             now: displayAt ?? now))
     }
 }

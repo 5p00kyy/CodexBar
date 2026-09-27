@@ -211,8 +211,9 @@ the cookie import.
 - API calls (all include `Cookie: sessionKey=<value>`):
   - `GET https://claude.ai/api/organizations` → org UUID.
   - `GET https://claude.ai/api/organizations/{orgId}/usage?cedar_ember=1` → session/weekly/opus, plus limit-reset
-    grants in the `cedar_ember` block. Any answer other than 200, 401, 403, or 429 retries once without
-    `cedar_ember=1`, so a rejected opt-in keeps the usage windows.
+    grants in the `cedar_ember` block. Rejected requests, including ordinary 403 responses, retry once without
+    `cedar_ember=1`, so unsupported reset queries keep the usage windows.
+    Success, 401, 429, and recognized Cloudflare challenges retain their normal handling without a retry.
   - `GET https://claude.ai/api/organizations/{orgId}/overage_spend_limit` → Extra usage spend/limit.
   - `GET https://claude.ai/api/organizations/{orgId}/prepaid/credits` → remaining Usage credits balance.
   - `GET https://claude.ai/api/account` → email + plan hints.
@@ -228,6 +229,9 @@ the cookie import.
   quota windows on that network (the web-only Usage credits balance is unavailable), or try a different network.
   Explicit Web mode remains terminal and never reads OAuth credentials as a fallback.
 - Limit Reset Credits ("Reset for free" in Claude Settings > Usage), Web source only:
+  - These are saved resets a user can redeem, separate from the session and weekly reset timestamps already
+    supplied by Web, OAuth, and CLI. Existing cookie settings and source selection govern all Web access; this
+    feature does not enable cookies, broaden browser discovery, or initiate Web enrichment.
   - Read from `cedar_ember` in the same usage response as the session and weekly windows, so they share its session
     and organization. Observed on a personal Pro/Max account; Team and Enterprise organizations are not verified.
   - The count sums `resets_left` over grants that, at refresh time, are not paused, have started, and have not
@@ -240,8 +244,10 @@ the cookie import.
     `codexbar serve`: a `Limit Reset Credits` row in `usage.details` (`N available`, next expiry).
   - Live-only: grant IDs are never decoded, the usage request skips the URL cache, and cached or synced snapshots do
     not restore the inventory. A reset used on claude.ai disappears at the next successful refresh.
-  - The OAuth and CLI sources do not report resets. CodexBar never redeems a reset; use Claude on the web or Claude
-    Desktop.
+  - Source precedence stays unchanged: credits appear only when Web supplies the primary usage snapshot. OAuth
+    and CLI do not report saved reset credits, and optional Web enrichment never adds Web credits to either source,
+    even when the account matches. The menu replaces the generic details row with one shared reset-credit section.
+    CodexBar never redeems a reset; use Claude on the web or Claude Desktop.
 
 ## claude-swap accounts (opt-in)
 

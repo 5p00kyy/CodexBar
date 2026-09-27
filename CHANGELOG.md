@@ -2,6 +2,10 @@
 
 ## 0.68.1 — Unreleased
 
+### Added
+
+- Claude: show saved usage-limit resets and their expiry from the Web source in the menu and `codexbar usage` details (#4048). Thanks @enieuwy!
+
 ## 0.68.0 — 2026-09-27
 
 ### Highlights

@@ -53,22 +53,11 @@ struct LimitResetCreditsPresentation: Equatable {
             now: now)
     }
 
-    static func make(
-        snapshot: ClaudeRateLimitResetCreditsSnapshot,
-        resetStyle: ResetTimeDisplayStyle,
-        now: Date) -> LimitResetCreditsPresentation?
-    {
-        self.make(
-            expirations: snapshot.availableExpirations(at: now),
-            resetStyle: resetStyle,
-            now: now)
-    }
-
     private static func availableText(count: Int) -> String {
         count == 1 ? L("1 available") : String(format: L("%d available"), count)
     }
 
-    private static func make(
+    fileprivate static func make(
         expirations: [Date?],
         resetStyle: ResetTimeDisplayStyle,
         now: Date) -> LimitResetCreditsPresentation?
@@ -170,7 +159,7 @@ extension UsageMenuCardView.Model {
             guard input.showOptionalCreditsAndExtraUsage else { return nil }
             guard let resetCredits = input.snapshot?.claudeResetCredits else { return nil }
             return LimitResetCreditsPresentation.make(
-                snapshot: resetCredits,
+                expirations: resetCredits.availableExpirations(at: input.now),
                 resetStyle: input.resetTimeDisplayStyle,
                 now: input.now)
         default:

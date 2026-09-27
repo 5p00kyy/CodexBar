@@ -623,9 +623,11 @@ extension ClaudeWebAPIFetcher {
         renewalTracker?.observe(response: httpResponse)
         logger?("Usage API status: \(httpResponse.statusCode)")
 
-        if !Self.usageStatusesKeptWithResetOptIn.contains(httpResponse.statusCode) {
-            // A rejected opt-in must not cost the usage windows; retry once without it. Success, auth, and
-            // rate-limit answers are not caused by the opt-in, so they keep their normal handling.
+        if !Self.usageStatusesKeptWithResetOptIn.contains(httpResponse.statusCode),
+           !(httpResponse.statusCode == 403 && self.isCloudflareChallenge(response: httpResponse, data: data))
+        {
+            // A surface-specific 403 may reject only the opt-in. Retry the original usage request once;
+            // expired sessions, rate limits, and Cloudflare challenges retain their normal handling.
             (data, httpResponse) = try await self.requestUsage(
                 orgId: orgId,
                 sessionKey: sessionKey,
@@ -640,7 +642,7 @@ extension ClaudeWebAPIFetcher {
         throw self.fetchError(response: httpResponse, data: data)
     }
 
-    private static let usageStatusesKeptWithResetOptIn: Set<Int> = [200, 401, 403, 429]
+    private static let usageStatusesKeptWithResetOptIn: Set<Int> = [200, 401, 429]
 
     private static func requestUsage(
         orgId: String,
