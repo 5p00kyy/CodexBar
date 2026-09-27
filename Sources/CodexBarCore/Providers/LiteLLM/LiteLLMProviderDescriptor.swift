@@ -11,8 +11,9 @@ public enum LiteLLMProviderDescriptor {
         debugLogUnavailableMessage: "LiteLLM debug log not yet implemented",
         usesDetailBackedWindow: true,
         dashboardURL: nil,
-        color: ProviderColor(hex: 0x4C89F0),
-        confetti: [0x191938, 0x8258F2, 0xC5B9F6],
+        color: ProviderColor(hex: 0x5B3FD1),
+        confetti: [0x191938, 0x5B3FD1, 0xC5B9F6],
+        widgetColor: ProviderColor(hex: 0x4C89F0),
         noDataMessage: "LiteLLM spend is reported by the provider API.",
         environmentKey: LiteLLMSettingsReader.apiKeyEnvironmentKey,
         tokenAccountSupport: TokenAccountSupport(

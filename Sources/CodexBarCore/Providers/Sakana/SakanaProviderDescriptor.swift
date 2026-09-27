@@ -19,8 +19,8 @@ public enum SakanaProviderDescriptor {
         ],
         debugLogUnavailableMessage: "Sakana AI debug log not yet implemented",
         dashboardURL: "https://console.sakana.ai/billing",
-        color: .init(red: 0.16, green: 0.46, blue: 0.86),
-        confetti: [0xE10600, 0x0D0D0D, 0xFFFFFF],
+        color: .init(hex: 0xCC2B2B),
+        confetti: [0xCC2B2B, 0x0D0D0D, 0xFFFFFF],
         widgetColor: .init(hex: 0x2975DB),
         noDataMessage: "Sakana AI cost summary is not supported.",
         presentation: ProviderUsagePresentation(
