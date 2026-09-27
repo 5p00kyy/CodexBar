@@ -232,41 +232,53 @@ struct SpendDashboardPane: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(L("Usage & Spend"))
-                    .font(.title2.weight(.semibold))
-                Text(L("Local estimated cost history across supported providers."))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Picker(L("Time range"), selection: self.periodBinding) {
-                Text(spendDashboardDayRangeText(7)).tag(CostReportingPeriod.rolling(days: 7))
-                Text(spendDashboardDayRangeText(30)).tag(CostReportingPeriod.rolling(days: 30))
-                Text(spendDashboardDayRangeText(90)).tag(CostReportingPeriod.rolling(days: 90))
-                Text(L("Month to date")).tag(CostReportingPeriod.monthToDate)
-                Text(L("All")).tag(CostReportingPeriod.allTime)
-                if case let .rolling(days) = self.controller.selectedPeriod, ![7, 30, 90].contains(days) {
-                    Text(spendDashboardDayRangeText(days)).tag(self.controller.selectedPeriod)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(L("Usage & Spend"))
+                        .font(.title2.weight(.semibold))
+                        .lineLimit(1)
+                    Text(L("Local estimated cost history across supported providers."))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .layoutPriority(1)
+                Spacer(minLength: 0)
+                self.refreshButton
             }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .frame(width: 360)
-            .accessibilityIdentifier("spend-dashboard-range-picker")
-
-            Button {
-                self.store.refreshSpendDashboard(accounts: self.codexSpendScanRequests)
-            } label: {
-                if self.controller.isRefreshing {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Label(L("Refresh"), systemImage: "arrow.clockwise")
-                }
-            }
-            .disabled(self.controller.isRefreshing || !self.settings.costUsageEnabled)
+            self.rangePicker
         }
+    }
+
+    private var rangePicker: some View {
+        Picker(L("Time range"), selection: self.periodBinding) {
+            Text(spendDashboardDayRangeText(7)).tag(CostReportingPeriod.rolling(days: 7))
+            Text(spendDashboardDayRangeText(30)).tag(CostReportingPeriod.rolling(days: 30))
+            Text(spendDashboardDayRangeText(90)).tag(CostReportingPeriod.rolling(days: 90))
+            Text(L("Month to date")).tag(CostReportingPeriod.monthToDate)
+            Text(L("All")).tag(CostReportingPeriod.allTime)
+            if case let .rolling(days) = self.controller.selectedPeriod, ![7, 30, 90].contains(days) {
+                Text(spendDashboardDayRangeText(days)).tag(self.controller.selectedPeriod)
+            }
+        }
+        .labelsHidden()
+        .pickerStyle(.segmented)
+        .frame(maxWidth: 480, alignment: .leading)
+        .accessibilityIdentifier("spend-dashboard-range-picker")
+    }
+
+    private var refreshButton: some View {
+        Button {
+            self.store.refreshSpendDashboard(accounts: self.codexSpendScanRequests)
+        } label: {
+            if self.controller.isRefreshing {
+                ProgressView().controlSize(.small)
+            } else {
+                Label(L("Refresh"), systemImage: "arrow.clockwise")
+            }
+        }
+        .disabled(self.controller.isRefreshing || !self.settings.costUsageEnabled)
     }
 
     @ViewBuilder
