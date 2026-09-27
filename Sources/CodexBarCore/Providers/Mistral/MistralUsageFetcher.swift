@@ -349,8 +349,19 @@ public enum MistralUsageFetcher {
 
     // MARK: - Private Helpers
 
-    private static func buildPriceIndex(_ prices: [MistralPrice]) -> [String: Double] {
-        var index: [String: Double] = [:]
+    /// Mistral lists one price per event type, metric, group, API zone, and service tier. The same metric and
+    /// group can carry a far higher per-second audio price or a priority-tier price, so every dimension is part of
+    /// the key; a price table without zone or tier still matches entries through the zone-less key.
+    fileprivate struct PriceKey: Hashable {
+        let eventType: String?
+        let metric: String
+        let group: String
+        let apiZone: String?
+        let serviceTier: String?
+    }
+
+    private static func buildPriceIndex(_ prices: [MistralPrice]) -> [PriceKey: Double] {
+        var index: [PriceKey: Double] = [:]
         for price in prices {
             guard let metric = price.billingMetric,
                   let group = price.billingGroup,
@@ -358,7 +369,12 @@ public enum MistralUsageFetcher {
                   let value = Double(priceStr),
                   value.isFinite
             else { continue }
-            let key = "\(metric)::\(group)"
+            let key = PriceKey(
+                eventType: price.eventType,
+                metric: metric,
+                group: group,
+                apiZone: price.apiZone,
+                serviceTier: price.serviceTier)
             index[key] = value
         }
         return index
@@ -366,7 +382,7 @@ public enum MistralUsageFetcher {
 
     private static func aggregateModel(
         _ data: MistralModelUsageData,
-        prices: [String: Double],
+        prices: [PriceKey: Double],
         countsTokens: Bool) throws -> (tokens: TokenCounts, cost: Double)
     {
         var tokens = TokenCounts()
@@ -387,7 +403,7 @@ public enum MistralUsageFetcher {
     private static func addDailyEntries(
         modelName: String,
         data: MistralModelUsageData,
-        prices: [String: Double],
+        prices: [PriceKey: Double],
         daily: inout [String: DailyAccumulator],
         countsTokens: Bool) throws
     {
@@ -432,9 +448,21 @@ public enum MistralUsageFetcher {
         }
     }
 
-    private static func cost(for entry: MistralUsageEntry, units: Int, prices: [String: Double]) -> Double {
+    private static func cost(for entry: MistralUsageEntry, units: Int, prices: [PriceKey: Double]) -> Double {
         guard let metric = entry.billingMetric, let group = entry.billingGroup else { return 0 }
-        let cost = Double(units) * (prices["\(metric)::\(group)"] ?? 0)
+        let key = PriceKey(
+            eventType: entry.eventType,
+            metric: metric,
+            group: group,
+            apiZone: entry.apiZone,
+            serviceTier: entry.serviceTier)
+        let zonelessKey = PriceKey(
+            eventType: entry.eventType,
+            metric: metric,
+            group: group,
+            apiZone: nil,
+            serviceTier: nil)
+        let cost = Double(units) * (prices[key] ?? prices[zonelessKey] ?? 0)
         return cost.isFinite ? cost : 0
     }
 
@@ -468,7 +496,7 @@ public enum MistralUsageFetcher {
 private struct DailyEntryContext {
     let kind: MistralUsageFetcher.TokenKind
     let modelName: String
-    let prices: [String: Double]
+    let prices: [MistralUsageFetcher.PriceKey: Double]
     let countsTokens: Bool
 }
 
