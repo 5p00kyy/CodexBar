@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.68.1 — Unreleased
+
+### Fixed
+
+- Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
+
 ## 0.68.0 — 2026-09-27
 
 ### Highlights
@@ -31,7 +37,6 @@
 
 ### Fixed
 
-- Grok: show observed model names in local token history even when per-model token totals are unavailable. Fixes #4054.
 - Codex: resolve control socket symlinks when checking the running daemon, so System Account switches do not silently skip its restart (#3990, #4018). Thanks @massdo!
 - Codex: open usage analytics from Usage Dashboard instead of the retired settings route. Fixes #4004. Thanks @RowboTony!
 - Menu bar: prevent blank status-item slots after normal quit on macOS 26.6.2 while preserving saved icon positions (#4022). Fixes #4021. Thanks @mymatejackson and @giuseppebisemi!
