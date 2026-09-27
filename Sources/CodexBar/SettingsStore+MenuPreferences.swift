@@ -303,6 +303,16 @@ extension SettingsStore {
         {
             return .automatic
         }
+        // A layout whose percentages all read another window (set in the layout editor after Monthly Plan was
+        // chosen) wins, so widgets follow what the menu bar and its picker show.
+        if preference == .monthlyPlan,
+           let choice = MenuBarPercentWindowPreference.current(
+               in: self.menuBarLayout(for: provider),
+               metric: preference),
+           choice != .monthlyPlan
+        {
+            return .automatic
+        }
         return preference
     }
 
