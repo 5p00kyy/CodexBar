@@ -58,9 +58,22 @@ struct MistralMonthlyPlanPickerTests {
             layout: settings.menuBarLayout(for: .codex),
             provider: .codex))
 
+        // Without a percentage, only the metric-backed choices apply.
+        #expect(MenuBarPercentWindowPreference.available(
+            for: .mistral,
+            layout: settings.menuBarLayout(for: .mistral)) == [.automatic, .monthlyPlan])
+        #expect(picker.selectionBinding.wrappedValue == .automatic)
+
         picker.selectionBinding.wrappedValue = .monthlyPlan
         #expect(settings.menuBarMetricPreference(for: .mistral) == .monthlyPlan)
         #expect(picker.selectionBinding.wrappedValue == .monthlyPlan)
+
+        picker.selectionBinding.wrappedValue = .session
+        #expect(settings.menuBarMetricPreference(for: .mistral) == .monthlyPlan)
+
+        picker.selectionBinding.wrappedValue = .automatic
+        #expect(settings.menuBarMetricPreference(for: .mistral) == .automatic)
+        #expect(picker.selectionBinding.wrappedValue == .automatic)
         #expect(settings.menuBarLayoutOverrides[.mistral] == nil)
     }
 }

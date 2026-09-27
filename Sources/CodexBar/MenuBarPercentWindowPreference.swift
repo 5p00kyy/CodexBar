@@ -90,6 +90,10 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
         if let layout, !self.percentWindows(in: layout).isEmpty, self.hasTertiaryPercent(in: layout) {
             return options.filter { $0 != .tertiary }
         }
+        // Without a percentage in the layout, only the stored metric can change.
+        if let layout, options.contains(.monthlyPlan), !self.hasPercentToken(in: layout) {
+            return [.automatic, .monthlyPlan]
+        }
         return options
     }
 
@@ -118,12 +122,14 @@ enum MenuBarPercentWindowPreference: String, CaseIterable, Identifiable, Sendabl
 
     /// Ordinary percentages own the choice when a custom layout also has an independent tertiary
     /// token. Only layouts without ordinary percentages treat tertiary tokens as the controlled group.
-    /// A Monthly Plan metric turns an all-automatic layout, or one without percentages, into the Monthly Plan choice.
-    static func current(in layout: MenuBarLayout, metric: MenuBarMetricPreference = .automatic) -> Self? {
+    /// Pass the stored metric for providers that offer Monthly Plan: it turns an all-automatic layout into the
+    /// Monthly Plan choice, and alone decides the choice when the layout has no percentage.
+    static func current(in layout: MenuBarLayout, metric: MenuBarMetricPreference? = nil) -> Self? {
         let windows = Self.percentWindows(in: layout)
         guard let first = windows.first else {
             if self.hasTertiaryPercent(in: layout) { return .tertiary }
-            return metric == .monthlyPlan ? .monthlyPlan : nil
+            guard let metric else { return nil }
+            return metric == .monthlyPlan ? .monthlyPlan : .automatic
         }
         guard windows.allSatisfy({ $0 == first }) else { return nil }
         if first == .automatic, metric == .monthlyPlan { return .monthlyPlan }

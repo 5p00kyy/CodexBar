@@ -73,7 +73,8 @@ struct ProviderMenuBarPercentWindowPicker: View {
             get: {
                 let layout = self.layout
                 let available = MenuBarPercentWindowPreference.available(for: self.provider, layout: layout)
-                return MenuBarPercentWindowPreference.current(in: layout, metric: self.metric.wrappedValue)
+                let metric = available.contains(.monthlyPlan) ? self.metric.wrappedValue : nil
+                return MenuBarPercentWindowPreference.current(in: layout, metric: metric)
                     .flatMap { available.contains($0) ? $0 : nil }
             },
             set: { preference in
