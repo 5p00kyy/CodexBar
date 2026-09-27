@@ -590,7 +590,7 @@
 "menu_bar_metric_subtitle" = "Wählen Sie aus, welches Fenster den Prozentwert der Menüleiste steuert.";
 "menu_bar_metric_subtitle_deepseek" = "Zeigt das DeepSeek-Guthaben in der Menüleiste an.";
 "menu_bar_metric_subtitle_moonshot" = "Zeigt das Moonshot-/Kimi-API-Guthaben in der Menüleiste an.";
-"menu_bar_metric_subtitle_mistral" = "Wähle Mistral-API-Ausgaben oder die Nutzung des Monthly Plan für Menüleiste und Widgets.";
+"menu_bar_metric_subtitle_mistral" = "Zeigt die Mistral-API-Ausgaben des aktuellen Monats in der Menüleiste an.";
 "automatic" = "Automatisch";
 "primary_api_key_limit" = "Primär (API-Schlüssellimit)";
 

@@ -588,7 +588,7 @@
 "menu_bar_metric_subtitle" = "Chọn cửa sổ nào thúc đẩy phần trăm thanh menu.";
 "menu_bar_metric_subtitle_deepseek" = "Hiển thị số dư DeepSeek trong thanh menu .";
 "menu_bar_metric_subtitle_moonshot" = "Hiển thị số dư Moonshot / Kimi API trong thanh menu .";
-"menu_bar_metric_subtitle_mistral" = "Chọn chi tiêu API của Mistral hoặc mức sử dụng Monthly Plan cho thanh menu và tiện ích.";
+"menu_bar_metric_subtitle_mistral" = "Hiển thị mức chi tiêu API của Mistral trong tháng hiện tại trong thanh menu .";
 "automatic" = "Tự động";
 "primary_api_key_limit" = "Chính ( API giới hạn khóa)";
 

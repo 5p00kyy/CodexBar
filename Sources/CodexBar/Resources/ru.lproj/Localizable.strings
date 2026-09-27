@@ -593,7 +593,7 @@
 "menu_bar_metric_subtitle" = "Выберите, какое окно управляет процентами строки меню.";
 "menu_bar_metric_subtitle_deepseek" = "Показывает баланс DeepSeek в строке меню.";
 "menu_bar_metric_subtitle_moonshot" = "Показывает баланс Moonshot / Kimi API в строке меню.";
-"menu_bar_metric_subtitle_mistral" = "Выберите расходы Mistral API или использование ежемесячного плана для строки меню и виджетов.";
+"menu_bar_metric_subtitle_mistral" = "В строке меню показаны расходы Mistral API за текущий месяц.";
 "automatic" = "Автоматически";
 "primary_api_key_limit" = "Основной (лимит API-ключа)";
 

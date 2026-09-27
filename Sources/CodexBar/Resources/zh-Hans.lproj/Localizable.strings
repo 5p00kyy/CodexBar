@@ -576,7 +576,7 @@
 "menu_bar_metric_subtitle" = "选择哪个窗口驱动菜单栏百分比。";
 "menu_bar_metric_subtitle_deepseek" = "在菜单栏显示 DeepSeek 余额。";
 "menu_bar_metric_subtitle_moonshot" = "在菜单栏显示 Moonshot / Kimi API 余额。";
-"menu_bar_metric_subtitle_mistral" = "为菜单栏和小组件选择 Mistral API 支出或 Monthly Plan 用量。";
+"menu_bar_metric_subtitle_mistral" = "在菜单栏显示 Mistral API 本月支出。";
 "automatic" = "自动";
 "primary_api_key_limit" = "主要（API 密钥限制）";
 "menu_bar_style_title" = "菜单栏样式";

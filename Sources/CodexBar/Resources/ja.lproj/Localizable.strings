@@ -589,7 +589,7 @@
 "menu_bar_metric_subtitle" = "メニューバーのパーセント表示に使用するウインドウを選択します。";
 "menu_bar_metric_subtitle_deepseek" = "DeepSeek の残高をメニューバーに表示します。";
 "menu_bar_metric_subtitle_moonshot" = "Moonshot / Kimi API の残高をメニューバーに表示します。";
-"menu_bar_metric_subtitle_mistral" = "メニューバーとウィジェットに表示する Mistral API 支出または Monthly Plan の使用量を選択します。";
+"menu_bar_metric_subtitle_mistral" = "今月の Mistral API 支出をメニューバーに表示します。";
 "automatic" = "自動";
 "primary_api_key_limit" = "プライマリ（API キー上限）";
 

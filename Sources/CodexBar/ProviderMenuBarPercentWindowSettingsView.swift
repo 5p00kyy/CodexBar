@@ -62,9 +62,7 @@ struct ProviderMenuBarPercentWindowPicker: View {
                 .pickerStyle(.menu)
                 .listRowSeparator(.hidden)
             } footer: {
-                SettingsSectionFooter(available.contains(.monthlyPlan)
-                    ? L("menu_bar_metric_subtitle_mistral")
-                    : L("menu_bar_metric_subtitle"))
+                SettingsSectionFooter(L("menu_bar_metric_subtitle"))
             }
             .background(FocusResigningBackground())
         }
