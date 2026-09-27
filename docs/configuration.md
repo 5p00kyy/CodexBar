@@ -311,6 +311,8 @@ explicitly exported and imported. Import does not modify `config.json` or iCloud
 
 In **Settings → Menu Bar**, inactive combined-icon controls use dimmed labels. Their titles and explanations remain readable and available to VoiceOver; label styling follows each control's enabled state, including stacked-icon restrictions. The layout size and gap controls remain independent of Merge Icons.
 
+The open menu's persistent **Refresh** row uses a text label aligned with the other actions, without a decorative icon. Click the row, press **⌘R**, or use its VoiceOver button action to refresh.
+
 ### Provider switcher shortcuts
 
 **Settings → General → Provider Switcher Shortcuts…** edits the same mapping as `switcherShortcuts` above.
