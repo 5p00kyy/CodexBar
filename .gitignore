@@ -45,6 +45,3 @@ docs/.astro/
 # Swift Package Manager metadata (leave sources tracked)
 # Packages/
 # Package.resolved
-
-# graft's local graph cache — regenerable, not committed (run `graft build`).
-/graft/

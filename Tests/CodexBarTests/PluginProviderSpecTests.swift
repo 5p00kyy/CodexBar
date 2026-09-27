@@ -17,78 +17,79 @@ struct PluginProviderSpecTests {
         .zenmux,
         .clinepass,
         .aiand,
+        .synthetic, .chutes, .v0, .elevenlabs, .neuralwatt, .clawrouter,
+        .aixy, .bifrost, .deepgram, .llmproxy, .litellm, .sub2api, .llmman,
+        .helmcode, .hyper, .manus, .perplexity, .qoder, .raycast, .sakana, .t3chat,
     ]
 
+    private struct DerivedProvider: Decodable, Equatable {
+        let id: String
+        let projections: [String: String]
+        let sourceModes: [String]
+        let strategies: [String]
+        let fields: [String]
+        let availability: [Bool]
+        let environmentAvailability: [[Bool]]
+        let enterpriseHost: Bool
+        let workspaceOrder: Int?
+        let projectToken: String
+        let cliResolution: [String: [String]]
+    }
+
     @Test
-    func `pilot registration and settings preserve their baseline`() throws {
+    func `builders preserve derived registration and settings behavior`() async throws {
         let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: "PluginProviderSpecTests")
-        let rows = try Self.providers.map { provider -> [String: Any] in
+        var rows: [DerivedProvider] = []
+        for provider in Self.providers {
             let descriptor = ProviderDescriptorRegistry.descriptor(for: provider)
-            let metadata = descriptor.metadata
             let implementation = try #require(ProviderCatalog.implementation(for: provider))
             let fields = implementation.settingsFields(context: fixture.settingsContext(provider: provider))
-            var row: [String: Any] = [
-                "id": provider.rawValue,
-                "name": metadata.displayName,
-                "labels": [metadata.sessionLabel, metadata.weeklyLabel, metadata.opusLabel ?? ""],
-                "toggle": metadata.toggleTitle,
-                "cli": [descriptor.cli.name] + descriptor.cli.aliases,
-                "dashboard": metadata.dashboardURL ?? "",
-                "status": [metadata.statusPageURL ?? "", metadata.statusLinkURL ?? ""],
-                "debug": metadata.debugLogUnavailableMessage ?? "",
-                "flags": [
-                    metadata.supportsOpus,
-                    metadata.supportsCredits,
-                    metadata.defaultEnabled,
-                    metadata.widgetSelectable,
-                    metadata.isPrimaryProvider,
-                    metadata.usesAccountFallback,
-                    metadata.balanceOnly,
-                    metadata.usesDetailBackedWindow,
-                ],
-                "color": Self.components(descriptor.branding.color),
-                "confetti": descriptor.branding.confettiPalette.map(Self.components),
-                "icon": descriptor.branding.iconResourceName,
-                "noData": descriptor.tokenCost.noDataMessage(),
-                "detail": implementation.presentation(context: fixture.presentationContext(
-                    provider: provider,
-                    metadata: metadata)).detailLine(fixture.presentationContext(
-                    provider: provider,
-                    metadata: metadata)),
-                "fields": fields.map { field -> [String: Any] in
-                    [
-                        "id": field.id,
-                        "title": field.title,
-                        "subtitle": field.subtitle,
-                        "placeholder": field.placeholder as Any? ?? NSNull(),
-                        "secure": field.kind == .secure,
-                        "actions": field.actions.map { ["id": $0.id, "title": $0.title] },
-                    ]
-                },
-            ]
-            row["availability"] = ["", "  ", "fixture-key"].map { value in
+            let availability = ["", "  ", "fixture-key"].map { value in
                 fixture.settings[providerConfig: provider, field: .apiKey] = value
                 return implementation.isAvailable(context: .init(
-                    provider: provider,
-                    settings: fixture.settings,
-                    environment: [:]))
+                    provider: provider, settings: fixture.settings, environment: [:]))
             }
-            for field in fields where field.kind == .secure {
-                field.binding.wrappedValue = "bound-key"
-                #expect(fixture.settings[providerConfig: provider, field: .apiKey] == "bound-key")
+            fixture.settings[providerConfig: provider, field: .apiKey] = ""
+            var config = ProviderConfig(id: provider.instanceID, apiKey: "fixture-key", workspaceID: "fixture-project")
+            config.enterpriseHost = "https://fixture.example.com"
+            config.litellmModelUsageEnabled = true
+            let projected = descriptor.credentials?.applyConfig(base: [:], config: config) ?? [:]
+            let keyOnly = descriptor.credentials?.applyConfig(
+                base: [:], config: ProviderConfig(id: provider.instanceID, apiKey: "fixture-key")) ?? [:]
+            config.enterpriseHost = "http://public.example.com"
+            let invalid = descriptor.credentials?.applyConfig(base: [:], config: config) ?? [:]
+            var environmentAvailability: [[Bool]] = []
+            for environment in [[:], keyOnly, projected, invalid] {
+                let context = ProviderCutoverTestSupport.context(environment: environment)
+                let strategies = await descriptor.fetchPlan.pipeline.resolveStrategies(context)
+                await environmentAvailability.append([
+                    implementation.isAvailable(context: .init(
+                        provider: provider, settings: fixture.settings, environment: environment)),
+                    strategies.first?.isAvailable(context) ?? false,
+                ])
             }
-            return row
+            let strategies = await descriptor.fetchPlan.pipeline.resolveStrategies(ProviderCutoverTestSupport.context())
+            let cliResolution = Dictionary(uniqueKeysWithValues: ([descriptor.cli.name] + descriptor.cli.aliases).map {
+                ($0.uppercased(), ProviderSelection(argument: $0.uppercased())?.asList.map(\.rawValue) ?? [])
+            })
+            rows.append(DerivedProvider(
+                id: provider.rawValue,
+                projections: projected,
+                sourceModes: descriptor.fetchPlan.sourceModes.map(\.rawValue).sorted(),
+                strategies: strategies.map(\.id),
+                fields: fields.map { $0.kind == .secure ? "secure" : "plain" },
+                availability: availability,
+                environmentAvailability: environmentAvailability,
+                enterpriseHost: descriptor.config.supportsEnterpriseHost,
+                workspaceOrder: descriptor.config.workspaceIDValidationOrder,
+                projectToken: descriptor.credentials?.resolveToken(kind: .projectID, environment: projected)?
+                    .token ?? "",
+                cliResolution: cliResolution))
         }
-        let baseline: [String: Any] = [
-            "providers": rows,
-            "order": ProviderDescriptorRegistry.all.map(\.id.rawValue),
-            "implementationOrder": ProviderCatalog.all.map(\.id.rawValue),
-            "help": CodexBarCLI.rootHelp(version: "0.0.0"),
-        ]
-        let data = try JSONSerialization.data(withJSONObject: baseline, options: [.prettyPrinted, .sortedKeys])
         let golden = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .appendingPathComponent("Fixtures/plugin-provider-specs.json")
-        #expect(try String(data: data, encoding: .utf8) == String(contentsOf: golden, encoding: .utf8))
+        let expected = try JSONDecoder().decode([DerivedProvider].self, from: Data(contentsOf: golden))
+        #expect(rows == expected)
     }
 
     @Test
@@ -107,10 +108,6 @@ struct PluginProviderSpecTests {
         #expect(spec.apiKey(environment: [:]) == nil)
         #expect(spec.apiKey(environment: ["FIXTURE_KEY": "  ", "FIXTURE_ALIAS": " 'alias' "]) == "alias")
         #expect(spec.apiKey(environment: ["FIXTURE_KEY": " primary ", "FIXTURE_ALIAS": "alias"]) == "primary")
-    }
-
-    private static func components(_ color: ProviderColor) -> [Double] {
-        [color.red, color.green, color.blue]
     }
 
     @Test
@@ -150,5 +147,69 @@ struct PluginProviderSpecTests {
         #expect(DevPassProviderDescriptor.spec.apiKeyField?.action?.url == "https://devpass.llmgateway.io/dashboard")
         #expect(ZenMuxProviderDescriptor.spec.apiKeyField?.action?.url == "https://zenmux.ai/platform/management")
         #expect(AiAndProviderDescriptor.spec.apiKeyField?.action?.url == "https://console.aiand.com")
+    }
+}
+
+extension PluginProviderSpecTests {
+    @Test
+    func `workspace bindings and project token resolution remain distinct`() throws {
+        let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: "PluginSpec-workspaces")
+        for spec in [V0ProviderDescriptor.spec, DeepgramProviderDescriptor.spec] {
+            let workspace = try #require(spec.workspaceField)
+            let implementation = try #require(ProviderCatalog.implementation(for: spec.id))
+            let field = try #require(implementation.settingsFields(context: fixture.settingsContext(provider: spec.id))
+                .first { $0.id == workspace.field.id })
+            field.binding.wrappedValue = "fixture-project"
+            let config = try #require(fixture.settings.providerConfig(for: spec.id))
+            #expect(config.workspaceID == "fixture-project")
+            #expect(config.apiKey == nil)
+            let environment = spec.makeDescriptor().credentials?.applyConfig(base: [:], config: config) ?? [:]
+            #expect(environment[workspace.environmentKey] == "fixture-project")
+            let project = spec.makeDescriptor().credentials?.resolveToken(kind: .projectID, environment: environment)
+            #expect(project?.token == (workspace.resolvesProjectID ? "fixture-project" : nil))
+        }
+    }
+
+    @Test
+    func `endpoint fields share config projection and retain validation policies`() throws {
+        let fixture = try ProviderSettingsDescriptorTests().makeSettingsFixture(suite: "PluginSpec-endpoints")
+        for spec in [
+            AixyProviderDescriptor.spec, BifrostProviderDescriptor.spec, LLMProxyProviderDescriptor.spec,
+            LiteLLMProviderDescriptor.spec, Sub2APIProviderDescriptor.spec, LLMManProviderDescriptor.spec,
+        ] {
+            let endpoint = try #require(spec.endpoint)
+            let implementation = try #require(ProviderCatalog.implementation(for: spec.id))
+            let fields = implementation.settingsFields(context: fixture.settingsContext(provider: spec.id))
+            let field = try #require(fields.first { $0.id == endpoint.field.id })
+            field.binding.wrappedValue = "https://fixture.example.com/v1"
+            let config = try #require(fixture.settings.providerConfig(for: spec.id))
+            #expect(config.enterpriseHost == "https://fixture.example.com/v1")
+            let projected = spec.makeDescriptor().credentials?.applyConfig(base: [:], config: config) ?? [:]
+            #expect(projected[endpoint.environmentKey] == "https://fixture.example.com/v1")
+            #expect(endpoint.url(environment: projected)?.absoluteString == "https://fixture.example.com/v1")
+            #expect(endpoint.url(environment: [endpoint.environmentKey: "http://public.example.com"]) == nil)
+            #expect(endpoint
+                .url(environment: [endpoint.environmentKey: "https://user:password@fixture.example.com"]) == nil)
+        }
+        #expect(AixyProviderDescriptor.spec.endpoint?.url(environment: [:]) == AixySettingsReader.defaultBaseURL)
+        #expect(LLMManProviderDescriptor.spec.endpoint?.url(environment: [:]) == LLMManSettingsReader.defaultBaseURL)
+        #expect(LLMManProviderDescriptor.spec.endpoint?.url(environment: ["LLMMAN_HOST": "localhost"])?
+            .absoluteString == "http://localhost:17434")
+    }
+
+    @Test
+    func `keyless daemon fetch and optional activity budget remain explicit`() throws {
+        let context = ProviderCutoverTestSupport.context(environment: [:])
+        let daemon = try #require(LLMManProviderDescriptor.spec.scriptValues(context))
+        #expect(daemon.secrets.isEmpty)
+        #expect(daemon.settings == ["LLMMAN_HOST": "http://127.0.0.1:17434"])
+        #expect(LiteLLMProviderDescriptor.spec.scriptValues(context) == nil)
+        #expect(LiteLLMProviderDescriptor.spec.fetchTimeout(environment: [:]) == ProviderPluginRuntime.defaultTimeout)
+        #expect(LiteLLMProviderDescriptor.spec.fetchTimeout(environment: ["LITELLM_MODEL_USAGE_ENABLED": "true"]) == 40)
+        #expect(LiteLLMProviderDescriptor.spec.fetchTimeout(environment: ["LITELLM_MODEL_USAGE_ENABLED": "false"]) ==
+            ProviderPluginRuntime.defaultTimeout)
+        let values = try #require(LiteLLMProviderDescriptor.spec.scriptValues(ProviderCutoverTestSupport.context(
+            environment: ["LITELLM_API_KEY": "fixture-key", "LITELLM_BASE_URL": "https://fixture.example.com"])))
+        #expect(values.settings["LITELLM_MODEL_USAGE_ENABLED"] == "false")
     }
 }

@@ -197,12 +197,10 @@ extension UsageStore {
                 previousState: previousState,
                 requiresLowConfirmation: requiresLowConfirmation))
         states[detectorKey] = transition.state
-        if previousState != transition.state {
-            self.persistLimitResetDetectorStates(
-                states,
-                defaultsKey: descriptor.defaultsKey,
-                logName: descriptor.resetKind)
-        }
+        self.persistLimitResetDetectorStates(
+            states,
+            defaultsKey: descriptor.defaultsKey,
+            logName: descriptor.resetKind)
 
         if transition.claudeWeeklyRecoveryPending, currentUsed > Self.limitResetThreshold {
             CodexBarLog.logger(LogCategories.confetti).debug(

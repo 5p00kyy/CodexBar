@@ -127,7 +127,7 @@ complete when the available scan window covers fewer days.
 | Codebuff | API token from config/env or `codebuff login` credentials → usage API (`api`). |
 | Venice | Auto/API: API key from config/env → DIEM/USD balance (`api`). Explicit Web: Chrome or manual cookies → subscription credit details (`web`). |
 | Command Code | Web billing API via Command Code session cookies (`web`). |
-| ClinePass | API key from config/env → 5-hour, weekly, and monthly subscription usage limits (`api`). |
+| ClinePass | API key from config/env, then the existing `cline auth` session file → 5-hour, weekly, and monthly subscription usage limits (`api`). |
 | Qoder | Browser or manual cookies → big model credit usage (`web`). |
 | StepFun | Username/password login or manual Oasis token (`web`). |
 | AWS Bedrock | AWS credentials → Cost Explorer spend/budgets and optional CloudWatch Claude activity (`api`). |
@@ -550,6 +550,9 @@ provider-specific cookie validation, endpoints, login detection, and error trans
 - Details: `docs/command-code.md`.
 
 ## ClinePass
+
+Cline's existing browser sign-in session is reused read-only when no API key is configured. CodexBar does not copy or
+refresh the token; renew an expired session with `cline auth`. See the path overrides in [ClinePass setup](clinepass.md).
 
 ClinePass usage is fetched by the bundled TypeScript plugin on macOS and Linux; QuickJS is the default engine and
 JavaScriptCore is the macOS rollback engine. The committed `.js` is generated from `clinepass.ts`.

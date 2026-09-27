@@ -11,7 +11,7 @@ This matrix evaluates 69 providers in the current capability audit against the p
 [`plugin-prototype.md`](plugin-prototype.md). Each provider has one primary blocker. This pass re-audits the remaining convertible and cookie rows;
 other legacy classifications still need their own parity audit.
 
-`convertible-now` means the canonical first-party flow fits the current HTTP GET/JSON POST, declared-origin,
+`convertible-now` means the canonical first-party flow fits the current HTTP GET/JSON or form POST, declared-origin,
 authentication, and generic snapshot capabilities. Text decoding and dependent requests can be implemented in the
 script. Settings-derived origins include the private-network HTTP policy for LLM Proxy and LiteLLM.
 
@@ -30,15 +30,26 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 
 ## Totals
 
+Bundled Swift registration uses `PluginProviderSpec` for the ten pilot providers plus Synthetic, Chutes, v0,
+ElevenLabs, Neuralwatt, ClawRouter, Aixy, Bifrost, Deepgram, LLM Proxy, LiteLLM, sub2api, and llmman. ClawRouter keeps
+its custom app endpoint field. The other twelve additions share app settings builders; provider-owned endpoint
+validation and the bundled scripts remain authoritative. This glue migration does not change the conversion
+classifications or registry count below.
+
+Eight cookie/web providers also use the spec: Helmcode, Hyper, Manus, Perplexity, Qoder, Raycast, Sakana, and T3 Chat,
+bringing the declarative total to **31**. Six share the cookie app implementation; Helmcode and Qoder retain small
+provider-owned UI adapters. Replicate and TypeSafe keep their native conditional session-cache strategies. Cookie
+domains, session candidates, regional origins, browser policy, and bundled scripts are unchanged.
+
 | Status | Count |
 |---|---:|
-| `cut-over` | 29 |
+| `cut-over` | 30 |
 | `converted` | 0 |
 | `convertible-now` | 0 |
 | `needs-cookie-import` | 7 |
 | `needs-files/subprocess/oauth-broker` | 20 |
 | `needs-pty/webview/native` | 8 |
-| `needs-host-extension` | 5 |
+| `needs-host-extension` | 4 |
 | **Audit total** | **69** |
 | Additional plugin-first providers | 9 |
 | Registered providers not yet classified here | 9 |
@@ -53,13 +64,13 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 | azureopenai | `needs-pty/webview/native` | No | The current quota probe is a POST chat completion against a user-configured deployment origin. |
 | claude | `needs-files/subprocess/oauth-broker` | No | Full parity needs credential files/Keychain, OAuth refresh, CLI/PTY, cookies, local logs, and admin details. |
 | fireworks | `cut-over` | Yes | Both engines use the bundled script for account discovery and billing spend, including empty results, dynamic source labels, and allowlisted app/CLI slug persistence with save diagnostics. Native fetcher is deleted. |
-| clinepass | `cut-over` | Yes | Cut over on both engines: fixed-origin bearer GET, typed quota lanes, credential aliases, and classified failures match native behavior; the Swift fetcher and Linux fixtures are deleted. |
+| clinepass | `cut-over` | Yes | Cut over on both engines: fixed-origin bearer GET, typed quota lanes, credential aliases, and classified failures match native behavior; Swift reads the existing Cline auth-session file without refreshing or persisting credentials. The Swift fetcher and Linux fixtures are deleted. |
 | cursor | `needs-files/subprocess/oauth-broker` | No | Native app-auth SQLite discovery and local CSV usage remain required; domain cookies do not replace those sources. |
 | opencode | `needs-cookie-import` | No | Same-refresh candidate rejection is supported, but native import merges two cookie domains into one cache entry; domain-scoped plugin imports can stage two writes, which interactive refresh cannot commit atomically (#3982). |
 | opencodego | `needs-files/subprocess/oauth-broker` | No | Local auth/SQLite state and browser sessions are required, with an additional bespoke usage model. |
-| alibaba | `needs-host-extension` | No | Console auth still requires form-encoded POST and CSRF/sec-token discovery; the host only sends JSON POST. |
-| alibabatokenplan | `needs-host-extension` | No | Console requests require form-encoded POST and redirect-aware cookie forwarding, which domain-scoped headers do not supply. |
-| qwencloud | `needs-host-extension` | No | CSRF plus form-encoded POST and redirect-aware routing remain outside the JSON-only POST broker. |
+| alibaba | `needs-host-extension` | No | Form POST is available in host-caps-3; CSRF/sec-token parsing stays in the script. Cookie-jar lane host-caps-4 owns redirect-scoped cookies and the remaining session parity audit; not yet convertible. |
+| alibabatokenplan | `needs-host-extension` | No | Form POST is available in host-caps-3. Cookie-jar lane host-caps-4 must preserve domain/path metadata through redirects and define legacy-header migration before cutover. |
+| qwencloud | `needs-host-extension` | No | Form POST is available in host-caps-3. Cookie-jar lane host-caps-4 owns declared-origin redirects, dashboard/API domain/path routing, final-URL proof, and migration of the native paired-header cache; no cutover here. |
 | factory | `needs-files/subprocess/oauth-broker` | No | The canonical fallback recovers WorkOS tokens from browser localStorage and persists sessions; cookie headers cover only part of auth. |
 | gemini | `needs-files/subprocess/oauth-broker` | No | Gemini CLI credential/config files, Google OAuth refresh, and a curl fallback own the current flow. |
 | antigravity | `needs-pty/webview/native` | No | Process/port discovery, localhost IDE RPC, OAuth files, and a persistent PTY make this a native integration. |
@@ -88,7 +99,7 @@ Remaining cookie rows need individual parity audits for their provider-specific 
 | mimo | `needs-files/subprocess/oauth-broker` | No | The canonical pipeline includes the file-based local usage fallback as well as browser sessions; cookies alone cannot preserve it. |
 | doubao | `needs-files/subprocess/oauth-broker` | No | Full parity needs a CLI subprocess or Volcengine HMAC signing and POST-based plan calls. |
 | sakana | `cut-over` | Yes | Both engines use the bundled billing/PAYG parser and generic details. The host runs concurrent GETs with a shared 200 ms collection budget, a five-second optional request limit, and cancellation of unfinished work. The native fetcher and snapshot twin are deleted. |
-| abacus | `needs-host-extension` | No | Billing duration subtracts one Calendar.current month; the host exposes daily resets but no calendar/month subtraction with timezone parity. |
+| abacus | `cut-over` | Yes | Both engines use the bundled plugin for required credits GET plus optional billing POST, calendar-month pacing, and Chrome-first session fallback. Each credits request uses the configured timeout; at most five candidates share a refresh budget of timeout × 5 plus the billing budget, capped at 90 seconds. Native fetching and snapshot projection are deleted; the session-validating importer remains. |
 | mistral | `needs-cookie-import` | No | CSRF extraction and dependent GETs fit scripts, but auth rejection iterates alternate browser profiles and preserves session selection. |
 | deepseek | `needs-files/subprocess/oauth-broker` | No | Platform auth/profile selection reads Chromium localStorage, and the result has a bespoke history model. |
 | deepinfra | `cut-over` | Yes | Both engines use fixed-origin bearer GETs for required billing data, preserving cents conversion, balance deductions, suspension, spending limits, and bounded retries. The native fetcher and parser are deleted. |
