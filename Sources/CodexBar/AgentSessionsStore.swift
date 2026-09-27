@@ -53,12 +53,12 @@ final class AgentSessionsStore {
     private let remoteFetch: RemoteFetch
     private let remoteFetcher: RemoteSessionFetcher
     private let powerAssertion: AgentSessionPowerAssertion
-    private var powerAssertionID: UInt32?
+    private nonisolated(unsafe) var powerAssertionID: UInt32?
     private let periodicSleep: PeriodicSleep
-    @ObservationIgnored private var localPeriodicTask: Task<Void, Never>?
-    @ObservationIgnored private var remotePeriodicTask: Task<Void, Never>?
-    @ObservationIgnored private var localImmediateTask: Task<Void, Never>?
-    @ObservationIgnored private var remoteImmediateTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var localPeriodicTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var remotePeriodicTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var localImmediateTask: Task<Void, Never>?
+    @ObservationIgnored private nonisolated(unsafe) var remoteImmediateTask: Task<Void, Never>?
     @ObservationIgnored private var localRefreshGate = AgentSessionRefreshGate()
     @ObservationIgnored private var remoteRefreshGate = AgentSessionRemoteRefreshGate()
     @ObservationIgnored var onUpdate: (@MainActor () -> Void)?
@@ -113,7 +113,7 @@ final class AgentSessionsStore {
         self.periodicSleep = periodicSleep
     }
 
-    isolated deinit {
+    deinit {
         if let powerAssertionID { self.powerAssertion.release(powerAssertionID) }
         self.localPeriodicTask?.cancel()
         self.remotePeriodicTask?.cancel()
