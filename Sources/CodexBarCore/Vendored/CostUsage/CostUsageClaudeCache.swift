@@ -341,58 +341,25 @@ enum CostUsageClaudeCacheIO {
     /// Reparse records written before proxy completion metadata was retained.
     private static let schemaVersion = 3
 
-    /// Decoding the Claude history artifact is by far the most expensive step of a cost scan.
-    /// `claude-history-v6.json` grows to ~9 MB holding ~24k rows, and `Codable`'s field-by-field
-    /// decode of those rows costs seconds where the raw JSON parse costs ~190 ms. Scans re-run
-    /// whenever any Claude transcript changes, but this artifact only changes when *we* rewrite
-    /// it, so an unchanged artifact was re-decoded on every scan and pinned the serial store
-    /// queue at full CPU. Memoizing the decoded value against the file's identity/size/mtime
-    /// stamp makes repeat loads free while any rewrite — ours or an external one — invalidates
-    /// the entry. Capacity covers the whole working set the app can hold at once (Claude and
-    /// Vertex, each with a regular and a spend-dashboard artifact) so steady-state scans never
-    /// thrash; anything beyond that simply re-decodes.
+    /// NSCache provides synchronized, memory-pressure-aware storage for the four app artifacts.
+    /// This caches decoded bytes only; the scanner still validates source scope and reprices rows.
     private final class ArtifactMemo: @unchecked Sendable {
-        static let shared = ArtifactMemo()
-
-        private struct StoredEntry {
+        final class Entry {
             let stamp: CostUsageClaudeFileStamp
             let cache: CostUsageClaudeCache
-            let generation: UInt64
-        }
 
-        private let lock = NSLock()
-        private let capacity = 4
-        private var generation: UInt64 = 0
-        private var entries: [String: StoredEntry] = [:]
-
-        func cache(forKey key: String, stamp: CostUsageClaudeFileStamp) -> CostUsageClaudeCache? {
-            self.lock.lock()
-            defer { self.lock.unlock() }
-            guard let stored = self.entries[key], stored.stamp == stamp else { return nil }
-            return stored.cache
-        }
-
-        func store(_ cache: CostUsageClaudeCache, forKey key: String, stamp: CostUsageClaudeFileStamp) {
-            self.lock.lock()
-            defer { self.lock.unlock() }
-            self.generation &+= 1
-            self.entries[key] = StoredEntry(stamp: stamp, cache: cache, generation: self.generation)
-            if self.entries.count > self.capacity,
-               let oldest = self.entries.min(by: { $0.value.generation < $1.value.generation })?.key
-            {
-                self.entries.removeValue(forKey: oldest)
+            init(stamp: CostUsageClaudeFileStamp, cache: CostUsageClaudeCache) {
+                self.stamp = stamp
+                self.cache = cache
             }
         }
 
-        func removeAll() {
-            self.lock.lock()
-            defer { self.lock.unlock() }
-            self.entries.removeAll()
-        }
-    }
+        static let shared = ArtifactMemo()
+        let entries = NSCache<NSURL, Entry>()
 
-    private static func memoKey(for url: URL) -> String {
-        url.standardizedFileURL.resolvingSymlinksInPath().path
+        private init() {
+            self.entries.countLimit = 4
+        }
     }
 
     /// Mirrors the validation the decode path applied inline, so a memoized artifact is
@@ -406,8 +373,8 @@ enum CostUsageClaudeCacheIO {
     }
 
     #if DEBUG
-    static func evictArtifactMemoForTesting() {
-        ArtifactMemo.shared.removeAll()
+    static func evictArtifactMemoForTesting(at url: URL) {
+        ArtifactMemo.shared.entries.removeObject(forKey: url.standardizedFileURL.resolvingSymlinksInPath() as NSURL)
     }
     #endif
 
@@ -441,10 +408,10 @@ enum CostUsageClaudeCacheIO {
         calendar: Calendar? = nil) -> CostUsageClaudeCache
     {
         let url = self.cacheFileURL(provider: provider, cacheRoot: cacheRoot, reportContext: reportContext)
-        let key = self.memoKey(for: url)
+        let key = url.standardizedFileURL.resolvingSymlinksInPath() as NSURL
         let stamp = CostUsageClaudeFileStamp.read(at: url)
-        if let stamp, let memoized = ArtifactMemo.shared.cache(forKey: key, stamp: stamp) {
-            return self.validated(memoized, calendar: calendar) ?? CostUsageClaudeCache()
+        if let stamp, let memoized = ArtifactMemo.shared.entries.object(forKey: key), memoized.stamp == stamp {
+            return self.validated(memoized.cache, calendar: calendar) ?? CostUsageClaudeCache()
         }
         guard let data = try? Data(contentsOf: url) else { return CostUsageClaudeCache() }
         #if DEBUG
@@ -453,10 +420,10 @@ enum CostUsageClaudeCacheIO {
         guard let cache = try? JSONDecoder().decode(CostUsageClaudeCache.self, from: data) else {
             return CostUsageClaudeCache()
         }
-        // Only memoize a read that is provably of the stamped bytes; a concurrent rewrite
-        // between the stat and the read must fall through to a fresh decode next time.
+        // Only memoize a read with stable metadata; a concurrent atomic replacement
+        // must fall through to a fresh decode next time.
         if let stamp, CostUsageClaudeFileStamp.read(at: url) == stamp {
-            ArtifactMemo.shared.store(cache, forKey: key, stamp: stamp)
+            ArtifactMemo.shared.entries.setObject(ArtifactMemo.Entry(stamp: stamp, cache: cache), forKey: key)
         }
         return self.validated(cache, calendar: calendar) ?? CostUsageClaudeCache()
     }

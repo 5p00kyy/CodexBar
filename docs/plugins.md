@@ -20,7 +20,7 @@ App refreshes are scoped to the installed plugin runtime and its fetch settings.
 reconfiguring a plugin prevents an older refresh from publishing usage or errors. A replacement refresh waits for retired
 work to finish and reads the current configuration when its fetch starts. Display-only preferences do not invalidate usage.
 
-## Bundled API-key provider registration
+## Bundled provider registration
 
 For a bundled plugin with a simple API-key configuration, declare a public `PluginProviderSpec` named `spec` in its
 provider-owned `*ProviderDescriptor.swift` file, then expose `descriptor = Self.spec.makeDescriptor()`. The spec owns
@@ -38,16 +38,31 @@ it does not gain an `enterpriseHost` setting.
 
 Typed Boolean toggles share config reads/writes, environment projection, app bindings, and an optional enabled
 fetch timeout; LiteLLM uses this for model activity. Only llmman opts out of requiring an API key for fetching.
-The pre-migration `plugin-provider-specs.json` golden covers settings, registration, CLI help, branding, credential
-projections, token-account metadata, and availability. Extend it before migrating another provider.
+The `plugin-provider-specs.json` golden keeps builder-derived credential projections, source modes and strategy IDs,
+field kinds, availability, CLI alias mappings, and config capabilities. Before another migration, capture the full
+pre-migration descriptor and settings output separately and compare it after the change; keep that equivalence proof
+in the PR. Do not expand the committed golden with copied labels, colors, or other spec literals.
 
 Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec with an `apiKeyField` and no separate
 app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
 the provider's availability and detail-line policies explicitly. Providers with extra fields or token-account behavior
 can share the descriptor builder while retaining their app implementation, as GitKraken and DeepInfra do. Keep native
-credential discovery and cookie/session handling outside this API-key-only building block. ClinePass supplies
+credential discovery in provider-owned adapters. ClinePass supplies
 provider-owned credential and fetch-plan overrides to `makeDescriptor` for its read-only Cline session file, while
 retaining the spec's API-key path, metadata, and shared settings field.
+
+`WebSource` adds typed web-only or session/API source modes, browser import order, settings registration, timeout
+policy, and manual-cookie fields. `PluginCookieProviderImplementation` shares the picker, field, observation,
+login link, and manual token-account behavior. The existing `ProviderSettingsSectionRegistration` passes each
+provider's typed cookie snapshot to the broker, including the manual origin used for regional session candidates.
+Cookie domains and session capabilities remain authoritative in the unchanged bundled manifest; the shared
+`ScriptFetchStrategy` passes those declarations through to the broker without widening them.
+
+Manus, Perplexity, Hyper, Raycast, Sakana, and T3 Chat use the shared app implementation. Helmcode retains its tenant
+picker/snapshot, and Qoder retains its regional dashboard action and source-label adapter while sharing cookie UI.
+Provider-owned values resolvers retain token normalization and captured-header allowlists. Replicate and TypeSafe
+remain outside this spec migration: their native strategies publish cookies conditionally after a successful fetch,
+honor pinned-account fallback, and enforce their existing redirect policies.
 
 ## Minimal plugin
 

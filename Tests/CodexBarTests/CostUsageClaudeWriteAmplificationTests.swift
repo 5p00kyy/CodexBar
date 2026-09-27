@@ -59,7 +59,6 @@ struct CostUsageClaudeWriteAmplificationTests {
         let fixture = try Fixture(rowCount: 2)
         defer { fixture.env.cleanup() }
         _ = try fixture.load(context: .regular)
-        CostUsageClaudeCacheIO.evictArtifactMemoForTesting()
 
         let warm = CostUsageScanner.ClaudeScanWorkRecorder()
         let cache = CostUsageScanner.withClaudeScanWorkRecorderForTesting(warm) {
@@ -116,6 +115,130 @@ struct CostUsageClaudeWriteAmplificationTests {
         let cold = try fixture.load(context: .regular, cycle: 3)
         #expect(cold.data == changed.data)
         #expect(cold.quotaSlices == changed.quotaSlices)
+    }
+
+    @Test
+    func `memo validates the requested timezone and artifact schema on every hit`() throws {
+        let fixture = try Fixture(rowCount: 2)
+        defer { fixture.env.cleanup() }
+        _ = try fixture.load(context: .regular)
+        let cache = CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot)
+        var differentCalendar = Calendar(identifier: .gregorian)
+        differentCalendar.timeZone = try #require(TimeZone(identifier:
+            Calendar.current.timeZone.identifier == "UTC" ? "Asia/Tokyo" : "UTC"))
+        #expect(CostUsageClaudeCacheIO.load(
+            provider: .claude, cacheRoot: fixture.env.cacheRoot, calendar: differentCalendar).usage.files.isEmpty)
+        #expect(!CostUsageClaudeCacheIO.load(
+            provider: .claude, cacheRoot: fixture.env.cacheRoot, calendar: .current).usage.files.isEmpty)
+        var invalid = cache
+        invalid.usage.version = -1
+        try JSONEncoder().encode(invalid).write(to: fixture.cacheURL(context: .regular), options: .atomic)
+        for _ in 0..<2 {
+            #expect(CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot).usage.files
+                .isEmpty)
+        }
+    }
+
+    @Test
+    func `same size and mtime replacement invalidates by identity and callers cannot mutate the memo`() throws {
+        let fixture = try Fixture(rowCount: 2)
+        defer { fixture.env.cleanup() }
+        _ = try fixture.load(context: .regular)
+        let url = fixture.cacheURL(context: .regular)
+        try FileManager.default.setAttributes([.modificationDate: fixture.day], ofItemAtPath: url.path)
+        let original = try #require(CostUsageClaudeFileStamp.read(at: url))
+        var cache = CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot)
+        let initialTime = cache.usage.lastScanUnixMs
+        cache.usage.lastScanUnixMs += 1
+        #expect(CostUsageClaudeCacheIO.load(
+            provider: .claude, cacheRoot: fixture.env.cacheRoot).usage.lastScanUnixMs == initialTime)
+        _ = try CostUsageClaudeCacheIO.save(provider: .claude, cache: cache, cacheRoot: fixture.env.cacheRoot)
+        try FileManager.default.setAttributes([.modificationDate: fixture.day], ofItemAtPath: url.path)
+        let replacement = try #require(CostUsageClaudeFileStamp.read(at: url))
+        #expect(original.fileID != replacement.fileID)
+        #expect(original.size == replacement.size)
+        #expect(original.modifiedSeconds == replacement.modifiedSeconds)
+        #expect(original.modifiedNanoseconds == replacement.modifiedNanoseconds)
+        #expect(CostUsageClaudeCacheIO.load(
+            provider: .claude, cacheRoot: fixture.env.cacheRoot).usage.lastScanUnixMs == initialTime + 1)
+        try FileManager.default.removeItem(at: url)
+        #expect(CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot).usage.files.isEmpty)
+    }
+
+    @Test
+    func `memo separates provider report context and cache root`() throws {
+        let fixture = try Fixture(rowCount: 2)
+        defer { fixture.env.cleanup() }
+        _ = try fixture.load(context: .regular)
+        var cache = CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot)
+        let scopes: [(UsageProvider, CostUsageReportContext, URL)] = [
+            (.claude, .regular, fixture.env.cacheRoot),
+            (.claude, .spendDashboard, fixture.env.cacheRoot),
+            (.vertexai, .regular, fixture.env.cacheRoot),
+            (.vertexai, .spendDashboard, fixture.env.cacheRoot),
+            (.claude, .regular, fixture.env.root.appendingPathComponent("other-cache")),
+        ]
+        for (index, scope) in scopes.enumerated() {
+            cache.usage.lastScanUnixMs = Int64(index + 1)
+            _ = try CostUsageClaudeCacheIO.save(
+                provider: scope.0, cache: cache, cacheRoot: scope.2, reportContext: scope.1)
+        }
+        for _ in 0..<2 {
+            for (index, scope) in scopes.enumerated().reversed() {
+                #expect(CostUsageClaudeCacheIO.load(
+                    provider: scope.0,
+                    cacheRoot: scope.2,
+                    reportContext: scope.1).usage.lastScanUnixMs == Int64(index + 1))
+            }
+        }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["CODEXBAR_ARTIFACT_BENCHMARK"] == "1"))
+    func `synthetic artifact decode benchmark`() throws {
+        let fixture = try Fixture(rowCount: 4096)
+        defer { fixture.env.cleanup() }
+        _ = try fixture.load(context: .regular)
+        let url = fixture.cacheURL(context: .regular)
+        let recorder = CostUsageScanner.ClaudeScanWorkRecorder()
+        try CostUsageScanner.withClaudeScanWorkRecorderForTesting(recorder) {
+            let coldStart = ContinuousClock.now
+            for _ in 0..<5 {
+                CostUsageClaudeCacheIO.evictArtifactMemoForTesting(at: url)
+                #expect(CostUsageClaudeCacheIO.load(
+                    provider: .claude, cacheRoot: fixture.env.cacheRoot).usage.files.count == 1)
+            }
+            let cold = coldStart.duration(to: .now)
+            let warmStart = ContinuousClock.now
+            for _ in 0..<5 {
+                #expect(CostUsageClaudeCacheIO.load(
+                    provider: .claude, cacheRoot: fixture.env.cacheRoot).usage.files.count == 1)
+            }
+            let warm = warmStart.duration(to: .now)
+            let bytes = try Data(contentsOf: url).count
+            print("[artifact-benchmark] rows=4096 bytes=\(bytes) reads=5 cold=\(cold) warm=\(warm)")
+        }
+        #expect(recorder.snapshot().cacheDecodes == 5)
+    }
+
+    @Test
+    func `switching source roots with a warm artifact never borrows prior rows`() throws {
+        let fixture = try Fixture(rowCount: 2)
+        defer { fixture.env.cleanup() }
+        #expect(try fixture.load(context: .regular).summary?.totalInputTokens == 20)
+        let otherRoot = fixture.env.root.appendingPathComponent("other-projects")
+        try FileManager.default.createDirectory(at: otherRoot, withIntermediateDirectories: true)
+        try fixture.event(index: 700).write(
+            to: otherRoot.appendingPathComponent("other.jsonl"), atomically: true, encoding: .utf8)
+        let report = try CostUsageScanner.loadDailyReportCancellable(
+            provider: .claude,
+            since: fixture.day.addingTimeInterval(-29 * 86400),
+            until: fixture.day,
+            now: fixture.day,
+            options: .init(claudeProjectsRoots: [otherRoot], cacheRoot: fixture.env.cacheRoot),
+            reportContext: .regular,
+            checkCancellation: nil)
+        #expect(report.summary?.totalInputTokens == 10)
+        #expect(try fixture.load(context: .regular).summary?.totalInputTokens == 20)
     }
 
     private struct Fixture {
