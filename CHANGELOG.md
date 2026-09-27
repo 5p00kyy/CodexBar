@@ -2,6 +2,10 @@
 
 ## 0.68.1 — Unreleased
 
+### Added
+
+- Claude: show saved usage-limit resets and their expiry from the Web source in the menu and `codexbar usage` details (#4048). Thanks @enieuwy!
+
 ### Fixed
 
 - Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
