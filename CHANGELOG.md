@@ -2,6 +2,18 @@
 
 ## 0.68.1 — Unreleased
 
+### Added
+
+- Claude: show saved usage-limit resets and their expiry from the Web source in the menu and `codexbar usage` details (#4048). Thanks @enieuwy!
+
+### Fixed
+
+- Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
+- TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes, using shared balance-label metadata (#4050). Thanks @lg!
+- Grok: retain the product usage breakdown on the grok.com billing fallback, with bounded shared protobuf decoding (#4041). Thanks @olddonkey!
+### Changed
+
+- Menu bar: align the persistent Refresh row with other menu actions by removing its decorative icon, preserving the shortcut and accessibility action (#4057). Thanks @elijahfriedman!
 ### Fixed
 
 - Costs: keep All history priority checks proportional to recorded days instead of generating centuries of empty days, while preserving older logs (#4045). Thanks @djbclark!
