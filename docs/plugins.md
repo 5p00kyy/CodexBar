@@ -113,17 +113,26 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
 
 - `await ctx.http.getJSON(url, opts?)` performs GET and returns `{status, headers, json}`.
 - `await ctx.http.get(url, opts?)` performs GET and returns `{status, headers, bodyText}`.
-- `await ctx.http.getWithOptional(url, optionalURL, opts?)` runs two text GETs concurrently through the host,
-  with the same options and declared-origin/authentication checks for both. It returns the primary response with
-  `optional` containing the secondary response or `null`. Optional work has a five-second request limit, no retries,
-  and a shared 200 ms collection budget measured from the first primary attempt's admission. Scheduling waits count
-  against the overall fetch timeout, not this collection budget. A slow primary only collects an already
-  completed secondary; a fast primary can wait for the remainder of that budget. Failed optional work is discarded.
-  Unfinished optional work is cancelled on collection, primary failure, or caller cancellation. This primitive works
-  on both engines without relying on JavaScript promise concurrency. HTTP responses also expose their final `url`.
+- `await ctx.http.getWithOptional(url, optional, opts?)` runs a required text GET concurrently with an optional
+  request through the host. A string `optional` is a GET URL that shares `opts`; an object
+  `{url, method: "POST", body, headers?, timeoutSeconds?}` supplies an independent JSON POST, or use `form` instead
+  of `body` for a host-encoded form POST. Both requests pass declared-origin/authentication checks before either starts.
+  The result is the primary response with `optional` containing the secondary response or `null`.
+  Optional work has a five-second request limit and no retries. `opts.optionalBudgetSeconds` selects a shared
+  collection budget from zero through five seconds (default 0.2), measured from the first primary attempt's
+  admission. Scheduling waits count against the overall fetch timeout, not this collection budget. A slow primary
+  only collects an already completed secondary; a fast primary can wait for the remainder of that budget.
+  Failed optional work is discarded. Unfinished optional work is cancelled on collection, primary failure, or caller
+  cancellation. This works on both engines without JavaScript promise concurrency. HTTP responses expose their final `url`.
 - `await ctx.http.postJSON(url, {body, headers?})` performs JSON POST. `body` must be JSON-serializable.
 - `await ctx.http.post(url, {body, headers?})` sends the same JSON POST and returns `{status, headers, bodyText}` so a
   plugin can classify non-JSON error pages before parsing a successful response.
+- `await ctx.http.post(url, {form: {key: "value"}, headers?})` sends `application/x-www-form-urlencoded` data and
+  returns the text response, including its final `url`. The host encodes a string-to-string map; raw form strings,
+  non-string values, and combining `form` with `body` are rejected. Form requests use the same declared-origin,
+  authentication, deadline, response-size, and retry rules as JSON POST. Form values, their percent-encoded values,
+  and their JSON-escaped values join the fetch's log/error redaction set before transport starts. Do not log
+  credentials before submitting the request; values discovered by the script are not known to the host yet.
 - `opts.headers` accepts string values. Plugins cannot replace their declared auth header. `opts.timeoutSeconds` sets a
   hard request deadline from 1 through 90 seconds; the default is 15 seconds. Each attempt’s deadline starts when
   its transport task begins, so scheduler delays do not consume the request budget. Queued work remains bounded
@@ -182,6 +191,11 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
   the host refresh clock.
 - `ctx.date.nowMillis()` returns the host refresh clock as Unix epoch milliseconds for deterministic arithmetic.
 - `ctx.date.nextDailyReset(timeZoneIdentifier, hour)` returns the next wall-clock reset in an IANA time zone.
+- `ctx.date.addMonths(date, months, timeZoneIdentifier)` adds an integer number of Gregorian calendar months to a
+  valid JavaScript `Date`; use negative months to subtract. Both engines call Foundation Calendar with the specified
+  IANA time zone, preserving local wall-clock time across DST and clamping month ends (January 31 plus one month is
+  February 28, or February 29 in a leap year). Offsets are limited to ±120,000 months, and invalid dates, time zones,
+  fractional offsets, or results outside JavaScript's Date range throw.
 - `ctx.env.timeZone` is the host's current IANA time-zone identifier; zero-offset GMT aliases are normalized to `UTC`.
 - `ctx.format.number(value, options?)`, `usd(value)`, and `monthDay(date)` provide deterministic formatting on both
   engines. Number options support `minimumFractionDigits` and `maximumFractionDigits`.
