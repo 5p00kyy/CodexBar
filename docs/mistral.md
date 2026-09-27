@@ -63,11 +63,28 @@ For the console request, CodexBar forwards only the `csrftoken` and `ory_session
 - Final input, cached, and output totals allow signed adjustments in any lane while rejecting totals outside the
   supported integer range.
 
+## Widgets
+
+Usage widgets follow Mistral's menu bar metric preference:
+
+- **Automatic** and **Included API** show only the API allowance, preserving the existing default.
+- **Monthly Plan** shows only the Vibe allowance, falling back to Included API when the plan is missing or unknown.
+
+Automatic still shows API spend in the menu bar. Changing the metric updates widget rows from the existing snapshot,
+without another request. After a failed refresh, widgets reselect from the last published usage snapshot and keep its
+original measurement time, including across repeated metric changes. This in-memory source is cleared when provider
+or account ownership is invalidated. Burn Down eligibility still requires a known window duration and reset.
+
 ## CLI Usage
 
 ```bash
 codexbar usage --provider mistral --verbose
 ```
+
+Text output includes both Included API and the optional Monthly Plan, each with its percentage, reset date when
+available, and used / total / remaining amounts. Amounts are shown as detail, never as a reset time. This uses the
+existing snapshot; no additional requests are made. JSON output is unchanged: the Monthly Plan remains in
+`extraRateWindows` with the ID `mistral-monthly-plan`.
 
 ## Troubleshooting
 
