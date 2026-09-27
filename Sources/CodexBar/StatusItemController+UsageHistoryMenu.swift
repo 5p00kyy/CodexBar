@@ -49,6 +49,27 @@ extension StatusItemController {
             return true
         }
 
+        // Provider-specific by design: this menu burndown currently targets Codex and Claude quota histories.
+        if provider == .codex || provider == .claude {
+            let burndownView = QuotaBurndownChartMenuView(
+                provider: provider,
+                histories: histories,
+                width: width)
+            if burndownView.hasSeries {
+                let hosting = UsageHistoryMenuHostingView(rootView: burndownView)
+                hosting.frame = NSRect(
+                    origin: .zero,
+                    size: NSSize(width: width, height: self.hostedSubviewFittingHeight(for: hosting, width: width)))
+                let chartItem = NSMenuItem()
+                chartItem.view = hosting
+                chartItem.isEnabled = true
+                chartItem.representedObject = Self.usageHistoryChartID
+                chartItem.toolTip = provider.rawValue
+                submenu.addItem(chartItem)
+                return true
+            }
+        }
+
         let chartView = PlanUtilizationHistoryChartMenuView(
             provider: provider,
             histories: histories,
