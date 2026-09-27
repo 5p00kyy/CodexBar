@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import CodexBar
 @testable import CodexBarCore
 
 struct PiInclusiveRefreshTests {
@@ -57,5 +58,95 @@ struct PiInclusiveRefreshTests {
         let forced = try await refresh(force: true)
         #expect(forced.last30DaysTokens == 25)
         #expect(forced.historyCoverageIsEstablished)
+    }
+
+    @Test
+    func `an incomplete Pi mirror keeps the priced Claude total as a lower bound`() async throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let day = try env.makeLocalNoon(year: 2026, month: 4, day: 9)
+        var nativeOptions = CostUsageScanner.Options(
+            codexSessionsRoot: env.codexSessionsRoot,
+            claudeProjectsRoots: [env.claudeProjectsRoot],
+            cacheRoot: env.cacheRoot)
+        nativeOptions.refreshMinIntervalSeconds = 0
+        let ompSessionsRoot = env.root.appendingPathComponent("empty-omp", isDirectory: true)
+        try FileManager.default.createDirectory(at: ompSessionsRoot, withIntermediateDirectories: true)
+        let piOptions = PiSessionCostScanner.Options(
+            piSessionsRoot: env.piSessionsRoot,
+            ompSessionsRoot: ompSessionsRoot,
+            cacheRoot: env.cacheRoot,
+            calendar: .current,
+            refreshMinIntervalSeconds: 0,
+            environment: ["HOME": env.root.path])
+        let claudeRow: [String: Any] = [
+            "type": "assistant",
+            "timestamp": env.isoString(for: day),
+            "sessionId": "native-claude",
+            "message": [
+                "id": "native-claude-row",
+                "model": "claude-sonnet-4-6",
+                "usage": [
+                    "input_tokens": 100_000,
+                    "output_tokens": 1000,
+                ],
+            ],
+        ]
+        _ = try env.writeClaudeProjectFile(
+            relativePath: "project-a/native-claude.jsonl",
+            contents: env.jsonl([claudeRow]))
+        let piRow: [String: Any] = [
+            "type": "message",
+            "id": "pi-claude",
+            "timestamp": env.isoString(for: day),
+            "message": [
+                "role": "assistant",
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-6",
+                "usage": ["input": 20, "output": 5, "totalTokens": 25],
+            ],
+        ]
+        let piFile = try env.writePiSessionFile(
+            relativePath: "truncated.jsonl",
+            contents: env.jsonl([piRow]))
+        let truncated = try String(contentsOf: piFile, encoding: .utf8) + "{\"type\":\"message\""
+        try truncated.write(to: piFile, atomically: true, encoding: .utf8)
+
+        func load(includePiSessions: Bool) async throws -> CostUsageTokenSnapshot {
+            try await CostUsageFetcher.loadTokenSnapshot(
+                provider: .claude,
+                environment: ["HOME": env.root.path],
+                now: day,
+                historyDays: 1,
+                allowPricingRefresh: false,
+                refreshPricingInBackground: false,
+                includePiSessions: includePiSessions,
+                scannerOptions: nativeOptions,
+                piScannerOptions: piOptions)
+        }
+
+        let native = try await load(includePiSessions: false)
+        #expect(native.historyCoverageIsEstablished)
+        #expect(!native.historyScanIsPartial)
+        let nativeCost = try #require(native.last30DaysCostUSD)
+        #expect(nativeCost > 0)
+
+        let merged = try await load(includePiSessions: true)
+        #expect(!merged.historyCoverageIsEstablished)
+        #expect(merged.historyScanIsPartial)
+        #expect(merged.last30DaysCostUSD == nativeCost)
+
+        let model = SpendDashboardModel.build(
+            inputs: [.init(provider: .claude, displayName: "Claude", snapshot: merged)],
+            requestedDays: 1,
+            now: day)
+        let group = try #require(model.groups.first)
+        let provider = try #require(group.providers.first)
+        #expect(provider.totalCost == nativeCost)
+        #expect(provider.costIsLowerBound)
+        let payload = try #require(ShareStatsBuilder.make(model: model))
+        let text = ShareStatsFormatting.text(payload)
+        #expect(text.contains("(partial)"))
+        #expect(!text.contains("Spend unavailable"))
     }
 }

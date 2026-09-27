@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Claude: keep a priced Usage & Spend total when an incomplete Pi session mirror is merged into an otherwise complete native scan, and mark that total as a lower bound. Fixes #4051.
 - Mistral: show the Vibe Monthly Plan window, with its used / total / remaining amounts, in `codexbar usage` text output and the menu descriptor (#4025). Thanks @T0mSIlver!
 - ClinePass: reuse an existing Cline browser sign-in session when no API key is configured, without copying or refreshing tokens (#4026). Thanks @shirishpothi!
 - Settings: dim inactive merged-icon labels while keeping their titles and explanations accessible, including stacked-style restrictions (#4030). Thanks @elijahfriedman!
