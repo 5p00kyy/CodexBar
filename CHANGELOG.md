@@ -6,6 +6,10 @@
 
 - Claude: show saved usage-limit resets and their expiry from the Web source in the menu and `codexbar usage` details (#4048). Thanks @enieuwy!
 
+### Fixed
+
+- CLI: macOS release builds compile again on the Xcode 26 release runners, so the 0.68 macOS CLI tarballs and the Homebrew `codexbar` formula ship alongside the app.
+
 ## 0.68.0 — 2026-09-27
 
 ### Highlights
