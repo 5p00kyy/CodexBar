@@ -72,7 +72,8 @@ struct PluginProviderSpecTests {
                 let strategies = await descriptor.fetchPlan.pipeline.resolveStrategies(context)
                 await environmentAvailability.append([
                     implementation.isAvailable(context: .init(
-                        provider: provider, settings: fixture.settings,
+                        provider: provider,
+                        settings: fixture.settings,
                         environment: Self.isolatedEnvironment.merging(environment) { _, value in value })),
                     strategies.first?.isAvailable(context) ?? false,
                 ])
