@@ -287,6 +287,37 @@ struct CostHistoryChartMenuViewTests {
     }
 
     @Test
+    func `grok token history shows observed model names without assigning tokens to them`() {
+        let entry = CostUsageDailyReport.Entry(
+            date: "2026-06-07",
+            inputTokens: nil,
+            outputTokens: nil,
+            totalTokens: 150,
+            costUSD: nil,
+            modelsUsed: ["grok-4.6", "grok-4.7", "grok-4.6", " "],
+            modelBreakdowns: nil)
+        let rows = CostHistoryChartMenuView._detailRowsForTesting(
+            provider: .grok,
+            daily: [entry],
+            selectedDateKey: entry.date)
+
+        #expect(rows.map(\.title) == ["grok-4.6", "grok-4.7"])
+        #expect(rows.allSatisfy { $0.subtitle == nil })
+        #expect(CostHistoryChartMenuView._detailViewportConfigurationForTesting(
+            provider: .grok,
+            daily: [entry]).rowCount == 2)
+        #expect(CostHistoryChartMenuView._detailRowsForTesting(
+            provider: .codex,
+            daily: [entry],
+            selectedDateKey: entry.date).isEmpty)
+
+        let snapshot = Self.makeSnapshot(daily: [entry])
+        let fingerprint = CostHistoryChartMenuView.renderFingerprint(from: snapshot, provider: .grok)
+        #expect(fingerprint.daily.first?.modelNamesWithoutBreakdown == ["grok-4.6", "grok-4.7"])
+        #expect(fingerprint.daily.first?.modelBreakdowns.isEmpty == true)
+    }
+
+    @Test
     func `session model label maps codex auto review role`() {
         #expect(CostHistoryChartMenuView.sessionModelLabel([]) == "Unknown model")
         #expect(CostHistoryChartMenuView.sessionModelLabel(["codex-auto-review"]) == "Codex Auto Review")

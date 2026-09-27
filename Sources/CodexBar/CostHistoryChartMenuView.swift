@@ -726,7 +726,9 @@ struct CostHistoryChartMenuView: View {
             }
         }
         let breakdowns = visibleEntries.compactMap(\.modelBreakdowns)
-        let maxRows = breakdowns.map(\.count).max() ?? 0
+        let maxRows = visibleEntries.map { entry in
+            max(entry.modelBreakdowns?.count ?? 0, self.modelNamesWithoutBreakdown(entry, provider: provider).count)
+        }.max() ?? 0
         let hasModeDetails = breakdowns.joined().contains(where: self.hasModeSubtitle)
         return DetailLayout(
             viewportRowCount: min(maxRows, self.maxVisibleDetailLines),
@@ -966,7 +968,18 @@ struct CostHistoryChartMenuView: View {
 
     private func breakdownRows(key: String, model: Model) -> [DetailRow] {
         guard let entry = model.entriesByDateKey[key] else { return [] }
-        guard let breakdown = entry.modelBreakdowns, !breakdown.isEmpty else { return [] }
+        guard let breakdown = entry.modelBreakdowns, !breakdown.isEmpty else {
+            return Self.modelNamesWithoutBreakdown(entry, provider: self.provider)
+                .enumerated()
+                .map { index, name in
+                    DetailRow(
+                        id: "\(name)-\(index)",
+                        title: UsageFormatter.modelDisplayName(name),
+                        subtitle: nil,
+                        modeSubtitle: nil,
+                        accentColor: model.barColor.opacity(Self.breakdownAccentOpacity(for: index)))
+                }
+        }
 
         return Self.orderedBreakdownItems(breakdown)
             .enumerated()
@@ -978,6 +991,16 @@ struct CostHistoryChartMenuView: View {
                     modeSubtitle: self.modelBreakdownModeSubtitle(item),
                     accentColor: model.barColor.opacity(Self.breakdownAccentOpacity(for: index)))
             }
+    }
+
+    private static func modelNamesWithoutBreakdown(_ entry: DailyEntry, provider: UsageProvider) -> [String] {
+        // Provider-specific by design: Grok signals list models but contain no per-model token counts.
+        guard provider == .grok, entry.modelBreakdowns?.isEmpty != false else { return [] }
+        var seen = Set<String>()
+        return (entry.modelsUsed ?? []).compactMap { name in
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty || !seen.insert(trimmed).inserted ? nil : trimmed
+        }
     }
 
     static func orderedBreakdownItems(
@@ -1117,6 +1140,7 @@ extension CostHistoryChartMenuView {
         let totalTokens: Int?
         let requestCount: Int?
         let costBitPattern: UInt64?
+        let modelNamesWithoutBreakdown: [String]
         let modelBreakdowns: [VisibleModelBreakdownFingerprint]
     }
 
@@ -1181,7 +1205,7 @@ extension CostHistoryChartMenuView {
                     self.availableMetrics(provider: provider, daily: [entry]).isEmpty == false
                 }
                 .sorted { $0.date < $1.date }
-                .map(self.visibleDailyFingerprint),
+                .map { self.visibleDailyFingerprint($0, provider: provider) },
             projects: Array(projects.prefix(self.maxVisibleProjectRows).enumerated()).map { index, project in
                 let identity = self.projectIdentity(project, ordinal: index + 1, hidePersonalInfo: hidePersonalInfo)
                 let visibleSources = self.visibleProjectSources(project)
@@ -1227,12 +1251,16 @@ extension CostHistoryChartMenuView {
             })
     }
 
-    private static func visibleDailyFingerprint(_ entry: DailyEntry) -> VisibleDailyFingerprint {
+    private static func visibleDailyFingerprint(
+        _ entry: DailyEntry,
+        provider: UsageProvider) -> VisibleDailyFingerprint
+    {
         VisibleDailyFingerprint(
             date: entry.date,
             totalTokens: entry.totalTokens,
             requestCount: entry.requestCount,
             costBitPattern: entry.costUSD.map(\.bitPattern),
+            modelNamesWithoutBreakdown: self.modelNamesWithoutBreakdown(entry, provider: provider),
             modelBreakdowns: self.orderedBreakdownItems(entry.modelBreakdowns ?? []).map { item in
                 VisibleModelBreakdownFingerprint(
                     modelName: item.modelName,
@@ -1320,6 +1348,19 @@ extension CostHistoryChartMenuView {
             daily: daily,
             metric: metric ?? self.defaultMetric(provider: provider, daily: daily))
         return (model.detailViewportRowCount, model.hasDetailOverflow, model.detailRowHeight)
+    }
+
+    static func _detailRowsForTesting(
+        provider: UsageProvider,
+        daily: [DailyEntry],
+        selectedDateKey: String) -> [(title: String, subtitle: String?)]
+    {
+        let view = Self(provider: provider, daily: daily, totalCostUSD: nil, hidePersonalInfo: false, width: 320)
+        let model = self.makeModel(
+            provider: provider,
+            daily: daily,
+            metric: self.defaultMetric(provider: provider, daily: daily))
+        return view.breakdownRows(key: selectedDateKey, model: model).map { ($0.title, $0.subtitle) }
     }
 }
 
