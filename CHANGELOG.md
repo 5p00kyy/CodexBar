@@ -22,6 +22,7 @@
 - Updates: offer one-click Homebrew cask upgrades from the menu and About while keeping Homebrew responsible for installation (#3994). Thanks @Yuxin-Qiao!
 - Web dashboard: choose Follow server, Used, or Remaining per browser, with persistent display preferences and consumption-based warnings (#4013). Fixes #3156. Thanks @andybergon!
 - Menu bar: add opt-in, bounded startup diagnostics for status-item creation and Control Center hosting investigations (#3377).
+- Claude: show saved usage-limit resets and the next expiry from the Web source in the menu and in `codexbar usage` details (#3895).
 
 ### Changed
 
