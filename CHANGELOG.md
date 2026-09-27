@@ -5,6 +5,7 @@
 ### Fixed
 
 - Costs: keep All history priority checks proportional to recorded days instead of generating centuries of empty days, while preserving older logs (#4045). Thanks @djbclark!
+- CLI: macOS release builds compile again on the Xcode 26 release runners, so the 0.68 macOS CLI tarballs and the Homebrew `codexbar` formula ship alongside the app.
 
 ## 0.68.0 — 2026-09-27
 
