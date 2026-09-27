@@ -1856,10 +1856,10 @@ struct ProviderArchitectureGatekeeperTests {
         AllowedProviderConstruct(
             path: "Sources/CodexBar/MenuCardView+CodexResetCredits.swift",
             anchor: "case .codex:",
-            expectedProviderIDs: ["codex", "grok"],
-            expectedReferenceCount: 2,
-            expectedReferenceFingerprint: ["codex@0", "grok@6"],
-            reason: "This shared renderer selects the provider-owned Codex and Grok reset-credit projections."),
+            expectedProviderIDs: ["claude", "codex", "grok"],
+            expectedReferenceCount: 3,
+            expectedReferenceFingerprint: ["codex@0", "grok@6", "claude@13"],
+            reason: "This shared renderer selects the provider-owned Codex, Grok, and Claude reset-credit projections."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/MenuCardView+Costs.swift",
             anchor: "let sessionLabel = if provider == .bedrock || provider == .mistral {",
