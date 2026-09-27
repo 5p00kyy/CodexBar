@@ -55,6 +55,39 @@ struct CostUsageClaudeWriteAmplificationTests {
     }
 
     @Test
+    func `unchanged cache artifacts decode once and rewrites invalidate the memo`() throws {
+        let fixture = try Fixture(rowCount: 2)
+        defer { fixture.env.cleanup() }
+        _ = try fixture.load(context: .regular)
+        CostUsageClaudeCacheIO.evictArtifactMemoForTesting()
+
+        let warm = CostUsageScanner.ClaudeScanWorkRecorder()
+        let cache = CostUsageScanner.withClaudeScanWorkRecorderForTesting(warm) {
+            var loaded = CostUsageClaudeCache()
+            for _ in 0..<4 {
+                loaded = CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot)
+            }
+            return loaded
+        }
+        // Repeated reads of an untouched artifact must not repeat its multi-second row decode.
+        #expect(warm.snapshot().cacheDecodes == 1)
+        #expect(!cache.usage.files.isEmpty)
+
+        var mutated = cache
+        mutated.usage.lastScanUnixMs += 1
+        _ = try CostUsageClaudeCacheIO.save(
+            provider: .claude, cache: mutated, cacheRoot: fixture.env.cacheRoot)
+
+        let rewritten = CostUsageScanner.ClaudeScanWorkRecorder()
+        let reloaded = CostUsageScanner.withClaudeScanWorkRecorderForTesting(rewritten) {
+            CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot)
+        }
+        // A rewrite restamps the artifact, so the stale memo entry must not be served.
+        #expect(rewritten.snapshot().cacheDecodes == 1)
+        #expect(reloaded.usage.lastScanUnixMs == mutated.usage.lastScanUnixMs)
+    }
+
+    @Test
     func `changed usage persists once and a cancelled save preserves the artifacts`() throws {
         let fixture = try Fixture(rowCount: 2)
         defer { fixture.env.cleanup() }
