@@ -125,7 +125,8 @@ struct CostUsageClaudeWriteAmplificationTests {
         let cache = CostUsageClaudeCacheIO.load(provider: .claude, cacheRoot: fixture.env.cacheRoot)
         var differentCalendar = Calendar(identifier: .gregorian)
         differentCalendar.timeZone = try #require(TimeZone(identifier:
-            Calendar.current.timeZone.identifier == "UTC" ? "Asia/Tokyo" : "UTC"))
+            cache.usage.timeZoneIdentifier == "Asia/Tokyo" ? "America/Los_Angeles" : "Asia/Tokyo"))
+        #expect(differentCalendar.timeZone.identifier != cache.usage.timeZoneIdentifier)
         #expect(CostUsageClaudeCacheIO.load(
             provider: .claude, cacheRoot: fixture.env.cacheRoot, calendar: differentCalendar).usage.files.isEmpty)
         #expect(!CostUsageClaudeCacheIO.load(
