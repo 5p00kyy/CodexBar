@@ -317,8 +317,6 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
     var lastObservedStoreIconWorkSignature: String?
     var iconPerfRefreshCycleMetrics: IconPerfRefreshCycleMetrics?
     var iconPerfUpdatePassActive = false
-    var lastKnownScreenCount: Int
-    var pendingScreenChangePreviousCount: Int?
     var screenChangeVisibilityTask: Task<Void, Never>?
     let loginLogger = CodexBarLog.logger(LogCategories.login)
     let menuLogger = CodexBarLog.logger(LogCategories.app)
@@ -417,7 +415,6 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
             identity: .merged,
             defaults: settings.userDefaults,
             legacyDefaultItemIndex: Self.mergedLegacyDefaultItemIndex)
-        self.lastKnownScreenCount = NSScreen.screens.count
         // Status items for individual providers are now created lazily in updateVisibility()
         super.init()
         if !repairedStatusItemVisibilityKeys.isEmpty {
@@ -609,6 +606,8 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
     private func observeUpdaterChanges() {
         withObservationTracking {
             _ = self.updater.updateStatus.isUpdateReady
+            _ = self.updater.updateStatus.availableVersion
+            _ = self.updater.updateStatus.isInstalling
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -920,7 +919,6 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
         self.loginTask?.cancel()
         self.overviewSharePresentation.task?.cancel()
         self.screenChangeVisibilityTask?.cancel()
-        self.pendingScreenChangePreviousCount = nil
         NotificationCenter.default.removeObserver(self)
     }
 }

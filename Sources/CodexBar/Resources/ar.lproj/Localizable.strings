@@ -967,6 +967,12 @@
 "Copied" = "تم النسخ";
 "Managed by Homebrew" = "تتم إدارته بواسطة Homebrew";
 "Copy update command" = "نسخ أمر التحديث";
+"Update to %@" = "التحديث إلى %@";
+"CodexBar %@ is available" = "CodexBar %@ متاح";
+"CodexBar is up to date" = "CodexBar محدَّث";
+"Checking for updates…" = "جارٍ البحث عن تحديثات…";
+"Updating with Homebrew…" = "جارٍ التحديث عبر Homebrew…";
+"Homebrew update failed. You can run this command in Terminal instead:" = "فشل التحديث عبر Homebrew. يمكنك تشغيل هذا الأمر في Terminal بدلاً من ذلك:";
 "Copy error" = "خطأ في النسخ.";
 "Copy path" = "مسار النسخ";
 "Extra usage spent" = "الاستخدام الإضافي المخصص";
@@ -1417,7 +1423,6 @@
 "menu_bar_layout_gap_tight" = "ضيّق";
 "menu_bar_layout_gap_regular" = "عادي";
 "menu_bar_layout_vertical_adjustment" = "الضبط العمودي";
-"menu_bar_layout_keyboard_hint" = "يحذف Delete العنصر المحدد";
 "menu_bar_layout_sample_account" = "حساب";
 "menu_bar_layout_sample_runs_out" = "ينفد الجمعة";
 "menu_bar_layout_token_icon" = "الأيقونة";

@@ -827,6 +827,12 @@
 "Copied" = "已複製";
 "Managed by Homebrew" = "由 Homebrew 管理";
 "Copy update command" = "複製更新指令";
+"Update to %@" = "更新至 %@";
+"CodexBar %@ is available" = "CodexBar %@ 已推出";
+"CodexBar is up to date" = "CodexBar 已是最新版本";
+"Checking for updates…" = "正在檢查更新…";
+"Updating with Homebrew…" = "正在透過 Homebrew 更新…";
+"Homebrew update failed. You can run this command in Terminal instead:" = "Homebrew 更新失敗。你也可以在終端機中執行此指令：";
 "Copy error" = "複製錯誤";
 "Copy path" = "複製路徑";
 "Extra usage spent" = "額外使用量支出";
@@ -1444,7 +1450,6 @@
 "menu_bar_layout_gap_tight" = "緊湊";
 "menu_bar_layout_gap_regular" = "一般";
 "menu_bar_layout_vertical_adjustment" = "垂直調整";
-"menu_bar_layout_keyboard_hint" = "Delete 鍵會移除所選項目";
 "menu_bar_layout_sample_account" = "帳號";
 "menu_bar_layout_sample_runs_out" = "週五用盡";
 "menu_bar_layout_token_icon" = "圖示";

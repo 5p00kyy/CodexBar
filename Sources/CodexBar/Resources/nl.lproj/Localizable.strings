@@ -960,6 +960,12 @@
 "Copied" = "Gekopieerd";
 "Managed by Homebrew" = "Beheerd door Homebrew";
 "Copy update command" = "Updatecommando kopiëren";
+"Update to %@" = "Bijwerken naar %@";
+"CodexBar %@ is available" = "CodexBar %@ is beschikbaar";
+"CodexBar is up to date" = "CodexBar is up-to-date";
+"Checking for updates…" = "Zoeken naar updates…";
+"Updating with Homebrew…" = "Bijwerken met Homebrew…";
+"Homebrew update failed. You can run this command in Terminal instead:" = "Bijwerken met Homebrew is mislukt. Je kunt deze opdracht in Terminal uitvoeren:";
 "Copy error" = "Kopieerfout";
 "Copy path" = "Kopieer pad";
 "Extra usage spent" = "Extra gebruik besteed";
@@ -1413,7 +1419,6 @@
 "menu_bar_layout_gap_tight" = "Krap";
 "menu_bar_layout_gap_regular" = "Normaal";
 "menu_bar_layout_vertical_adjustment" = "Verticale aanpassing";
-"menu_bar_layout_keyboard_hint" = "Delete verwijdert het geselecteerde token";
 "menu_bar_layout_sample_account" = "account";
 "menu_bar_layout_sample_runs_out" = "op vr.";
 "menu_bar_layout_token_icon" = "Pictogram";
