@@ -5,11 +5,15 @@
 ### Fixed
 
 - Settings: dim inactive merged-icon labels while keeping their titles and explanations accessible, including stacked-style restrictions (#4030). Thanks @elijahfriedman!
+- Plugins: retire timed-out or cancelled script contexts before allowing a retry, so the next refresh cannot reuse a poisoned worker.
+- Menu bar: keep stable status-item identities through recovery removal after updates while preserving saved icon positions. Fixes #3201. Thanks @WilliamTso and @zxfxpower!
+- Mistral: accept a manual Cookie header in the Linux CLI, which refused it as macOS-only, so Linux shows the Included API and Vibe Monthly Plan allowances (#4024). Thanks @T0mSIlver!
 - Menu bar: prevent blank status-item slots after normal quit on macOS 26.6.2 while preserving saved icon positions (#4022). Fixes #4021. Thanks @mymatejackson and @giuseppebisemi!
 - Codex: resolve control socket symlinks when checking the running daemon, so System Account switches do not silently skip its restart (#3990, #4018). Thanks @massdo!
 - Venice: accept Clerk session cookies in Web and Manual modes, authenticate with a Bearer token, and explain active-tab recovery for expired sessions. Fixes #3940. Thanks @LachieFREEDOM!
 - Nous Portal: include Nous-billed OpenCodex ledger activity in Usage & Spend, preserving estimated or unpriced costs separately from Portal credits. Fixes #4008. Thanks @Reztahla!
 - Muse Code: optionally show the explicitly selected dev.meta.ai browser team’s quota when the login omits quotas, with cookies Off by default and team choices in settings (#4011). Fixes #4002. Thanks @enieuwy!
+- Cursor: keep all-history cost requests within the dashboard API's supported date range so Usage & Spend can refresh (#4028). Thanks @Yuxin-Qiao!
 ### Added
 
 - Updates: offer one-click Homebrew cask upgrades from the menu and About while keeping Homebrew responsible for installation (#3994). Thanks @Yuxin-Qiao!
@@ -18,6 +22,7 @@
 
 ### Changed
 
+- Usage & Spend: name Codex sessions from local thread metadata, rank them by cost with stable ties, and mask session titles and projects when Hide personal information is enabled (#4020). Thanks @urda!
 - Settings: simplify menu bar layout controls while keeping token-removal instructions in the section footer (#3999). Thanks @elijahfriedman!
 
 ### Fixed
