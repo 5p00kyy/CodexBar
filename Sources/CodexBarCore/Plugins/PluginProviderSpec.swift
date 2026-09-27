@@ -44,11 +44,14 @@ public struct PluginProviderSpec: Sendable {
         SettingsValue.first(in: environment, keys: [self.environmentKey] + self.environmentAliases)
     }
 
-    public func makeDescriptor() -> ProviderDescriptor {
+    public func makeDescriptor(
+        credentials: ProviderCredentialAdapter? = nil,
+        fetchPlan: ProviderFetchPlan? = nil) -> ProviderDescriptor
+    {
         ProviderDescriptor(
             id: self.id,
             menuBarMetrics: self.menuBarMetrics,
-            credentials: .apiKey(
+            credentials: credentials ?? .apiKey(
                 environmentKey: self.environmentKey,
                 additionalProjections: self.additionalProjections,
                 resolve: self.apiKey,
@@ -81,7 +84,7 @@ public struct PluginProviderSpec: Sendable {
                 confettiPalette: self.confetti.map { ProviderColor(hex: $0) }),
             tokenCost: ProviderTokenCostConfig(supportsTokenCost: false, noDataMessage: { self.noDataMessage }),
             presentation: self.presentation,
-            fetchPlan: ProviderFetchPlan(
+            fetchPlan: fetchPlan ?? ProviderFetchPlan(
                 sourceModes: [.auto, .api],
                 pipeline: ProviderFetchPipeline(resolveStrategies: { _ in [self.makeStrategy()] })),
             cli: ProviderCLIConfig(name: self.id.rawValue, aliases: self.aliases, versionDetector: nil))

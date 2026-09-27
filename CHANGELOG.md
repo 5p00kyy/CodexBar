@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- ClinePass: reuse an existing Cline browser sign-in session when no API key is configured, without copying or refreshing tokens (#4026). Thanks @shirishpothi!
 - Settings: dim inactive merged-icon labels while keeping their titles and explanations accessible, including stacked-style restrictions (#4030). Thanks @elijahfriedman!
 - Plugins: retire timed-out or cancelled script contexts before allowing a retry, so the next refresh cannot reuse a poisoned worker.
 - Menu bar: keep stable status-item identities through recovery removal after updates while preserving saved icon positions. Fixes #3201. Thanks @WilliamTso and @zxfxpower!
