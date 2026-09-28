@@ -1,4 +1,7 @@
 import Foundation
+#if os(macOS)
+import Security
+#endif
 
 final class FutureModificationDateClamp: @unchecked Sendable {
     private let lock = NSLock()
@@ -20,27 +23,49 @@ final class FutureModificationDateClamp: @unchecked Sendable {
     }
 }
 
-private final class TrustedCodexAppServerCache: @unchecked Sendable {
-    private let lock = NSLock()
-    private var trustedExecutablePaths = Set<String>()
-
-    func isTrusted(_ path: String, validator: @Sendable (String) -> Bool) -> Bool {
-        self.lock.withLock {
-            if self.trustedExecutablePaths.contains(path) {
-                return true
-            }
-            guard validator(path) else { return false }
-            self.trustedExecutablePaths.insert(path)
-            return true
-        }
+enum ChatGPTCodexProcessTrust {
+    #if os(macOS)
+    static func isTrusted(
+        _ pid: Int32,
+        executablePath: (Int32) -> String? = DarwinProcessEnumerator.executablePath,
+        resolvePath: (String) -> String = { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path },
+        processIsTrusted: (Int32) -> Bool = Self.isOpenAIProcess,
+        appIsTrusted: (String) -> Bool = { CodexLaunchPreflight.isLaunchCandidateAllowed(path: $0) }) -> Bool
+    {
+        guard let path = executablePath(pid),
+              AgentPSOutputParser.chatGPTCodexExecutablePaths.contains(path),
+              resolvePath(path) == path
+        else { return false }
+        // Check the running code, not argv or a cached on-disk pathname. Validate the outer app's seal and identity.
+        return processIsTrusted(pid) && appIsTrusted("/Applications/ChatGPT.app")
     }
+
+    private static func isOpenAIProcess(_ pid: Int32) -> Bool {
+        var code: SecCode?
+        guard SecCodeCopyGuestWithAttributes(
+            nil, [kSecGuestAttributePid: pid] as CFDictionary, SecCSFlags(), &code) == errSecSuccess,
+            let code
+        else { return false }
+        var requirement: SecRequirement?
+        let requirementText = "anchor apple generic and certificate leaf[subject.OU] = \"2DC432GLL2\""
+        guard SecRequirementCreateWithString(
+            requirementText as CFString, SecCSFlags(), &requirement) == errSecSuccess,
+            let requirement
+        else { return false }
+        return SecCodeCheckValidity(code, SecCSFlags(), requirement) == errSecSuccess
+    }
+    #else
+    static func isTrusted(_: Int32) -> Bool {
+        false
+    }
+    #endif
 }
 
 public struct LocalAgentSessionScanner: Sendable {
     typealias ProcessOutputProvider = @Sendable ([String: String]) async -> String
     typealias CWDProvider = @Sendable ([Int32], [String: String]) async -> [Int32: String]
     typealias ProcessEnvironmentProvider = @Sendable ([Int32]) async -> [Int32: [String: String]]
-    typealias AppServerTrustValidator = @Sendable (String) -> Bool
+    typealias AppServerTrustValidator = @Sendable (AgentProcessRecord) -> Bool
 
     private struct Rollout: Sendable {
         let url: URL
@@ -53,15 +78,13 @@ public struct LocalAgentSessionScanner: Sendable {
         let host: String
         let now: Date
         let codexAppServerPresent: Bool
-        let includeFileOnlySessions: Bool
-        let includeTrustedCodexAppServerRollouts: Bool
+        let includeUnmatchedCodexRollouts: Bool
         let threadMetadata: [String: CodexThreadMetadata]
         let piFamilySessions: [AgentSession]
     }
 
     public let config: SessionScanConfig
     private let futureModificationDateClamp = FutureModificationDateClamp()
-    private let trustedCodexAppServerCache = TrustedCodexAppServerCache()
     private let processOutputProvider: ProcessOutputProvider?
     private let cwdProvider: CWDProvider?
     private let processEnvironmentProvider: ProcessEnvironmentProvider?
@@ -69,21 +92,16 @@ public struct LocalAgentSessionScanner: Sendable {
     private let didVisitDirectoryEntry: (@Sendable () -> Void)?
 
     public init(config: SessionScanConfig = SessionScanConfig()) {
-        self.config = config
-        self.processOutputProvider = nil
-        self.cwdProvider = nil
-        self.processEnvironmentProvider = nil
-        self.appServerTrustValidator = { CodexLaunchPreflight.isLaunchCandidateAllowed(path: $0) }
-        self.didVisitDirectoryEntry = nil
+        self.init(config: config, processOutputProvider: nil, cwdProvider: nil)
     }
 
     init(
         config: SessionScanConfig = SessionScanConfig(),
-        processOutputProvider: @escaping ProcessOutputProvider,
-        cwdProvider: @escaping CWDProvider,
+        processOutputProvider: ProcessOutputProvider?,
+        cwdProvider: CWDProvider?,
         processEnvironmentProvider: ProcessEnvironmentProvider? = nil,
         appServerTrustValidator: @escaping AppServerTrustValidator = {
-            CodexLaunchPreflight.isLaunchCandidateAllowed(path: $0)
+            ChatGPTCodexProcessTrust.isTrusted($0.pid)
         },
         didVisitDirectoryEntry: (@Sendable () -> Void)? = nil)
     {
@@ -106,14 +124,8 @@ public struct LocalAgentSessionScanner: Sendable {
             AgentPSOutputParser.agentProcesses(from: allProcesses))
             .prefix(max(0, self.config.maxProcessCount)))
         let homeDirectory = URL(fileURLWithPath: environment["HOME"] ?? NSHomeDirectory(), isDirectory: true)
-        let trustedCodexAppServerPresent = if let executable = AgentPSOutputParser.chatGPTCodexAppServerExecutable(
-            in: allProcesses,
-            homeDirectory: homeDirectory)
-        {
-            self.trustedCodexAppServerCache.isTrusted(executable, validator: self.appServerTrustValidator)
-        } else {
-            false
-        }
+        let trustedCodexAppServerPresent = AgentPSOutputParser.hasTrustedChatGPTCodexAppServer(
+            in: allProcesses, validator: self.appServerTrustValidator)
         guard Self.shouldScanSessionMetadata(
             hasAgentProcesses: !processes.isEmpty,
             includeFileOnlySessions: includeFileOnlySessions,
@@ -141,13 +153,7 @@ public struct LocalAgentSessionScanner: Sendable {
                 ? self.config.directoryScanBudget
                 : min(self.config.directoryScanBudget, self.config.adaptiveDirectoryScanBudget),
             didVisitEntry: self.didVisitDirectoryEntry)
-        var piFamilyDirectoryBudget = DirectoryMetadataScanBudget(
-            maxEntryCount: self.config.maxDirectoryEntryCount,
-            maxDepth: self.config.maxDirectoryDepth,
-            timeLimit: includeFileOnlySessions
-                ? self.config.directoryScanBudget
-                : min(self.config.directoryScanBudget, self.config.adaptiveDirectoryScanBudget),
-            didVisitEntry: self.didVisitDirectoryEntry)
+        var piFamilyDirectoryBudget = directoryBudget
         let piFamilySessions = PiFamilySessionScanner.scan(
             input: PiFamilySessionScanner.ScanInput(
                 processes: processes,
@@ -157,14 +163,12 @@ public struct LocalAgentSessionScanner: Sendable {
                 host: host,
                 config: self.config),
             directoryBudget: &piFamilyDirectoryBudget)
-        let includeTrustedCodexAppServerRollouts = trustedCodexAppServerPresent && !includeFileOnlySessions
-        let rollouts: [Rollout] = if includeFileOnlySessions || !codexCWDs.isEmpty ||
-            includeTrustedCodexAppServerRollouts
-        {
+        let includeUnmatchedCodexRollouts = includeFileOnlySessions || trustedCodexAppServerPresent
+        let rollouts: [Rollout] = if includeUnmatchedCodexRollouts || !codexCWDs.isEmpty {
             self.codexRollouts(
                 now: now,
                 codexHomeDirectory: codexHomeDirectory,
-                matchingCWDs: includeFileOnlySessions || includeTrustedCodexAppServerRollouts ? nil : codexCWDs,
+                matchingCWDs: includeUnmatchedCodexRollouts ? nil : codexCWDs,
                 directoryBudget: &directoryBudget)
         } else {
             []
@@ -182,8 +186,7 @@ public struct LocalAgentSessionScanner: Sendable {
                 host: host,
                 now: now,
                 codexAppServerPresent: codexAppServerPresent,
-                includeFileOnlySessions: includeFileOnlySessions,
-                includeTrustedCodexAppServerRollouts: includeTrustedCodexAppServerRollouts,
+                includeUnmatchedCodexRollouts: includeUnmatchedCodexRollouts,
                 threadMetadata: threadMetadata,
                 piFamilySessions: piFamilySessions),
             directoryBudget: &directoryBudget)
@@ -380,7 +383,7 @@ public struct LocalAgentSessionScanner: Sendable {
         }
 
         for rollout in rollouts
-            where (context.includeFileOnlySessions || context.includeTrustedCodexAppServerRollouts) &&
+            where context.includeUnmatchedCodexRollouts &&
             !matchedRolloutPaths.contains(rollout.url.path)
         {
             guard var session = CodexRolloutFirstLineParser.makeSession(
