@@ -220,17 +220,17 @@ assert_verify_fails success success true success false false skipped success
 assert_verify_fails success success false skipped false false skipped success success
 assert_verify_fails success success false skipped false false skipped success failure
 
-assert_verify_fails success success true skipped false true success success
-assert_verify_fails success success true skipped true true success success
-assert_verify_fails success success false skipped true true success success
-assert_verify_fails success success true success true true success success
-assert_verify_fails success success false success false true success success
-assert_verify_fails success success "" skipped false true success success
-assert_verify_fails failure success true success false true success success
-assert_verify_fails success failure true success false true success success
-assert_verify_fails success success true success false true skipped success
-assert_verify_fails success success true success false false success success
-assert_verify_fails success success true success false "" skipped success
+assert_verify_fails success success true skipped false true success success success
+assert_verify_fails success success true skipped true true success success success
+assert_verify_fails success success false skipped true true success success skipped
+assert_verify_fails success success true success true true success success success
+assert_verify_fails success success false success false true success success skipped
+assert_verify_fails success success "" skipped false true success success success
+assert_verify_fails failure success true success false true success success success
+assert_verify_fails success failure true success false true success success success
+assert_verify_fails success success true success false true skipped success success
+assert_verify_fails success success true success false false success success success
+assert_verify_fails success success true success false "" skipped success success
 
 assert_linux_verify_fails() {
   local expected="$1"
@@ -261,14 +261,15 @@ for macos_required in true false; do
 
     for failed_result in failure cancelled; do
       assert_verify_fails "$failed_result" success "$macos_required" "$macos_result" \
-        false "$musl_required" "$musl_result" success
+        false "$musl_required" "$musl_result" success "$macos_result"
       assert_verify_fails success "$failed_result" "$macos_required" "$macos_result" \
-        false "$musl_required" "$musl_result" success
+        false "$musl_required" "$musl_result" success "$macos_result"
       if [[ "$macos_required" == true ]]; then
-        assert_verify_fails success success true "$failed_result" false "$musl_required" "$musl_result" success
+        assert_verify_fails success success true "$failed_result" false "$musl_required" "$musl_result" success success
       fi
       if [[ "$musl_required" == true ]]; then
-        assert_verify_fails success success "$macos_required" "$macos_result" false true "$failed_result" success
+        assert_verify_fails success success "$macos_required" "$macos_result" false true "$failed_result" \
+          success "$macos_result"
       fi
     done
   done
