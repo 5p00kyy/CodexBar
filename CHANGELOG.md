@@ -4,7 +4,7 @@
 
 ### Security
 
-- Tests: scrub inherited credentials from test runners and redact stored environment dictionaries in Codex/Claude usage fetcher and shared fetch-context debug output.
+- Tests: scrub inherited credentials from test runners and redact stored process-environment dictionaries throughout the app, CLI, provider contexts, and session scanners, including optional environments (#4097).
 
 ### Added
 
