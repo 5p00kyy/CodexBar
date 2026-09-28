@@ -37,9 +37,15 @@ validation and the bundled scripts remain authoritative. This glue migration doe
 classifications or registry count below.
 
 Eight cookie/web providers also use the spec: Helmcode, Hyper, Manus, Perplexity, Qoder, Raycast, Sakana, and T3 Chat,
-bringing the declarative total to **31**. Six share the cookie app implementation; Helmcode and Qoder retain small
+bringing that batch to **31** declarative providers. Six share the cookie app implementation; Helmcode and Qoder retain small
 provider-owned UI adapters. Replicate and TypeSafe keep their native conditional session-cache strategies. Cookie
 domains, session candidates, regional origins, browser policy, and bundled scripts are unchanged.
+
+Hugging Face, Nous, Fireworks, xAI, Venice, and Zed bring the declarative total to **37**. Hugging Face and xAI use the shared API-key
+app implementation; native credential/runtime, persistence, and source-selection adapters remain provider-owned.
+Moonshot's config normalizer, z.ai's custom pace rules, and OpenRouter's credit capability remain outside the spec.
+OpenAI API also retains its exact decimal branding and custom cost/card presentation. This batch leaves those four,
+Abacus, Muse, LongCat, Replicate, and TypeSafe unchanged.
 
 | Status | Count |
 |---|---:|
