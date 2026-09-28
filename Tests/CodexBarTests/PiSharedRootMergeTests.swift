@@ -102,6 +102,9 @@ struct PiSharedRootMergeTests {
         #expect(OMPSessionRootResolver.sessionRoots(
             environment: environment,
             baseDirectory: env.root) == missing)
+        #expect(PiFamilySessionScanner.costSessionRoots(
+            environment: environment,
+            baseDirectories: [env.root]).first { $0.url.path == missingRoot.path }?.url == missingCostRoot.url)
     }
 
     @Test
