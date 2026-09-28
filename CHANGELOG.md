@@ -9,6 +9,10 @@
 
 - Redact every remaining stored process environment in the app, CLI, provider contexts, and session scanners, and guard against new unredacted environment properties with a repository check (#4106).
 
+### Fixed
+
+- CLI: keep probe timeout and cancellation cleanup responsive when other processes have large environments (#4077).
+
 ## 0.69.0 — 2026-09-28
 
 ### Highlights
