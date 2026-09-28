@@ -7,12 +7,12 @@ struct CLIPluginConfigPreservationTests {
     func `missing and blank configs permit validation usage and settings writes`(_ contents: String?) async throws {
         let fixture = try Fixture()
         defer { fixture.remove() }
-        try fixture.installPlugin()
+        try fixture.installCodexStub()
         try FileManager.default.removeItem(at: fixture.configURL)
         if let contents { try Data(contents.utf8).write(to: fixture.configURL) }
 
         _ = try await fixture.run(["config", "validate", "--json"])
-        let usage = try await fixture.run(["usage", "--provider", "fixture-unavailable", "--json", "--json-only"])
+        let usage = try await fixture.run(["usage", "--provider", "codex", "--source", "cli", "--json", "--json-only"])
         let payloads = try #require(JSONSerialization.jsonObject(with: usage) as? [[String: Any]])
         let payload = try #require(payloads.first)
         #expect(payload["error"] == nil)
@@ -119,6 +119,32 @@ struct CLIPluginConfigPreservationTests {
 
         func remove() { try? FileManager.default.removeItem(at: self.directory) }
 
+        func installCodexStub() throws {
+            let source = #"""
+            #!/usr/bin/python3 -S
+            import json, sys
+            if "--version" in sys.argv:
+                print("codex-cli 1.0.0")
+                sys.exit(0)
+            assert "app-server" in sys.argv
+            for line in sys.stdin:
+                request = json.loads(line)
+                if "id" not in request:
+                    continue
+                result = {}
+                if request.get("method") == "account/rateLimits/read":
+                    result = {"rateLimits": {"planType": "plus", "primary": {
+                        "usedPercent": 1, "windowDurationMins": 300}}}
+                elif request.get("method") == "account/read":
+                    result = {"account": {"type": "chatgpt", "email": "fixture@example.com",
+                                          "planType": "plus"}, "requiresOpenaiAuth": False}
+                print(json.dumps({"id": request["id"], "result": result}), flush=True)
+            """#
+            let url = self.directory.appendingPathComponent("codex")
+            try Data(source.utf8).write(to: url)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        }
+
         func installPlugin() throws {
             let source = #"""
             defineProvider({
@@ -139,6 +165,8 @@ struct CLIPluginConfigPreservationTests {
                     "HOME": self.directory.path,
                     "CFFIXED_USER_HOME": self.directory.path,
                     "CODEX_HOME": self.directory.appendingPathComponent(".codex").path,
+                    "CODEX_CLI_PATH": self.directory.appendingPathComponent("codex").path,
+                    "SHELL": "/bin/sh",
                     "CODEXBAR_CONFIG": self.configURL.path,
                     "CODEXBAR_SUPPRESS_TEST_KEYCHAIN_ACCESS": "1",
                 ],
