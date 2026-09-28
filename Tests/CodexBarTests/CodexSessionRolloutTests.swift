@@ -167,7 +167,7 @@ struct CodexSessionRolloutTests {
         "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex-fake",
         "/Applications/ChatGPT.app/Contents/Resources/../Resources/codex",
     ])
-    func `unrelated chatgpt named bundle cannot authorize adaptive rollout inspection`(executable: String) async throws {
+    func `unrecognized app server path cannot authorize adaptive rollout inspection`(executable: String) async throws {
         let now = Date()
         let fixture = try Self.makeAdaptiveChatGPTFixture(
             now: now,
