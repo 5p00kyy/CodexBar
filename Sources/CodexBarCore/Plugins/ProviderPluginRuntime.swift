@@ -224,6 +224,16 @@ public final class ProviderPluginRuntime: @unchecked Sendable {
             resolver: cookieResolver,
             instanceResolver: instanceCookieResolver)
         contextOptions.cookieSessionInvalidator = cookieSessionInvalidator
+        if self.manifest.usesCookieJar {
+            let jar = ProviderPluginCookieJar()
+            let resolver = contextOptions.cookieSessionResolver
+            contextOptions.cookieJar = jar
+            contextOptions.cookieSessionResolver = { domain, cachedOnly in
+                guard let session = try await resolver?(domain, cachedOnly) else { return nil }
+                jar.register(session)
+                return session
+            }
+        }
         let worker = try self.currentWorker()
         let gate = ProviderPluginCompletionGate<ProviderPluginResult>()
         let finish: @Sendable (Result<ProviderPluginResult, Error>) -> Void = { [weak worker] result in
@@ -853,7 +863,8 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
                 secrets: secrets,
                 manifest: self.manifest,
                 enforcesUserResponsePolicy: self.enforcesUserResponsePolicy,
-                redactionValues: redactionValues)
+                redactionValues: redactionValues,
+                cookieJar: contextOptions.cookieJar)
         } catch {
             self.reject(callbacks.reject, error: error, transportErrors: redactionValues.transportErrors)
             return
@@ -919,13 +930,22 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
                 return
             }
             let resolveCookie: @Sendable () async throws -> (header: String, payload: String)
+            guard sessionResolver != nil || !self.manifest.usesCookieJar else {
+                self.reject(
+                    ProviderPluginJSValueBox(reject),
+                    error: ProviderPluginError.secretAccess("cookie jars do not expose headers"))
+                return
+            }
             if let sessionResolver {
                 resolveCookie = {
                     guard let session = try await sessionResolver(domain, cachedOnly) else { return ("", "null") }
                     guard session.origin == "https://\(domain)" else {
                         throw ProviderPluginError.secretAccess("cookie session origin does not match its domain")
                     }
-                    return try (session.header, session.json())
+                    for record in session.records ?? [] {
+                        redactionValues.insert(record.value)
+                    }
+                    return try (session.header, session.json(opaque: self.manifest.usesCookieJar))
                 }
             } else if let provider = self.manifest.id.firstPartyProvider, let resolver {
                 resolveCookie = { let header = try await resolver(provider, domain); return (header, header) }

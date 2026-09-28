@@ -77,6 +77,7 @@ public struct ProviderPluginManifest: Sendable {
     public let settings: [ProviderPluginSetting]
     public let capabilities: Set<ProviderPluginCapability>
     public let cookieDomains: Set<String>
+    public let usesCookieJar: Bool
 
     func cookieDomain(_ rawDomain: String) throws -> String {
         let domain = rawDomain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -130,7 +131,7 @@ public struct ProviderPluginManifest: Sendable {
             }
             self.topLevel = topLevel.boolValue()
         } else {
-            self.topLevel = false
+            self.topLevel = true
         }
 
         let endpointValue = definition.property("endpoints")
@@ -287,6 +288,22 @@ public struct ProviderPluginManifest: Sendable {
                 "the browser-cookies capability requires at least one declared cookie domain")
         }
         self.cookieDomains = cookieDomains
+        if let policy = definition.property("cookiePolicy"), !policy.isUndefined {
+            guard !allowsDynamicID, self.id.firstPartyProvider != nil, capabilities.contains(.browserCookies),
+                  policy.isObject, !policy.isArray,
+                  try Set(policy.propertyNames()) == ["selection", "cache"],
+                  policy.property("selection")?.isString == true,
+                  policy.property("cache")?.isString == true,
+                  policy.property("selection")?.stringValue() == "request-url",
+                  policy.property("cache")?.stringValue() == "nonpersistent"
+            else {
+                throw ProviderPluginError
+                    .invalidManifest("cookiePolicy requires bundled request-url/nonpersistent cookies")
+            }
+            self.usesCookieJar = true
+        } else {
+            self.usesCookieJar = false
+        }
     }
 
     private static func requiredString(_ object: any ProviderPluginValue, property: String) throws -> String {
