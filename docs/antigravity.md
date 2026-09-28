@@ -285,7 +285,8 @@ shared OAuth file can still be used as a fallback credential source.
 - `resetTime` parsing:
   - ISO-8601 preferred; numeric epoch seconds as fallback.
 - Identity:
-  - `accountEmail` and `planName` only from `GetUserStatus`.
+  - Local HTTPS merges email and plan from the same server's `GetUserStatus`; print reports supply neither.
+  - OAuth retains the selected account's existing email claims and `loadCodeAssist` plan when parsing grouped quotas.
 
 ## UI mapping
 - Provider metadata:
