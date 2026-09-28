@@ -77,6 +77,16 @@ enum AntigravityAgyFileTokenEncoder {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter.string(from: date)
     }
+
+    static func expiryDate(from string: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: string) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: string)
+    }
 }
 
 // MARK: - Scoped staging
@@ -191,6 +201,56 @@ enum AntigravityScopedAgyStaging {
         return trimmed.lowercased()
     }
 
+    /// Reads the staged token file as `agy` left it after a run. `agy` rewrites
+    /// this file when it refreshes an expired grant, so the payload may carry a
+    /// newer access token, refresh token, expiry, and `id_token` than what was
+    /// staged.
+    static func stagedTokenPayload(
+        home: URL,
+        fileManager: FileManager = .default) -> AntigravityAgyFileTokenPayload?
+    {
+        var tokenURL = home
+        for component in Self.tokenRelativePath {
+            tokenURL.appendPathComponent(component, isDirectory: false)
+        }
+        guard let data = fileManager.contents(atPath: tokenURL.path) else { return nil }
+        return AntigravityAgyFileTokenEncoder.decode(data: data)
+    }
+
+    /// Returns the saved-account form of the staged payload when `agy` changed
+    /// it (typically a token refresh), or nil when the file is unchanged. The
+    /// caller must only persist the result after the effective account has been
+    /// verified — the payload alone does not prove which account it belongs to.
+    static func refreshedCredentials(
+        home: URL,
+        original: AntigravityOAuthCredentials,
+        fileManager: FileManager = .default) -> AntigravityOAuthCredentials?
+    {
+        guard let payload = stagedTokenPayload(home: home, fileManager: fileManager),
+              let originalData = AntigravityAgyFileTokenEncoder.encode(credentials: original),
+              let originalPayload = AntigravityAgyFileTokenEncoder.decode(data: originalData),
+              payload != originalPayload
+        else {
+            return nil
+        }
+        var updated = original
+        let accessToken = payload.token.accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        let refreshToken = payload.token.refreshToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !accessToken.isEmpty {
+            updated.accessToken = accessToken
+        }
+        if !refreshToken.isEmpty {
+            updated.refreshToken = refreshToken
+        }
+        if let expiry = AntigravityAgyFileTokenEncoder.expiryDate(from: payload.token.expiry) {
+            updated.expiryDateMilliseconds = expiry.timeIntervalSince1970 * 1000
+        }
+        if let idToken = payload.idToken?.trimmingCharacters(in: .whitespacesAndNewlines), !idToken.isEmpty {
+            updated.idToken = idToken
+        }
+        return updated
+    }
+
     /// The account whose credential `agy` actually used during a run. After the
     /// child exits, its staged token file holds the access token that made the
     /// API calls — refreshed in place when the staged grant was expired — so
@@ -203,12 +263,7 @@ enum AntigravityScopedAgyStaging {
         dataLoader: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse),
         fileManager: FileManager = .default) async -> String?
     {
-        var tokenURL = home
-        for component in Self.tokenRelativePath {
-            tokenURL.appendPathComponent(component, isDirectory: false)
-        }
-        guard let data = fileManager.contents(atPath: tokenURL.path),
-              let payload = AntigravityAgyFileTokenEncoder.decode(data: data)
+        guard let payload = stagedTokenPayload(home: home, fileManager: fileManager)
         else {
             return nil
         }
@@ -245,7 +300,11 @@ extension AntigravityCLIHTTPSFetchStrategy {
     /// CLI authenticates with the staged access/refresh tokens — which could
     /// disagree with the `id_token` claim — the access token `agy` actually used
     /// is resolved through Google's `userinfo` endpoint after the run and must
-    /// match the selected account before the report is labeled with it. Fails
+    /// match the selected account before the report is labeled with it. When the
+    /// identity check succeeds and `agy` refreshed the staged grant, the updated
+    /// credentials are handed to `credentialsUpdateHandler` (the same guarded
+    /// token-account updater the OAuth strategy uses) so the next refresh starts
+    /// from the refreshed token instead of the discarded expired one. Fails
     /// closed: any error propagates so the pipeline falls through to the
     /// account-scoped OAuth strategy; ambient reports are never substituted for
     /// a selected account.
@@ -253,7 +312,9 @@ extension AntigravityCLIHTTPSFetchStrategy {
         binary: String,
         environment: [String: String],
         timeout: TimeInterval = 90,
-        dataLoader: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil) async throws
+        dataLoader: (@Sendable (URLRequest) async throws -> (Data, URLResponse))? = nil,
+        credentialsUpdateHandler: (@Sendable (AntigravityOAuthCredentials) async throws -> Void)? = nil)
+        async throws
         -> ProviderFetchResult
     {
         guard let value = environment[AntigravityOAuthCredentialsStore.environmentCredentialsKey],
@@ -315,6 +376,19 @@ extension AntigravityCLIHTTPSFetchStrategy {
                 "Scoped agy usage report rejected: CLI effective account does not match the selected account")
             throw AntigravityStatusProbeError.accountMismatch(
                 expected: expectedAccountEmail, found: effectiveEmail)
+        }
+        // `agy` may have refreshed the staged grant in place; persist the verified
+        // refreshed credential so the next run does not start from the expired token.
+        if let credentialsUpdateHandler,
+           let refreshed = AntigravityScopedAgyStaging.refreshedCredentials(
+               home: staged.home, original: credentials)
+        {
+            do {
+                try await credentialsUpdateHandler(refreshed)
+            } catch {
+                Self.scopedPrintLog.warning(
+                    "Scoped agy usage: could not persist refreshed credentials (\(error.localizedDescription))")
+            }
         }
         let snapshot = parsed.withIdentity(from: AntigravityStatusSnapshot(
             modelQuotas: [], accountEmail: expectedAccountEmail, accountPlan: nil, source: parsed.source))

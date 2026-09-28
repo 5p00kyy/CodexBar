@@ -531,7 +531,18 @@ struct AntigravityCLIHTTPSFetchStrategy: ProviderFetchStrategy {
         }
         #if os(macOS)
         let scopedReportFetch: (@Sendable () async throws -> ProviderFetchResult)? = {
-            try await self.fetchScopedPrintUsage(binary: binary, environment: context.env)
+            try await self.fetchScopedPrintUsage(
+                binary: binary,
+                environment: context.env,
+                credentialsUpdateHandler: { credentials in
+                    guard let accountID = context.selectedTokenAccountID,
+                          let updater = context.tokenAccountTokenUpdater
+                    else {
+                        return
+                    }
+                    let token = try AntigravityOAuthCredentialsStore.tokenAccountValue(for: credentials)
+                    await updater(.antigravity, accountID, token)
+                })
         }
         #else
         let scopedReportFetch: (@Sendable () async throws -> ProviderFetchResult)? = nil

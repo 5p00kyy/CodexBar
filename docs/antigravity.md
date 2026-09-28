@@ -56,7 +56,10 @@ variables) without `ANTIGRAVITY_OAUTH_CREDENTIALS_JSON` or any ambient provider 
 staging directory is deleted after the run, and the report is only attributed to the account after
 the access token `agy` actually used — refreshed in place inside the staged file when expired — is
 resolved through Google's `userinfo` endpoint and its email matches it, so an identity-free report
-can never carry a label its credentials did not prove. Any
+can never carry a label its credentials did not prove. When that verification succeeds and `agy`
+refreshed the staged grant, the refreshed credential is written back to the selected saved account
+through the same guarded token-account updater the OAuth strategy uses, so the next refresh starts
+from the fresh token instead of the discarded expired one; a rejected identity is never persisted. Any
 scoped failure preserves the original ambient error — an ambient report is never substituted for a
 selected account, so the pipeline falls through to the account-scoped OAuth fetch exactly as before.
 

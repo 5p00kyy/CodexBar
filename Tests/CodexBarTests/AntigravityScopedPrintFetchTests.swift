@@ -114,6 +114,43 @@ struct AntigravityScopedPrintFetchTests {
         #expect(payload?.idToken == nil)
     }
 
+    // MARK: - Refreshed credential persistence
+
+    @Test
+    func `refreshed credentials follow the staged payload after agy rewrites it`() throws {
+        let credentials = AntigravityOAuthCredentials(
+            accessToken: "expired-access",
+            refreshToken: "refresh",
+            expiryDate: Date(timeIntervalSince1970: 1_000_000),
+            email: "scoped@example.com")
+        let staged = try AntigravityScopedAgyStaging.stage(
+            credentials: credentials, expectedAccountEmail: "scoped@example.com")
+        defer { try? FileManager.default.removeItem(at: staged.stagingRoot) }
+
+        // An unchanged staged file has nothing to persist.
+        #expect(AntigravityScopedAgyStaging.refreshedCredentials(
+            home: staged.home, original: credentials) == nil)
+
+        let tokenURL = staged.home
+            .appendingPathComponent(".gemini/antigravity-cli/antigravity-oauth-token")
+        let rewritten = AntigravityAgyFileTokenPayload(
+            token: .init(
+                accessToken: "fresh-access",
+                tokenType: "Bearer",
+                refreshToken: "fresh-refresh",
+                expiry: "2030-01-01T00:00:00Z"),
+            authMethod: "consumer",
+            idToken: nil)
+        try JSONEncoder().encode(rewritten).write(to: tokenURL)
+
+        let refreshed = try #require(AntigravityScopedAgyStaging.refreshedCredentials(
+            home: staged.home, original: credentials))
+        #expect(refreshed.accessToken == "fresh-access")
+        #expect(refreshed.refreshToken == "fresh-refresh")
+        #expect(refreshed.expiryDate == Date(timeIntervalSince1970: 1_893_456_000))
+        #expect(refreshed.email == "scoped@example.com")
+    }
+
     // MARK: - Fallback wiring (platform-independent)
 
     @Test
@@ -249,6 +286,7 @@ struct AntigravityScopedPrintFetchTests {
         var environment = self.accountEnv(email: "scoped@example.com")
         environment.merge(fixture.environment) { _, new in new }
 
+        let persisted = LockIsolated<AntigravityOAuthCredentials?>(nil)
         await #expect(throws: AntigravityStatusProbeError.accountMismatch(
             expected: "scoped@example.com", found: "donor@example.com"))
         {
@@ -258,8 +296,69 @@ struct AntigravityScopedPrintFetchTests {
                 dataLoader: self.userinfoLoader(mapping: [
                     "scoped-access-token": "scoped@example.com",
                     "donor-access-token": "donor@example.com",
-                ]))
+                ]),
+                credentialsUpdateHandler: { persisted.setValue($0) })
         }
+        // A rejected identity must never reach the saved-account updater.
+        #expect(persisted.value == nil)
+    }
+
+    @Test
+    func `scoped print persists refreshed staged credentials for the next run`() async throws {
+        let report = try self.reportJSON()
+        // Simulate agy refreshing an expired staged grant: it rewrites the
+        // staged token file with fresh tokens and expiry before printing.
+        let firstFixture = try self.scopedPrintFixture(body: """
+        TOKEN_FILE="$HOME/.gemini/antigravity-cli/antigravity-oauth-token"
+        /usr/bin/sed -i '' \
+            -e 's/scoped-access-token/refreshed-access-token/' \
+            -e 's/"refresh_token":"refresh"/"refresh_token":"refreshed-refresh"/' \
+            -e 's/"expiry":"[^"]*"/"expiry":"2030-01-01T00:00:00Z"/' \
+            "$TOKEN_FILE"
+        /bin/cat <<'REPORT'
+        \(report)
+        REPORT
+        """)
+        defer { try? FileManager.default.removeItem(at: firstFixture.directory) }
+
+        var environment = self.expiredAccountEnv(email: "scoped@example.com")
+        environment.merge(firstFixture.environment) { _, new in new }
+
+        let persisted = LockIsolated<AntigravityOAuthCredentials?>(nil)
+        let result = try await AntigravityCLIHTTPSFetchStrategy().fetchScopedPrintUsage(
+            binary: firstFixture.binary.path,
+            environment: environment,
+            dataLoader: self.userinfoLoader(mapping: ["refreshed-access-token": "scoped@example.com"]),
+            credentialsUpdateHandler: { persisted.setValue($0) })
+        #expect(result.usage.identity?.accountEmail == "scoped@example.com")
+
+        let updated = try #require(persisted.value)
+        #expect(updated.accessToken == "refreshed-access-token")
+        #expect(updated.refreshToken == "refreshed-refresh")
+        #expect(updated.expiryDate == Date(timeIntervalSince1970: 1_893_456_000))
+
+        // A second refresh stages the persisted credentials, so it must start
+        // from the refreshed token — not the expired grant that was staged first.
+        let secondTokenValue = try AntigravityOAuthCredentialsStore.tokenAccountValue(for: updated)
+        var secondEnvironment = [
+            AntigravityOAuthCredentialsStore.environmentCredentialsKey: secondTokenValue,
+        ]
+        let secondFixture = try self.scopedPrintFixture(body: """
+        TOKEN_FILE="$HOME/.gemini/antigravity-cli/antigravity-oauth-token"
+        /usr/bin/grep -q 'refreshed-access-token' "$TOKEN_FILE" || exit 31
+        ! /usr/bin/grep -q 'scoped-access-token' "$TOKEN_FILE" || exit 32
+        /bin/cat <<'REPORT'
+        \(report)
+        REPORT
+        """)
+        defer { try? FileManager.default.removeItem(at: secondFixture.directory) }
+        secondEnvironment.merge(secondFixture.environment) { _, new in new }
+
+        let secondResult = try await AntigravityCLIHTTPSFetchStrategy().fetchScopedPrintUsage(
+            binary: secondFixture.binary.path,
+            environment: secondEnvironment,
+            dataLoader: self.userinfoLoader(mapping: ["refreshed-access-token": "scoped@example.com"]))
+        #expect(secondResult.usage.identity?.accountEmail == "scoped@example.com")
     }
 
     @Test
@@ -353,6 +452,19 @@ struct AntigravityScopedPrintFetchTests {
     private func accountEnv(email: String) -> [String: String] {
         guard let value = try? AntigravityOAuthCredentialsStore.tokenAccountValue(
             for: self.credentials(email: email))
+        else { return [:] }
+        return [AntigravityOAuthCredentialsStore.environmentCredentialsKey: value]
+    }
+
+    private func expiredAccountEnv(email: String) -> [String: String] {
+        let credentials = AntigravityOAuthCredentials(
+            accessToken: "scoped-access-token",
+            refreshToken: "refresh",
+            expiryDate: Date(timeIntervalSince1970: 1_000_000),
+            idToken: GeminiAPITestHelpers.makeIDToken(email: email),
+            email: email)
+        guard let value = try? AntigravityOAuthCredentialsStore.tokenAccountValue(
+            for: credentials)
         else { return [:] }
         return [AntigravityOAuthCredentialsStore.environmentCredentialsKey: value]
     }
