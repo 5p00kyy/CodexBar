@@ -23,8 +23,11 @@ struct QuotaBurndownChartMenuView: View {
         width: CGFloat,
         referenceDate: Date = Date())
     {
-        self.series = Self.normalizedHistories(histories, provider: provider).compactMap { history in
-            guard let latest = history.entries.last,
+        self.series = PlanUtilizationHistoryChartMenuView.visibleSeries(
+            histories: histories, provider: provider, snapshot: nil).compactMap { series in
+            let history = series.history
+            guard [.session, .weekly, .monthly, .opus].contains(history.name),
+                  let latest = history.entries.last,
                   let reset = latest.resetsAt,
                   latest.capturedAt <= referenceDate,
                   reset > referenceDate
@@ -36,17 +39,9 @@ struct QuotaBurndownChartMenuView: View {
                 resetDescription: nil)
             guard let model = QuotaBurndownModel(history: history, window: window, now: latest.capturedAt)
             else { return nil }
-            let title: String
-            switch history.name {
-            case .session: title = L("Session")
-            case .weekly: title = L("Weekly")
-            case .monthly: title = L("Monthly")
-            case .opus: title = L("Opus")
-            default: return nil
-            }
             return Series(
-                id: "\(history.name.rawValue):\(history.windowMinutes)",
-                title: title,
+                id: series.id,
+                title: series.title,
                 model: model,
                 lastKnownUsageMessage: LastKnownUsagePresentation.message(
                     capturedAt: latest.capturedAt,
@@ -144,27 +139,6 @@ struct QuotaBurndownChartMenuView: View {
 
     var hasSeries: Bool {
         !self.series.isEmpty
-    }
-
-    private static func normalizedHistories(
-        _ histories: [PlanUtilizationSeriesHistory],
-        provider: UsageProvider) -> [PlanUtilizationSeriesHistory]
-    {
-        var orderedIDs: [String] = []
-        var historiesByID: [String: PlanUtilizationSeriesHistory] = [:]
-        for history in histories {
-            guard [.session, .weekly, .monthly, .opus].contains(history.name) else { continue }
-            let name = PlanUtilizationHistoryChartMenuView.effectiveSeriesName(provider: provider, history: history)
-            let windowMinutes = name.canonicalWindowMinutes(history.windowMinutes)
-            let id = "\(name.rawValue):\(windowMinutes)"
-            if historiesByID[id] == nil { orderedIDs.append(id) }
-            historiesByID[id] = PlanUtilizationSeriesHistory(
-                name: name,
-                windowMinutes: windowMinutes,
-                entries: PlanUtilizationHistoryChartMenuView.mergedEntries(
-                    (historiesByID[id]?.entries ?? []) + history.entries))
-        }
-        return orderedIDs.compactMap { historiesByID[$0] }
     }
 
     private func axisLabel(

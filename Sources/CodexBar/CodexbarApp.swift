@@ -27,9 +27,6 @@ enum CodexBarEntryPoint {
             exit(CodexBarCoreResourceSmoke.run())
         }
         #if DEBUG
-        if QuotaBurndownNativeProof.runIfRequested() {
-            return
-        }
         if MenuBarLayoutNativeProof.runIfRequested() {
             return
         }

@@ -2,6 +2,10 @@
 
 ## 0.68.1 — Unreleased
 
+### Added
+
+- Plan Usage: show recorded remaining-quota burndown for Codex and Claude alongside utilization history, with capture age and calendar endpoints (#4085). Thanks @callmejustdodo!
+
 ### Changed
 
 - Menu bar: align the persistent Refresh row with other menu actions by removing its decorative icon, preserving the shortcut and accessibility action (#4057). Thanks @elijahfriedman!

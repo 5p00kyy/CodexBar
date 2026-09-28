@@ -542,14 +542,10 @@ struct StatusMenuHostedSubmenuRefreshTests {
     }
 
     private static func makeSettings() -> SettingsStore {
-        let suite = "StatusMenuHostedSubmenuRefreshTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return SettingsStore(
-            userDefaults: defaults,
-            configStore: testConfigStore(suiteName: suite),
-            zaiTokenStore: NoopZaiTokenStore(),
-            syntheticTokenStore: NoopSyntheticTokenStore())
+        testSettingsStore(
+            suiteName: "StatusMenuHostedSubmenuRefreshTests",
+            userDefaults: InMemoryUserDefaults(),
+            config: testConfigWithAllProvidersDisabled())
     }
 
     private static func enableOnlyClaude(_ settings: SettingsStore) {

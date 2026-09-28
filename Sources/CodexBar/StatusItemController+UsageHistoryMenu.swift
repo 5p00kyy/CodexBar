@@ -56,16 +56,7 @@ extension StatusItemController {
                 histories: histories,
                 width: width)
             if burndownView.hasSeries {
-                let hosting = UsageHistoryMenuHostingView(rootView: burndownView)
-                hosting.frame = NSRect(
-                    origin: .zero,
-                    size: NSSize(width: width, height: self.hostedSubviewFittingHeight(for: hosting, width: width)))
-                let chartItem = NSMenuItem()
-                chartItem.view = hosting
-                chartItem.isEnabled = true
-                chartItem.representedObject = Self.usageHistoryChartID
-                chartItem.toolTip = provider.rawValue
-                submenu.addItem(chartItem)
+                self.appendUsageHistoryChart(burndownView, to: submenu, provider: provider, width: width)
                 submenu.addItem(.separator())
             }
         }
@@ -75,6 +66,16 @@ extension StatusItemController {
             histories: histories,
             snapshot: snapshot,
             width: width)
+        self.appendUsageHistoryChart(chartView, to: submenu, provider: provider, width: width)
+        return true
+    }
+
+    private func appendUsageHistoryChart(
+        _ chartView: some View,
+        to submenu: NSMenu,
+        provider: UsageProvider,
+        width: CGFloat)
+    {
         let hosting = UsageHistoryMenuHostingView(rootView: chartView)
         hosting.frame = NSRect(
             origin: .zero,
@@ -86,6 +87,5 @@ extension StatusItemController {
         chartItem.representedObject = Self.usageHistoryChartID
         chartItem.toolTip = provider.rawValue
         submenu.addItem(chartItem)
-        return true
     }
 }

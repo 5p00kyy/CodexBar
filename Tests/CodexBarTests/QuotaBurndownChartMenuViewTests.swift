@@ -84,6 +84,7 @@ struct QuotaBurndownChartMenuViewTests {
 
         #expect(view._seriesRemainingForTesting["weekly:10080"] == 80)
         #expect(view._seriesRemainingForTesting["opus:10080"] == 30)
+        #expect(view._seriesTitlesForTesting["opus:10080"] == "Sonnet")
         #expect(view._seriesLastKnownMessagesForTesting["weekly:10080"] == LastKnownUsagePresentation.message(
             capturedAt: now,
             now: now))

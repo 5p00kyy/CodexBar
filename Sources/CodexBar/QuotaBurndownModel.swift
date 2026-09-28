@@ -33,7 +33,7 @@ struct QuotaBurndownModel: Equatable, Sendable {
               now < reset
         else { return nil }
 
-        let historicalSamples = history.entries.enumerated().compactMap { index, entry -> (Int, Date, Double)? in
+        let historicalSamples = history.entries.compactMap { entry -> (Date, Double)? in
             guard entry.capturedAt >= start,
                   entry.capturedAt <= now,
                   entry.capturedAt.timeIntervalSinceReferenceDate.isFinite,
@@ -42,12 +42,8 @@ struct QuotaBurndownModel: Equatable, Sendable {
                       abs($0.timeIntervalSince(reset)) <= Self.resetEquivalenceTolerance
                   }) ?? true
             else { return nil }
-            return (index, entry.capturedAt, entry.usedPercent)
+            return (entry.capturedAt, entry.usedPercent)
         }
-        .sorted { lhs, rhs in
-            lhs.1 == rhs.1 ? lhs.0 < rhs.0 : lhs.1 < rhs.1
-        }
-        .map { ($0.1, $0.2) }
 
         var currentSegment: [(Date, Double)] = []
         for sample in historicalSamples + [(now, window.usedPercent)] {
