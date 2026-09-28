@@ -2,6 +2,9 @@
 
 ## 0.69.1 — Unreleased
 
+### Fixed
+
+- Mistral: price billing usage by event type, API zone, and service tier, so a per-second audio or priority price no longer inflates API spend and 30-day token cost (#4076). Thanks @T0mSIlver!
 ### Security
 
 - Redact every remaining stored process environment in the app, CLI, provider contexts, and session scanners, and guard against new unredacted environment properties with a repository check (#4106).
