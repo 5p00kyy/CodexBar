@@ -3397,13 +3397,6 @@ struct ProviderArchitectureGatekeeperTests {
             reason: "This exact host integration maps a provider-owned process, path, or window contract."),
         AllowedProviderConstruct(
             path: "Sources/CodexBarCore/AgentSession.swift",
-            anchor: "guard record.executableBasename.lowercased() == AgentSession.Provider.codex.rawValue,",
-            expectedProviderIDs: ["codex"],
-            expectedReferenceCount: 1,
-            expectedReferenceFingerprint: ["codex@0"],
-            reason: "This exact host integration recognizes only the Codex app-server bundled in ChatGPT.app."),
-        AllowedProviderConstruct(
-            path: "Sources/CodexBarCore/AgentSession.swift",
             anchor: "URL(fileURLWithPath: $0).lastPathComponent == AgentSession.Provider.claude.rawValue",
             expectedProviderIDs: ["claude"],
             expectedReferenceCount: 1,

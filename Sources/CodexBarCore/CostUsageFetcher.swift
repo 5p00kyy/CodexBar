@@ -774,6 +774,8 @@ public struct CostUsageFetcher: Sendable {
             historyDays: clampedHistoryDays,
             calendar: scanOptions.calendar,
             historyCoverageIsEstablished: scanResult.inclusive.historyCoverageIsEstablished,
+            historyScanIsPartial: scanResult.native.historyCoverageIsEstablished
+                && !scanResult.inclusive.historyCoverageIsEstablished,
             costProvenance: .listPriceEstimate,
             projects: scanResult.inclusive.projects,
             sessions: scanResult.inclusive.sessions,
