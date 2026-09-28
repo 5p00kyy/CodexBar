@@ -5,6 +5,7 @@
 ### Fixed
 
 - CLI: macOS release builds compile again on the Xcode 26 release runners, so the 0.68 macOS CLI tarballs and the Homebrew `codexbar` formula ship alongside the app.
+- Agent Sessions: avoid the macOS 15 isolated-teardown crash while retaining task cancellation and Stay Awake cleanup (#4068). Thanks @Sogl!
 
 ## 0.68.0 — 2026-09-27
 
