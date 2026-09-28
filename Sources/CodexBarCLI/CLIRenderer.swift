@@ -508,7 +508,7 @@ enum CLIRenderer {
         now: Date,
         lines: inout [String])
     {
-        if let primary = snapshot.primary {
+        if let primary = snapshot.primaryForDisplay(for: provider) {
             self.appendRateWindowLines(
                 provider: provider,
                 title: labels.primary,

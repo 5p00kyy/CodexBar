@@ -403,6 +403,7 @@
 "Weekly token limit" = "Wekelijkse tokenlimiet";
 "Weekly usage" = "Wekelijks gebruik";
 "Weekly usage unavailable for this account." = "Wekelijks gebruik is niet beschikbaar voor dit account.";
+"Session usage unavailable for this account." = "Sessiegebruik is niet beschikbaar voor dit account.";
 "Window: \\(window)" = "Venster: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Schrijf logboeken naar \\(self.fileLogPath) voor foutopsporing.";
 "Yes" = "Ja";

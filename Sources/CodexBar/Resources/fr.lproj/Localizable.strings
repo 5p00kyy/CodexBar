@@ -403,6 +403,7 @@
 "Weekly token limit" = "Limite hebdomadaire de jetons";
 "Weekly usage" = "Utilisation hebdomadaire";
 "Weekly usage unavailable for this account." = "Utilisation hebdomadaire indisponible pour ce compte.";
+"Session usage unavailable for this account." = "Utilisation de la session indisponible pour ce compte.";
 "Window: \\(window)" = "Fenêtre : \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Écrivez les journaux dans \\(self.fileLogPath) pour le débogage.";
 "Yes" = "Oui";

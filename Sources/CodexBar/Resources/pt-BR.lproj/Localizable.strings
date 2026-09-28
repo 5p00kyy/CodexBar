@@ -403,6 +403,7 @@
 "Weekly token limit" = "Limite semanal de tokens";
 "Weekly usage" = "Uso semanal";
 "Weekly usage unavailable for this account." = "Uso semanal indisponível para esta conta.";
+"Session usage unavailable for this account." = "Uso da sessão indisponível para esta conta.";
 "Window: \\(window)" = "Janela: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Grava logs em \\(self.fileLogPath) para depuração.";
 "Yes" = "Sim";

@@ -406,6 +406,7 @@
 "Weekly token limit" = "Еженедельный лимит токенов";
 "Weekly usage" = "Еженедельное использование";
 "Weekly usage unavailable for this account." = "Еженедельное использование недоступно для этого аккаунта.";
+"Session usage unavailable for this account." = "Использование сессии недоступно для этого аккаунта.";
 "Window: \\(window)" = "Окно: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Записывать журналы в \\(self.fileLogPath) для отладки.";
 "Yes" = "Да";

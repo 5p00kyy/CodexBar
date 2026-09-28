@@ -403,6 +403,7 @@
 "Weekly token limit" = "週間トークン上限";
 "Weekly usage" = "週間使用量";
 "Weekly usage unavailable for this account." = "このアカウントでは週間使用量を取得できません。";
+"Session usage unavailable for this account." = "このアカウントではセッション使用量を取得できません。";
 "Window: \\(window)" = "ウインドウ: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "デバッグ用にログを \\(self.fileLogPath) に書き込みます。";
 "Yes" = "はい";

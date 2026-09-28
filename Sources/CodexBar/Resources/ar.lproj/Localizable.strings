@@ -389,6 +389,7 @@
 "Weekly token limit" = "الحد الأسبوعي للرموز";
 "Weekly usage" = "الاستخدام الأسبوعي";
 "Weekly usage unavailable for this account." = "الاستخدام الأسبوعي غير متاح لهذا الحساب.";
+"Session usage unavailable for this account." = "الاستخدام الخاص بالجلسة غير متاح لهذا الحساب.";
 "Window: \\(window)" = "النافذة: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "اكتب السجلات إلى \\(self.fileLogPath) للتصحيح.";
 "Yes" = "نعم";

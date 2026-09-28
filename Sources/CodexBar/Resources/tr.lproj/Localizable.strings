@@ -387,6 +387,7 @@
 "Weekly token limit" = "Haftalık token limiti";
 "Weekly usage" = "Haftalık kullanım";
 "Weekly usage unavailable for this account." = "Bu hesap için haftalık kullanım verisi kullanılamıyor.";
+"Session usage unavailable for this account." = "Bu hesap için oturum kullanım verisi kullanılamıyor.";
 "Window: \\(window)" = "Pencere: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Hata ayıklama için günlükleri \\(self.fileLogPath) konumuna yaz.";
 "Yes" = "Evet";

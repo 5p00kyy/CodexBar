@@ -418,6 +418,7 @@
 "Weekly token limit" = "每周 token 限制";
 "Weekly usage" = "每周用量";
 "Weekly usage unavailable for this account." = "此账户的每周用量不可用。";
+"Session usage unavailable for this account." = "此账户的会话用量不可用。";
 "Window: \\(window)" = "窗口：\\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "将日志写入 \\(self.fileLogPath) 以进行调试。";
 "Yes" = "是";

@@ -415,6 +415,7 @@
 "Weekly token limit" = "每週 token 限制";
 "Weekly usage" = "每週使用量";
 "Weekly usage unavailable for this account." = "此帳號無法取得每週使用量。";
+"Session usage unavailable for this account." = "此帳號無法取得工作階段使用量。";
 "Window: \\(window)" = "時段：\\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "將記錄寫入 \\(self.fileLogPath) 以進行除錯。";
 "Yes" = "是";

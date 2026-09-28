@@ -389,6 +389,7 @@
 "Weekly token limit" = "Batas token mingguan";
 "Weekly usage" = "Penggunaan mingguan";
 "Weekly usage unavailable for this account." = "Penggunaan mingguan tidak tersedia untuk akun ini.";
+"Session usage unavailable for this account." = "Penggunaan sesi tidak tersedia untuk akun ini.";
 "Window: \\(window)" = "Jendela: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Tulis log ke \\(self.fileLogPath) untuk debugging.";
 "Yes" = "Ya";

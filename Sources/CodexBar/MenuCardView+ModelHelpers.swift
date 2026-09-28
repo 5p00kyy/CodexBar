@@ -318,6 +318,10 @@ extension UsageMenuCardView.Model {
             return Self.mimoUsageNotes(input: input, subscriptionNotes: subscriptionNotes)
         }
 
+        if input.provider == .claude, input.snapshot?.primary?.isSyntheticPlaceholder == true {
+            return [L("Session usage unavailable for this account.")] + subscriptionNotes
+        }
+
         if input.provider == .claude, input.snapshot?.dataConfidence == .percentOnly {
             // Both CLI scraping and restored history carry percentages without full usage detail.
             return [L("claude_limited_usage_detail")] + subscriptionNotes

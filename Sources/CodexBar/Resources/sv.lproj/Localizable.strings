@@ -404,6 +404,7 @@
 "Weekly token limit" = "Veckogräns för token";
 "Weekly usage" = "Veckoanvändning";
 "Weekly usage unavailable for this account." = "Veckoanvändning är inte tillgänglig för det här kontot.";
+"Session usage unavailable for this account." = "Sessionsanvändning är inte tillgänglig för det här kontot.";
 "Window: \\(window)" = "Fönster: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Skriv loggar till \\(self.fileLogPath) för felsökning.";
 "Yes" = "Ja";

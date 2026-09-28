@@ -1163,7 +1163,7 @@ extension UsageMenuCardView.Model {
                 input: input,
                 projection: codexProjection,
                 percentStyle: percentStyle))
-        } else if let primary = snapshot.primary {
+        } else if let primary = snapshot.primaryForDisplay(for: input.provider) {
             metrics.append(Self.primaryMetric(
                 input: input,
                 primary: primary,

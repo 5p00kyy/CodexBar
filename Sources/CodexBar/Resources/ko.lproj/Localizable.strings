@@ -404,6 +404,7 @@
 "Weekly token limit" = "주간 토큰 한도";
 "Weekly usage" = "주간 사용량";
 "Weekly usage unavailable for this account." = "이 계정에서는 주간 사용량을 사용할 수 없습니다.";
+"Session usage unavailable for this account." = "이 계정에서는 세션 사용량을 사용할 수 없습니다.";
 "Window: \\(window)" = "기간: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "디버깅을 위해 \\(self.fileLogPath)에 로그 기록";
 "Yes" = "예";

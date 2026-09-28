@@ -425,6 +425,15 @@ public struct UsageSnapshot: Codable, Sendable {
             !(self.extraRateWindows?.isEmpty ?? true)
     }
 
+    /// Returns the primary window when it represents measured usage for the selected provider.
+    /// Keep the raw snapshot intact so diagnostics and persistence can still inspect synthetic lanes.
+    public func primaryForDisplay(for provider: UsageProvider) -> RateWindow? {
+        guard let primary = self.primary else { return nil }
+        // Provider-specific by design: Claude's synthetic session lane is not measured usage.
+        guard !(provider == .claude && primary.isSyntheticPlaceholder) else { return nil }
+        return primary
+    }
+
     public func detailRow(label: String) -> ProviderDetailSection.Row? {
         self.details.lazy.flatMap(\.rows).first { $0.label == label }
     }
@@ -647,12 +656,22 @@ public enum UsageLimitsAvailability: Equatable, Sendable {
         // Provider-specific by design: Claude error text, Codex identity, and Doubao/Antigravity identities signal
         // whether a successful payload actually contains subscription limits.
         if provider == .claude {
+            if let snapshot, snapshot.primary?.isSyntheticPlaceholder == true {
+                let hasMeasuredWindow = [snapshot.secondary, snapshot.tertiary]
+                    .compactMap(\.self)
+                    .contains { !$0.isSyntheticPlaceholder }
+                    || snapshot.extraRateWindows?
+                    .contains { $0.usageKnown && !$0.window.isSyntheticPlaceholder } == true
+                return hasMeasuredWindow ? .available : .unavailable
+            }
             guard snapshot == nil else { return .available }
             return ClaudeStatusProbe.isSubscriptionQuotaUnavailableDescription(lastErrorDescription)
                 ? .unavailable
                 : .available
         }
 
+        // Provider-specific by design: these identities gate whether their returned payload contains
+        // measured limits.
         if provider == .doubao || provider == .antigravity {
             guard let snapshot,
                   snapshot.identity(for: provider.instanceID) != nil

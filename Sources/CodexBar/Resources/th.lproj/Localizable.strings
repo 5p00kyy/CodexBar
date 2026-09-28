@@ -389,6 +389,7 @@
 "Weekly token limit" = "ขีดจํากัดโทเค็นรายสัปดาห์";
 "Weekly usage" = "การใช้งานรายสัปดาห์";
 "Weekly usage unavailable for this account." = "การใช้งานรายสัปดาห์ไม่พร้อมใช้งานสําหรับบัญชีนี้";
+"Session usage unavailable for this account." = "การใช้งานเซสชันไม่พร้อมใช้งานสําหรับบัญชีนี้";
 "Window: \\(window)" = "หน้าต่าง: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "เขียนบันทึกไปยัง \\(self.fileLogPath) เพื่อแก้ไขข้อบกพร่อง";
 "Yes" = "ใช่";

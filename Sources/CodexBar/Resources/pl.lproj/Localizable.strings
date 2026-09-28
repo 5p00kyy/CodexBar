@@ -389,6 +389,7 @@
 "Weekly token limit" = "Tygodniowy limit tokenów";
 "Weekly usage" = "Tygodniowe użycie";
 "Weekly usage unavailable for this account." = "Dane tygodniowego użycia są niedostępne dla tego konta.";
+"Session usage unavailable for this account." = "Dane użycia sesji są niedostępne dla tego konta.";
 "Window: \\(window)" = "Okno: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Zapisuj logi do \\(self.fileLogPath) na potrzeby debugowania.";
 "Yes" = "Tak";

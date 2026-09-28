@@ -403,6 +403,7 @@
 "Weekly token limit" = "Тижневий ліміт жетонів";
 "Weekly usage" = "Щотижневе використання";
 "Weekly usage unavailable for this account." = "Щотижневе використання недоступне для цього облікового запису.";
+"Session usage unavailable for this account." = "Використання сеансу недоступне для цього облікового запису.";
 "Window: \\(window)" = "Вікно: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Записати журнали в \\(self.fileLogPath) для налагодження.";
 "Yes" = "Так";

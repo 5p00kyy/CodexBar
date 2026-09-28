@@ -1903,8 +1903,8 @@ struct ProviderArchitectureGatekeeperTests {
             path: "Sources/CodexBar/MenuCardView+ModelHelpers.swift",
             anchor: "if input.provider == .mimo, input.snapshot != nil {",
             expectedProviderIDs: ["claude", "mimo", "muse", "opencodego"],
-            expectedReferenceCount: 4,
-            expectedReferenceFingerprint: ["mimo@0", "claude@4", "opencodego@10", "muse@15"],
+            expectedReferenceCount: 5,
+            expectedReferenceFingerprint: ["mimo@0", "claude@4", "claude@8", "opencodego@14", "muse@19"],
             reason: "This exact shared renderer maps provider-owned presentation data into the generic UI model."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/MenuCardView+ModelHelpers.swift",

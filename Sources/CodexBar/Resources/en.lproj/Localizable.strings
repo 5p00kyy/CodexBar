@@ -370,6 +370,7 @@
 "Weekly token limit" = "Weekly token limit";
 "Weekly usage" = "Weekly usage";
 "Weekly usage unavailable for this account." = "Weekly usage unavailable for this account.";
+"Session usage unavailable for this account." = "Session usage unavailable for this account.";
 "Window: \\(window)" = "Window: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Write logs to \\(self.fileLogPath) for debugging.";
 "Yes" = "Yes";

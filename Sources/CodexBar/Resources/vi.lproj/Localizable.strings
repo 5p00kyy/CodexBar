@@ -403,6 +403,7 @@
 "Weekly token limit" = "token giới hạn";
 "Weekly usage" = "Hàng tuần Mức sử dụng";
 "Weekly usage unavailable for this account." = "Hàng tuần Mức sử dụng không khả dụng cho tài khoản này.";
+"Session usage unavailable for this account." = "Mức sử dụng phiên không khả dụng cho tài khoản này.";
 "Window: \\(window)" = "Cửa sổ: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "Ghi nhật ký vào \\(self.fileLogPath) để gỡ lỗi.";
 "Yes" = "Có";

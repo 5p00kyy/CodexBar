@@ -389,6 +389,7 @@
 "Weekly token limit" = "محدودیت هفتگی توکن";
 "Weekly usage" = "استفاده هفتگی";
 "Weekly usage unavailable for this account." = "استفاده هفتگی برای این حساب در دسترس نیست.";
+"Session usage unavailable for this account." = "استفاده از جلسه برای این حساب در دسترس نیست.";
 "Window: \\(window)" = "پنجره: \\(window)";
 "Write logs to \\(self.fileLogPath) for debugging." = "لاگ ها را برای \\(self.fileLogPath) برای اشکال زدایی بنویسید.";
 "Yes" = "بله";
