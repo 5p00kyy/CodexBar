@@ -126,8 +126,8 @@ enum ProviderPluginHTTPResponse {
                     for: request.primary,
                     transport: request.transport(transport, session: request.primarySession),
                     retryPolicy: request.retryPolicy,
-                    beforeAttempt: {
-                        try await contextOptions.beforeHTTPAttempt?()
+                    beforeAttempt: { request in
+                        try await contextOptions.beforeHTTPAttempt?(request)
                         started.yield(.now)
                         started.finish()
                     }))
@@ -144,7 +144,7 @@ enum ProviderPluginHTTPResponse {
                     // Admission and scheduling waits belong to the overall fetch timeout.
                     var iterator = starts.makeAsyncIterator()
                     if let start = await iterator.next() {
-                        try await Task.sleep(until: start.advanced(by: collectionBudget), clock: .continuous)
+                        try await contextOptions.waitForOptionalDeadline(start, collectionBudget)
                     }
                     return .budgetExpired
                 }
@@ -321,14 +321,14 @@ enum ProviderPluginHTTPResponse {
         for request: URLRequest,
         transport: any ProviderHTTPTransport,
         retryPolicy: ProviderHTTPRetryPolicy,
-        beforeAttempt: (@Sendable () async throws -> Void)? = nil) async throws -> ProviderHTTPResponse
+        beforeAttempt: (@Sendable (URLRequest) async throws -> Void)? = nil) async throws -> ProviderHTTPResponse
     {
         let bounded = ProviderHTTPTransportHandler { request in
             try Task.checkCancellation()
             let (starts, started) = AsyncStream<ContinuousClock.Instant>.makeStream()
             let task = Task {
                 defer { started.finish() }
-                try await beforeAttempt?()
+                try await beforeAttempt?(request)
                 try Task.checkCancellation()
                 started.yield(.now)
                 return try await transport.data(for: request)
