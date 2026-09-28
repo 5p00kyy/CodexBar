@@ -34,6 +34,19 @@ read_when:
 4. **Optional file log**: enable Debug → Logging → "Enable file logging" to write
    `~/Library/Logs/CodexBar/CodexBar.log` (verbosity defaults to "Verbose")
 
+## Swift Toolchain Compatibility
+
+The package supports Swift 6.2, including Xcode 26.3 on macOS 15. CI's
+`swift-build-macos-compatibility` job builds the app, CLI, and all test targets
+with that Xcode version using `swift build --build-tests`, without running them.
+It uses the existing macOS path gate, including every Swift change, and runs on
+draft PRs too. The aggregate `lint-build-test` gate requires a successful build
+when applicable; docs-only changes may skip it. Runtime tests remain on newer Xcode.
+
+Keep large initializer and `#expect` expressions simple: bind intermediate values
+to explicitly typed locals when the Swift 6.2 type checker struggles. Use
+`ProviderColor(hex:)` for provider colors instead of arithmetic inside spec initializers.
+
 ## Keychain Prompts (Development)
 
 ### First Launch After Fresh Clone
