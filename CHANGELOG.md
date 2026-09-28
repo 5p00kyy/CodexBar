@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Codex: retry brief credential-file publication races before reporting refresh errors, and discard the previous plan's quota baseline after a subscription change so fresh usage can appear (#3635, #3389).
 - Development: restore test compilation on Xcode 26.3 / Swift 6.2 and check app, CLI, and test compatibility in CI (#4070). Thanks @RowboTony!
 - Configuration: treat empty or whitespace-only config files like missing files so usage keeps working; settings saves write valid JSON, while malformed non-empty files still report errors (#4071).
 - Menu bar: reject corrupt saved positions during status-item visibility changes and removal while preserving valid placement across restarts (#3355).
@@ -22,6 +23,8 @@
 - z.ai: explain unavailable Coding Plan usage for empty or unsupported quota shapes while preserving recognized quotas and analytics (#2522).
 - Grok: keep local token totals visible in Usage & Spend and shared cards across wider history views and billing outages, with consistent daily scan windows (#3716). Thanks @Chipagosfinest!
 - Antigravity: reap MCP servers left behind by usage probes using a unique inherited ownership marker, preserving unrelated processes even when they share the probe directory (#4077). Thanks @bcharleson!
+- Adaptive refresh: recognize ChatGPT's nested Codex app-server with per-scan running-process validation and update-aware signed-bundle assessment caching, avoiding repeated Gatekeeper subprocesses while keeping idle servers at the normal cadence (#4069, #4090).
+- Widgets: retain each eligible provider's last-good reading and original age after failed refreshes, even when another provider is unavailable, disabled, or changes accounts (#3500).
 - Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
 - TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes, using shared balance-label metadata (#4050). Thanks @lg!
 - Grok: retain the product usage breakdown on the grok.com billing fallback, with bounded shared protobuf decoding (#4041). Thanks @olddonkey!

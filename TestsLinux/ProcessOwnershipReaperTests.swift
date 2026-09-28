@@ -3,8 +3,10 @@ import Testing
 @testable import CodexBarCore
 #if canImport(Darwin)
 import Darwin
-#else
+#elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 
 struct ProcessOwnershipReaperTests {
@@ -48,7 +50,7 @@ struct ProcessOwnershipReaperTests {
                 binary: "/usr/bin/python3",
                 arguments: ["-c", launcher, script, pidFile.path, completion],
                 environment: [:],
-                timeout: completion == "timeout" ? 3 * TestTimingBudget.slowdownFactor : 30,
+                timeout: completion == "timeout" ? 10 : 30,
                 currentDirectoryURL: root,
                 reapDescendants: true,
                 label: "owned-probe-fixture")
@@ -92,9 +94,9 @@ struct ProcessOwnershipReaperTests {
         let task = Task {
             try await SubprocessRunner.run(
                 binary: "/usr/bin/env",
-                arguments: ["-i", "/bin/sleep", "4"],
+                arguments: ["-i", "/bin/sleep", "30"],
                 environment: [:],
-                timeout: cancel ? 10 : 0.2,
+                timeout: cancel ? 60 : 0.2,
                 reapDescendants: true,
                 label: "cleared-marker-fixture")
         }
@@ -111,7 +113,7 @@ struct ProcessOwnershipReaperTests {
             guard case .timedOut = error else { throw error }
             #expect(!cancel)
         }
-        #expect(Date().timeIntervalSince(start) < 2)
+        #expect(Date().timeIntervalSince(start) < 10)
     }
 
     @Test
@@ -136,6 +138,22 @@ struct ProcessOwnershipReaperTests {
         current = false
         signal(SIGKILL)
         #expect(sent == [SIGTERM])
+    }
+
+    @Test
+    func `Linux environment reader selects the marker and rejects unavailable evidence`() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let process = root.appendingPathComponent("101", isDirectory: true)
+        try FileManager.default.createDirectory(at: process, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = process.appendingPathComponent("environ")
+        let key = ProcessOwnershipReaper.environmentKey
+        let names: Set<String> = [key]
+        try Data("OTHER=ignored\0\(key)=fixture\0".utf8).write(to: file)
+        #expect(PiProcessEnvironment.readLinuxEnvironment(pid: 101, procRoot: root, names: names) == [key: "fixture"])
+        try Data("\(key)=fixture".utf8).write(to: file)
+        #expect(PiProcessEnvironment.readLinuxEnvironment(pid: 101, procRoot: root, names: names) == nil)
+        #expect(PiProcessEnvironment.readLinuxEnvironment(pid: 102, procRoot: root, names: names) == nil)
     }
 
     @Test

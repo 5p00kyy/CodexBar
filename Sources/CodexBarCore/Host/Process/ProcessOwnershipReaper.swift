@@ -8,35 +8,29 @@ import Musl
 import Foundation
 
 /// A per-launch capability inherited across exec, setsid, and reparenting. Never infer ownership from cwd or argv.
-final class ProcessOwnershipReaper: @unchecked Sendable {
+struct ProcessOwnershipReaper: Sendable {
     static let environmentKey = "CODEXBAR_PROBE_OWNER"
     let marker = UUID().uuidString
-    private let lock = NSLock()
-    private var finished = false
 
     func reap(processGroup: pid_t? = nil) {
-        self.lock.withLock {
-            guard !self.finished else { return }
-            self.finished = true
-            // A live marked member must still witness group ownership after the leader exits.
-            if let processGroup {
-                self.signalGroup(processGroup, signal: SIGTERM)
+        // A live marked member must still witness group ownership after the leader exits.
+        if let processGroup {
+            self.signalGroup(processGroup, signal: SIGTERM)
+        }
+        let deadline = Date().addingTimeInterval(0.4)
+        repeat {
+            let identities = self.ownedProcesses()
+            if identities.isEmpty { return }
+            for identity in identities {
+                self.signal(identity, SIGTERM)
             }
-            let deadline = Date().addingTimeInterval(0.4)
-            repeat {
-                let identities = self.ownedProcesses()
-                if identities.isEmpty { return }
-                for identity in identities {
-                    self.signal(identity, SIGTERM)
-                }
-                usleep(50000)
-            } while Date() < deadline
-            if let processGroup {
-                self.signalGroup(processGroup, signal: SIGKILL)
-            }
-            for identity in self.ownedProcesses() {
-                self.signal(identity, SIGKILL)
-            }
+            usleep(50000)
+        } while Date() < deadline
+        if let processGroup {
+            self.signalGroup(processGroup, signal: SIGKILL)
+        }
+        for identity in self.ownedProcesses() {
+            self.signal(identity, SIGKILL)
         }
     }
 

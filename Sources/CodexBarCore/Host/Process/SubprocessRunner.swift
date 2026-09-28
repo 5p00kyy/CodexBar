@@ -163,6 +163,11 @@ public enum SubprocessRunner {
 
         let start = Date()
         let binaryName = URL(fileURLWithPath: binary).lastPathComponent
+        func logMetadata(duration: TimeInterval, exitCode: Int32? = nil) -> [String: String] {
+            var metadata = ["label": label, "binary": binaryName, "duration_ms": "\(Int(duration * 1000))"]
+            if let exitCode { metadata["status"] = "\(exitCode)" }
+            return metadata
+        }
         self.log.debug(
             "Subprocess start",
             metadata: ["label": label, "binary": binaryName, "timeout": "\(timeout)"])
@@ -250,11 +255,7 @@ public enum SubprocessRunner {
             if killedByTimeout.isSet {
                 self.log.warning(
                     "Subprocess timed out",
-                    metadata: [
-                        "label": label,
-                        "binary": binaryName,
-                        "duration_ms": "\(Int(duration * 1000))",
-                    ])
+                    metadata: logMetadata(duration: duration))
                 throw SubprocessRunnerError.timedOut(label)
             }
 
@@ -277,33 +278,19 @@ public enum SubprocessRunner {
                 let duration = Date().timeIntervalSince(start)
                 self.log.warning(
                     "Subprocess failed",
-                    metadata: [
-                        "label": label,
-                        "binary": binaryName,
-                        "status": "\(exitCode)",
-                        "duration_ms": "\(Int(duration * 1000))",
-                    ])
+                    metadata: logMetadata(duration: duration, exitCode: exitCode))
                 throw SubprocessRunnerError.nonZeroExit(code: exitCode, stderr: stderr)
             }
 
             self.log.debug(
                 "Subprocess exit",
-                metadata: [
-                    "label": label,
-                    "binary": binaryName,
-                    "status": "\(exitCode)",
-                    "duration_ms": "\(Int(duration * 1000))",
-                ])
+                metadata: logMetadata(duration: duration, exitCode: exitCode))
             return SubprocessResult(stdout: stdout, stderr: stderr)
         } catch {
             let duration = Date().timeIntervalSince(start)
             self.log.warning(
                 "Subprocess error",
-                metadata: [
-                    "label": label,
-                    "binary": binaryName,
-                    "duration_ms": "\(Int(duration * 1000))",
-                ])
+                metadata: logMetadata(duration: duration))
             // Safety net: ensure the process is dead (may already be killed by timeout timer).
             self.terminateProcess(process, processGroup: processGroup)
             exitCodeTask.cancel()
