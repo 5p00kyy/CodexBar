@@ -2,6 +2,10 @@
 
 ## 0.69.1 — Unreleased
 
+### Fixed
+
+- CLI: keep probe timeout and cancellation cleanup responsive when other processes have large environments (#4077).
+
 ## 0.69.0 — 2026-09-28
 
 ### Highlights
