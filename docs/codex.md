@@ -230,6 +230,8 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     - `~/.pi/agent/sessions/**/*.jsonl`
     - `~/.omp/agent/sessions/**/*.jsonl`
 - Scanner:
+  - Published model aliases resolve through the existing pricing canonicalizer. GPT-5.6 Sol estimates use the
+    rates applicable before or after August 21, 2026; see [model pricing](model-pricing.md).
   - Codex reserve telemetry uses the bundled GPT-5.6 Luna list-price estimate, including existing cached token rows.
     This estimates API-equivalent cost; it is not a charge for using a subscription reserve allowance.
   - Bundled `gpt-6-astra` pricing covers input, cache reads/writes, output, and the full-request long-context

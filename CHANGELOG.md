@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Costs: price documented Antigravity and Codex model aliases, add published Cyber fallback rates, and preserve Sol estimates across the August 21 price change (#4094). Thanks @urda!
 - Development: restore test compilation on Xcode 26.3 / Swift 6.2 and check app, CLI, and test compatibility in CI (#4070). Thanks @RowboTony!
 - Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
 - TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes, using shared balance-label metadata (#4050). Thanks @lg!
