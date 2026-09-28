@@ -32,11 +32,22 @@ public struct AntigravityRemoteUsageFetcher: Sendable {
     public var credentialsUpdateHandler: @Sendable (AntigravityOAuthCredentials) async throws -> Void
 
     private static let log = CodexBarLog.logger(LogCategories.provider(.antigravity))
-    private static let userAgent = "antigravity"
     private static let baseURL = "https://cloudcode-pa.googleapis.com"
     private static let loadCodeAssistEndpoint = "\(baseURL)/v1internal:loadCodeAssist"
     private static let onboardUserEndpoint = "\(baseURL)/v1internal:onboardUser"
     private static let refreshSafetyWindow: TimeInterval = 60
+
+    /// Cloud Code gates quota endpoints on the Antigravity Hub user agent: a bare `antigravity` UA gets
+    /// `retrieveUserQuota`/`retrieveUserQuotaSummary` 403s and a legacy model list. The version only needs to clear
+    /// the server's newer-model floor (2.9.0), so a fixed value avoids a runtime version lookup.
+    private static let userAgent: String = {
+        #if arch(arm64)
+        let architecture = "arm64"
+        #else
+        let architecture = "amd64"
+        #endif
+        return "antigravity/hub/2.9.1 darwin/\(architecture)"
+    }()
 
     private struct FetchContext {
         let timeout: TimeInterval
