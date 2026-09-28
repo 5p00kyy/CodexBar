@@ -48,6 +48,7 @@
 - CLI: macOS release builds compile again on the Xcode 26 release runners, so the 0.68 macOS CLI tarballs and the Homebrew `codexbar` formula ship alongside the app.
 - LongCat: move quota fetching to the bundled plugin on both engines, keeping imported cookies private to the host and preserving per-request cookie scope, profile fallback, and optional fuel-pack data.
 - Browser sessions: preserve distinct host-only and domain-scoped cookies when merging stores from the same profile.
+- Agent Sessions: avoid the macOS 15 isolated-teardown crash while retaining task cancellation and Stay Awake cleanup (#4068). Thanks @Sogl!
 
 ## 0.68.0 — 2026-09-27
 
