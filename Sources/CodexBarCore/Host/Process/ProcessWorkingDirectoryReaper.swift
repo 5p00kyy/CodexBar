@@ -16,19 +16,25 @@ enum ProcessWorkingDirectoryReaper {
     static func terminateProcesses(in directory: URL) {
         let target = Self.standardizedPath(directory.path)
         guard !target.isEmpty, target != "/" else { return }
-        let matches = self.processIDs(inCurrentDirectory: target)
+        let matches = self.processIdentities(inCurrentDirectory: target)
         guard !matches.isEmpty else { return }
-        for pid in matches {
-            kill(pid, SIGTERM)
+        for identity in matches where TTYProcessTreeTerminator.isCurrent(identity) {
+            kill(identity.pid, SIGTERM)
         }
         let deadline = Date().addingTimeInterval(0.4)
         while Date() < deadline {
-            if matches.allSatisfy({ kill($0, 0) != 0 }) { return }
-            usleep(50_000)
+            if matches.allSatisfy({ !TTYProcessTreeTerminator.isCurrent($0) }) { return }
+            usleep(50000)
         }
-        for pid in matches where kill(pid, 0) == 0 {
-            kill(pid, SIGKILL)
+        for identity in matches where TTYProcessTreeTerminator.isCurrent(identity) {
+            kill(identity.pid, SIGKILL)
         }
+    }
+
+    static func processIdentities(
+        inCurrentDirectory directory: String) -> [TTYProcessTreeTerminator.ProcessIdentity]
+    {
+        self.processIDs(inCurrentDirectory: directory).compactMap(TTYProcessTreeTerminator.processIdentity(for:))
     }
 
     static func processIDs(inCurrentDirectory directory: String) -> [pid_t] {

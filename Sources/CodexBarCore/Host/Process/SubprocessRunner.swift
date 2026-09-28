@@ -153,8 +153,8 @@ public enum SubprocessRunner {
         standardInput: Any? = nil,
         currentDirectoryURL: URL? = nil,
         acceptsNonZeroExit: Bool = false,
-        /// When set, descendants recorded while the process was alive are signaled after it
-        /// exits. This includes children that called `setsid` and were reparented to launchd.
+        // When set, descendants recorded while the process was alive are signaled after it
+        // exits. This includes children that called `setsid` and were reparented to launchd.
         reapDescendants: Bool = false,
         label: String) async throws -> SubprocessResult
     {
@@ -349,7 +349,7 @@ public enum SubprocessRunner {
             let deadline = Date().addingTimeInterval(0.4)
             while Date() < deadline {
                 if snapshot.allSatisfy({ !TTYProcessTreeTerminator.isCurrent($0) }) { return }
-                usleep(50_000)
+                usleep(50000)
             }
             for identity in snapshot where TTYProcessTreeTerminator.isCurrent(identity) {
                 kill(identity.pid, SIGKILL)
