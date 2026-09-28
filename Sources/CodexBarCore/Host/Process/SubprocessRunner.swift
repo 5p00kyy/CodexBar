@@ -153,6 +153,8 @@ public enum SubprocessRunner {
         standardInput: Any? = nil,
         currentDirectoryURL: URL? = nil,
         acceptsNonZeroExit: Bool = false,
+        // Mark this invocation so even detached descendants can be reaped after it exits.
+        reapDescendants: Bool = false,
         label: String) async throws -> SubprocessResult
     {
         guard FileManager.default.isExecutableFile(atPath: binary) else {
@@ -168,7 +170,10 @@ public enum SubprocessRunner {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binary)
         process.arguments = arguments
-        process.environment = environment
+        let ownership = reapDescendants ? ProcessOwnershipReaper() : nil
+        process.environment = ownership
+            .map { environment.merging([ProcessOwnershipReaper.environmentKey: $0.marker]) { _, new in new } } ??
+            environment
         process.currentDirectoryURL = currentDirectoryURL
 
         let stdoutPipe = Pipe()
@@ -202,7 +207,8 @@ public enum SubprocessRunner {
         stderrCapture.start()
 
         let pid = process.processIdentifier
-        let processGroup: pid_t? = setpgid(pid, pid) == 0 ? pid : nil
+        let processGroup: pid_t? = setpgid(pid, pid) == 0 || getpgid(pid) == pid ? pid : nil
+        defer { ownership?.reap(processGroup: processGroup) }
 
         let exitCodeTask = Task<Int32, Never> {
             await termination.wait()
