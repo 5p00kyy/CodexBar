@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Mistral: offer Monthly Plan in the provider's Menu bar metric picker, so the menu bar and widgets can show the Vibe allowance without a `defaults write` (#4072). Thanks @T0mSIlver!
+
 - Mistral: price billing usage by event type, API zone, and service tier, so a per-second audio or priority price no longer inflates API spend and 30-day token cost (#4076). Thanks @T0mSIlver!
 ### Security
 
