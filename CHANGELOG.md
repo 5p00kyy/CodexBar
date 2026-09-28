@@ -26,6 +26,7 @@
 - Kimi Code: mark shorter Code windows as blocked when the known monthly membership pool is exhausted, without showing fresh quota or pace forecasts (#3536).
 - z.ai: explain unavailable Coding Plan usage for empty or unsupported quota shapes while preserving recognized quotas and analytics (#2522).
 - Grok: keep local token totals visible in Usage & Spend and shared cards across wider history views and billing outages, with consistent daily scan windows (#3716). Thanks @Chipagosfinest!
+- Antigravity: reap MCP servers left behind by usage probes using a unique inherited ownership marker, preserving unrelated processes even when they share the probe directory (#4077). Thanks @bcharleson!
 - Adaptive refresh: recognize ChatGPT's nested Codex app-server with per-scan running-process validation and update-aware signed-bundle assessment caching, avoiding repeated Gatekeeper subprocesses while keeping idle servers at the normal cadence (#4069, #4090).
 - Widgets: retain each eligible provider's last-good reading and original age after failed refreshes, even when another provider is unavailable, disabled, or changes accounts (#3500).
 - Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
