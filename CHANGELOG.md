@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Widgets: retain each eligible provider's last-good reading and original age after failed refreshes, even when another provider is unavailable, disabled, or changes accounts (#3500).
 - Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!
 - TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes, using shared balance-label metadata (#4050). Thanks @lg!
 - Grok: retain the product usage breakdown on the grok.com billing fallback, with bounded shared protobuf decoding (#4041). Thanks @olddonkey!
