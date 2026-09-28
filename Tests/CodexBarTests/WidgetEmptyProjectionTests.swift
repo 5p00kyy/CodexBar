@@ -22,6 +22,7 @@ struct WidgetEmptyProjectionTests {
         store.persistWidgetSnapshot(reason: "synthetic-before-wake")
         await store.widgetSnapshotPersistTask?.value
         let before = try #require(saved?.entries.first { $0.provider == .deepseek })
+        #expect(before.balanceText == "$25.00")
         store.snapshots.removeAll()
         store.errors = [
             .minimax: "Synthetic offline failure",
@@ -44,6 +45,7 @@ struct WidgetEmptyProjectionTests {
         let after = try #require(saved?.entries.first { $0.provider == .deepseek })
         #expect(after.updatedAt == before.updatedAt)
         #expect(after.primary == before.primary)
+        #expect(after.balanceText == before.balanceText)
         #expect(saved?.entries.contains { $0.provider == .claude } == false)
         if scenario == "disabled" || scenario == "retired" {
             #expect(saved?.entries.contains { $0.provider == .minimax } == false)
@@ -416,7 +418,11 @@ struct WidgetEmptyProjectionTests {
         for (index, provider) in providers.enumerated() {
             store._setSnapshotForTesting(
                 UsageSnapshot(
-                    primary: RateWindow(usedPercent: 25, windowMinutes: 300, resetsAt: nil, resetDescription: nil),
+                    primary: RateWindow(
+                        usedPercent: 25,
+                        windowMinutes: 300,
+                        resetsAt: nil,
+                        resetDescription: provider == .deepseek ? "$25.00 (Paid: $25.00 / Granted: $0.00)" : nil),
                     secondary: nil,
                     updatedAt: measuredAt.addingTimeInterval(Double(index))),
                 provider: provider)

@@ -201,7 +201,7 @@ extension UsageStore {
                 now: now,
                 previousEntry: previousSnapshot?.entries.first { $0.provider == provider.instanceID })
             { return entry }
-            // Only this process's publication establishes ownership; Claude keeps its owner-aware path above.
+            // Provider-specific by design: Claude uses its owner-aware path; others require this process's publication.
             guard provider != .claude, enabledProviders.contains(provider.instanceID),
                   self.errors[provider.instanceID] != nil,
                   !self.invalidatedQueuedWidgetProviders.contains(provider.instanceID),
