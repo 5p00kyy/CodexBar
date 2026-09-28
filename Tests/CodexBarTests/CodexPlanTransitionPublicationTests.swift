@@ -121,7 +121,7 @@ struct CodexPlanTransitionPublicationTests {
             response: response,
             credentials: credentials,
             updatedAt: Date(timeIntervalSince1970: Double(epoch + offset))))
-        return reconciled.toUsageSnapshot()
+        return reconciled.toUsageSnapshot().withDataConfidence(.exact)
     }
 
     private func outcome(_ snapshot: UsageSnapshot) -> ProviderFetchOutcome {
