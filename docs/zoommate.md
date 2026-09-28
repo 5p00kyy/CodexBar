@@ -131,8 +131,7 @@ GET https://ai.zoom.us/ai-computer/api/v1/credits/history?app_id=demo_app&limit=
 non-auth error. Manual requests start on the captured host and retry the other host without the
 captured host's cookies — see "Auth & privacy" above.)
 
-The `credits/status` response's `data.credit_status` object is decoded into a
-`ZoomMateCreditStatus` struct. The `credits/history` request is paginated (looping on `page` until
+The bundled `zoommate` plugin decodes the `credits/status` response's `data.credit_status` object on both engines. The `credits/history` request is paginated (looping on `page` until
 `page * limit + records.length` reaches the response's flat `data.total`, or a page's records are
 entirely older than the requested `start_time`) to cover the last 30 days; real accounts have
 modest history (tens of records total), so this is normally 1–2 requests. `app_id` is sent as a
@@ -191,9 +190,7 @@ includes:
 sessions (`is_running: true`) are included since their `cost` reflects consumption so far. The
 30-day window is enforced independently at both fetch time (the request's `start_time`) and
 display time (`dailyBreakdown()` filters to the trailing 30 calendar days regardless of what the
-fetch returned), so the chart's calendar span is guaranteed either way. The pacing line only needs
-the always-fetched `credits/status` snapshot, so it can appear even in refreshes where
-`credits/history` fails or returns nothing. The inline section is gated on having either a
+fetch returned), so the chart's calendar span is guaranteed either way. The pacing line uses the paired `credits/status` cycle and appears only when the history request succeeds, including an empty history. The inline section is gated on having either a
 non-empty daily breakdown or a computable pacing verdict — an empty/failed history fetch silently
 omits the section instead of showing an empty dashboard.
 
@@ -253,15 +250,22 @@ includes the credits history dashboard and status page above — both are app-me
 | `apiError` | Any other non-200 HTTP status | Check ZoomMate's status; retry later |
 | `parseFailed` | HTTP 200 body did not contain the expected `credit_status` shape | Open a CodexBar issue with a redacted response sample |
 
+## Plugin and session ownership
+
+The bundled plugin owns bootstrap, host failover, credit parsing, and bounded history pagination. The host owns cookie
+selection and a single validated session cache; scripts receive opaque IDs and never cookie values. Existing paired-host
+cache entries migrate on successful validation. The successful bootstrap remains the persistence boundary, even if the
+subsequent credits-status request fails. Interactive refreshes stage that replacement until the whole refresh commits.
+A rejected stale candidate cannot erase a newer cached session.
+
+A SHA-256 identity derived from the canonical credential connects bearer reuse across runtime instances. Bearers remain
+in bounded process memory only, and unreadable expiries are never cached. Leaf cookies remain restricted to their own
+host; a bearer-only request may omit cookies on the alternate host. Cross-origin redirects remain blocked.
+
 ## Key files
 
-- `Sources/CodexBarCore/Providers/ZoomMate/ZoomMateProviderDescriptor.swift` — provider metadata (including `statusPageURL` and the status-component allowlist) and the unified fetch strategy (calls both `credits/status` and `credits/history`)
-- `Sources/CodexBarCore/Providers/ZoomMate/ZoomMateUsageFetcher.swift` — credits/status request, cURL parsing, and cookie-to-token minting
-- `Sources/CodexBarCore/Providers/ZoomMate/ZoomMateCreditsHistoryFetcher.swift` — credits/history request, paginated with a date-boundary stop, and the `ZoomMateCreditsHistorySnapshot` model
-- `Sources/CodexBarCore/Providers/ZoomMate/ZoomMateModels.swift` — response decoding, error taxonomy, window mapping, daily-bucket aggregation (`dailyBreakdown()`), today's-total lookup (`todayCreditsUsed(now:calendar:)`), and pacing verdict computation
-- `Sources/CodexBarCore/Providers/ZoomMate/ZoomMateCookieImporter.swift` — Chrome cookie-jar import (macOS only)
-- `Sources/CodexBar/InlineUsageDashboardContent.swift` — shared Today/30d KPI-tile + mini-bar view also used by Claude/Codex/OpenRouter/etc.; ZoomMate renders through this same component
-- `Sources/CodexBar/MenuCardView.swift` — renders the generic inline-dashboard slot for credits-only stacked cards
-- `Sources/CodexBar/StatusItemController+Menu.swift` — `statusComponentsSubmenuProviders` and descriptor-backed `filterStatusComponents`
-- `Sources/CodexBar/Providers/ZoomMate/ZoomMateProviderImplementation.swift` — settings pickers and bindings
-- `Sources/CodexBar/Providers/ZoomMate/ZoomMateSettingsStore.swift` — cookie source and capture persistence
+- `Sources/CodexBarCore/Resources/Plugins/zoommate.ts` — requests, parsing, JWT expiry handling, history, and snapshot mapping.
+- `Sources/CodexBarCore/Providers/ZoomMate/ZoomMateProviderDescriptor.swift` — metadata, manual capture validation, and minimal strategy wiring.
+- `Sources/CodexBarCore/Plugins/ProviderPluginCookieJar.swift` — host-owned URL cookie matcher and isolated transport.
+- `Sources/CodexBarCore/Plugins/ProviderPluginPersistentCookies.swift` — validated single-entry cache, migration, and conditional rejection.
+- `Sources/CodexBar/Providers/ZoomMate/ZoomMateProviderImplementation.swift` — existing settings pickers and bindings.
