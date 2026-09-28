@@ -2,6 +2,10 @@
 
 ## 0.69.1 — Unreleased
 
+### Security
+
+- Redact every remaining stored process environment in the app, CLI, provider contexts, and session scanners, and guard against new unredacted environment properties with a repository check (#4106).
+
 ## 0.69.0 — 2026-09-28
 
 ### Highlights
