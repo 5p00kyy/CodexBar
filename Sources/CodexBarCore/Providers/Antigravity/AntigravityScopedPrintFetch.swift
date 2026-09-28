@@ -344,6 +344,7 @@ extension AntigravityCLIHTTPSFetchStrategy {
                 maxOutputBytes: 1_048_576,
                 standardInput: FileHandle.nullDevice,
                 currentDirectoryURL: staged.home,
+                reapDescendants: true,
                 label: "antigravity-cli-scoped-usage")
         } catch let error as SubprocessRunnerError {
             try Task.checkCancellation()
