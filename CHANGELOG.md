@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.69.1 — Unreleased
+
 ## 0.69.0 — 2026-09-28
 
 ### Highlights
