@@ -414,8 +414,26 @@ capabilities and does not change network approval.
 
 ## Browser session cache
 
+Bundled providers may declare `cookiePolicy: { selection: "request-url", cache: "nonpersistent" }` alongside
+`browser-cookies` and `cookieDomains`. This policy imports declared domains together as one candidate per browser
+profile. It never reads or writes the persistent cookie cache, and automatic imports require a user-initiated app
+refresh. Manual headers remain usable in the CLI; Off disables both sources.
+
+With this policy, `ctx.browser.sessions(domain)` exposes only the candidate's `id`, source label, and origin.
+The header and cookie records remain in Swift, and `ctx.browser.cookieHeader` is denied. Pass the candidate ID as
+`cookieSession: session.id` in any GET or POST options. The host selects unexpired cookies for the request URL,
+honors host-only/domain scope, Secure, and encoded path boundaries, and retains duplicate names in longest-path-first
+order. Manual headers remain bound to their originating host. Unknown, rejected, or previous-fetch IDs fail closed;
+scripts cannot combine this option with a Cookie or Host override.
+
+The production transport uses an ephemeral session without ambient cookies, credentials, or response caching.
+Same-origin HTTPS redirects reselect cookies for each hop through that same matcher; cross-origin redirects are
+rejected. This is not Qwen Cloud's cross-origin dashboard/navigation policy. Ranked source-domain selection,
+validated persistent jars, and native session-file migration are not part of this initial policy. User-installed
+plugins cannot request it.
+
 Bundled plugins that declare multiple cookie domains use separate Keychain-backed cache scopes for each requested
-domain. Single-domain plugins retain their existing provider cache. Automatic imports query only the requested domain;
+domain under the default header policy. Single-domain plugins retain their existing provider cache. Automatic imports query only the requested domain;
 the default browser is Chrome, with existing provider browser-order overrides preserved. Manual headers bypass the
 cache and browser import, and Off fails before either is accessed.
 
