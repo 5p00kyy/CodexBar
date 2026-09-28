@@ -76,4 +76,47 @@ struct MistralMonthlyPlanPickerTests {
         #expect(picker.selectionBinding.wrappedValue == .automatic)
         #expect(settings.menuBarLayoutOverrides[.mistral] == nil)
     }
+
+    @Test
+    func `explicit Monthly Plan selection pins a percentage layout against later global edits`() {
+        let settings = testSettingsStore(
+            suiteName: "MistralMonthlyPlanPickerTests-global",
+            userDefaults: InMemoryUserDefaults())
+        settings.menuBarIconStyle = .iconAndPercent
+        let automatic = MenuBarLayout(lines: [[.icon, .percent(window: .automatic)]])
+        settings.setMenuBarLayout(automatic, for: nil)
+        let view = ProviderMenuBarPercentWindowSettingsView(provider: .mistral, settings: settings)
+        let picker = ProviderMenuBarPercentWindowPicker(
+            provider: .mistral,
+            iconStyle: .iconAndPercent,
+            layout: view.layoutBinding,
+            metric: view.metricBinding)
+        #expect(settings.menuBarLayoutOverrides[.mistral] == nil)
+
+        picker.selectionBinding.wrappedValue = .monthlyPlan
+        #expect(settings.menuBarLayoutOverrides[.mistral] == automatic)
+        settings.setMenuBarLayout(MenuBarLayout(lines: [[.icon, .percent(window: .session)]]), for: nil)
+        #expect(settings.menuBarLayout(for: .mistral) == automatic)
+        #expect(picker.selectionBinding.wrappedValue == .monthlyPlan)
+        #expect(settings.menuBarMetricPreference(for: .mistral) == .monthlyPlan)
+    }
+
+    @Test
+    func `reading the picker preserves an existing Monthly Plan widget preference`() {
+        let settings = testSettingsStore(
+            suiteName: "MistralMonthlyPlanPickerTests-saved",
+            userDefaults: InMemoryUserDefaults())
+        settings.setMenuBarMetricPreference(.monthlyPlan, for: .mistral)
+        let includedAPI = MenuBarLayout(lines: [[.icon, .percent(window: .session)]])
+        settings.setMenuBarLayout(includedAPI, for: .mistral)
+        let view = ProviderMenuBarPercentWindowSettingsView(provider: .mistral, settings: settings)
+        let picker = ProviderMenuBarPercentWindowPicker(
+            provider: .mistral,
+            iconStyle: .iconAndPercent,
+            layout: view.layoutBinding,
+            metric: view.metricBinding)
+        #expect(picker.selectionBinding.wrappedValue == .session)
+        #expect(settings.menuBarMetricPreference(for: .mistral) == .monthlyPlan)
+        #expect(settings.menuBarLayout(for: .mistral) == includedAPI)
+    }
 }

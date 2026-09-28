@@ -87,7 +87,7 @@ struct ProviderMenuBarPercentWindowPicker: View {
                     self.metric.wrappedValue = preference.menuBarMetric
                     // Without a percentage to change, only the metric is stored, so the layout keeps following
                     // its source instead of becoming a provider override.
-                    guard updated != layout else { return }
+                    guard MenuBarPercentWindowPreference.hasPercentToken(in: layout) else { return }
                 }
                 self.layout = updated
             })
