@@ -37,16 +37,22 @@ validation and the bundled scripts remain authoritative. This glue migration doe
 classifications or registry count below.
 
 Eight cookie/web providers also use the spec: Helmcode, Hyper, Manus, Perplexity, Qoder, Raycast, Sakana, and T3 Chat,
-bringing the declarative total to **31**. Six share the cookie app implementation; Helmcode and Qoder retain small
+bringing that batch to **31** declarative providers. Six share the cookie app implementation; Helmcode and Qoder retain small
 provider-owned UI adapters. Replicate and TypeSafe keep their native conditional session-cache strategies. Cookie
 domains, session candidates, regional origins, browser policy, and bundled scripts are unchanged.
 
+Hugging Face, Nous, Fireworks, xAI, Venice, and Zed bring the declarative total to **37**. Hugging Face and xAI use the shared API-key
+app implementation; native credential/runtime, persistence, and source-selection adapters remain provider-owned.
+Moonshot's config normalizer, z.ai's custom pace rules, and OpenRouter's credit capability remain outside the spec.
+OpenAI API also retains its exact decimal branding and custom cost/card presentation. This batch leaves those four,
+Abacus, Muse, LongCat, Replicate, and TypeSafe unchanged.
+
 | Status | Count |
 |---|---:|
-| `cut-over` | 30 |
+| `cut-over` | 31 |
 | `converted` | 0 |
 | `convertible-now` | 0 |
-| `needs-cookie-import` | 7 |
+| `needs-cookie-import` | 6 |
 | `needs-files/subprocess/oauth-broker` | 20 |
 | `needs-pty/webview/native` | 8 |
 | `needs-host-extension` | 4 |
@@ -120,7 +126,7 @@ domains, session candidates, regional origins, browser policy, and bundled scrip
 | helmcode | `cut-over` | Yes | Both tenant HTTP flows and quota projection live in the bundled TypeScript plugin, using domain-scoped cookies and policy-only availability. Swift supplies registration, settings, and dashboard routing. No native fetcher or cURL-capture fallback. |
 | neuralwatt | `cut-over` | Yes | Cut over on both engines: validated configured HTTPS, subscription kWh, prepaid balance, key allowances, and exact confidence; the host preserves selective single retries, capped Retry-After, and cancellation. The native fetch twin is deleted. |
 | clawrouter | `cut-over` | Yes | Cut over on JavaScriptCore: validated configured origins, classified failures, exact confidence, budget/ledger details, and provider charts match native behavior; the native fetch core is Linux-only. |
-| longcat | `needs-cookie-import` | No | Still needs path/domain-aware cookie selection and retries across imported profiles; per-domain cache isolation does not expose those candidates. |
+| longcat | `cut-over` | Yes | Both engines use opaque, nonpersistent per-profile cookie jars with request-URL selection, required account/legacy quota requests, best-effort token-pack/fuel probes, and auth-only profile fallback. Automatic imports remain user-initiated app-only. Native fetcher, importer, cookie-header, and snapshot code are deleted. |
 | sub2api | `cut-over` | Yes | Cut over on JavaScriptCore: configured HTTPS/loopback origins, a hard 15-second request deadline, strict parsing, exact confidence, and classified failures match native behavior; the native fetch core is Linux-only. |
 | wayfinder | `needs-pty/webview/native` | No | The local unauthenticated HTTP gateway, metrics text, and routing/savings model violate HTTPS-only generic scope. |
 | zenmux | `cut-over` | Yes | Both engines use fixed-origin bearer GETs for required subscription quotas and optional USD PAYG balance. Auth failures and cancellation remain fatal during enrichment; the native fetcher and parser are deleted. |
