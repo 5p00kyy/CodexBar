@@ -57,6 +57,7 @@ struct TokenAccountCLIContext {
     let accountsByProvider: [UsageProvider: ProviderTokenAccountData]
     private let baseEnvironment: [String: String]
     private let managedCodexAccountStoreURL: URL?
+    private let configStore: CodexBarConfigStore
 
     init(
         selection: TokenAccountCLISelection,
@@ -64,12 +65,14 @@ struct TokenAccountCLIContext {
         verbose _: Bool,
         resolutionScope: TokenAccountCLIResolutionScope = .configuredAccounts,
         baseEnvironment: [String: String] = ProcessInfo.processInfo.environment,
-        managedCodexAccountStoreURL: URL? = nil) throws
+        managedCodexAccountStoreURL: URL? = nil,
+        configStore: CodexBarConfigStore = CodexBarConfigStore()) throws
     {
         self.selection = selection
         self.config = config
         self.baseEnvironment = baseEnvironment
         self.managedCodexAccountStoreURL = managedCodexAccountStoreURL
+        self.configStore = configStore
         self.accountsByProvider = switch resolutionScope {
         case .configuredAccounts:
             Dictionary(uniqueKeysWithValues: config.providers.compactMap { provider in
@@ -189,9 +192,16 @@ struct TokenAccountCLIContext {
 
     func tokenUpdater(for account: ProviderTokenAccount?) -> ProviderFetchContext.TokenAccountTokenUpdater? {
         guard let account else { return nil }
+        let configStore = self.configStore
+        let expectedToken = account.token
         return { provider, accountID, token in
             guard accountID == account.id else { return }
-            try? Self.updateStoredTokenAccount(provider: provider, accountID: accountID, token: token)
+            try? Self.updateStoredTokenAccount(
+                store: configStore,
+                provider: provider,
+                accountID: accountID,
+                expectedToken: expectedToken,
+                token: token)
         }
     }
 
@@ -202,14 +212,15 @@ struct TokenAccountCLIContext {
     }
 
     private static func updateStoredTokenAccount(
+        store: CodexBarConfigStore,
         provider: UsageProvider,
         accountID: UUID,
+        expectedToken: String,
         token: String) throws
     {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let store = CodexBarConfigStore()
         guard var config = try store.load() else { return }
         guard var providerConfig = config.providerConfig(for: provider.instanceID),
               let data = providerConfig.tokenAccounts,
@@ -219,6 +230,12 @@ struct TokenAccountCLIContext {
         }
 
         let existing = data.accounts[index]
+        guard existing.token == expectedToken else {
+            CodexBarLog.logger(LogCategories.tokenAccounts).warning(
+                "Skipped token account writeback: the stored credential changed during the fetch",
+                metadata: ["provider": provider.rawValue])
+            return
+        }
         var accounts = data.accounts
         accounts[index] = ProviderTokenAccount(
             id: existing.id,
