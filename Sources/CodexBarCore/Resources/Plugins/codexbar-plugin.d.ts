@@ -279,7 +279,7 @@ interface CodexBarProviderDefinition {
   id: string;
   name: string;
   icon?: { monogram?: string; tint?: string };
-  /** Shows this plugin as its own provider-switcher tab. */
+  /** Defaults to true: a switcher tab when Merge Icons is on. False keeps an appended card. */
   topLevel?: boolean;
   endpoints: CodexBarEndpoint[];
   auth?: CodexBarAuth;
