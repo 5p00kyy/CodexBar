@@ -13,6 +13,7 @@
 - Grok: retain the product usage breakdown on the grok.com billing fallback, with bounded shared protobuf decoding (#4041). Thanks @olddonkey!
 ### Changed
 
+- Plugins: user plugins now get their own switcher tab by default when Merge Icons is on; set `topLevel: false` to keep the appended card.
 - Menu bar: align the persistent Refresh row with other menu actions by removing its decorative icon, preserving the shortcut and accessibility action (#4057). Thanks @elijahfriedman!
 ### Fixed
 

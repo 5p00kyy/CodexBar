@@ -102,7 +102,7 @@ defineProvider({
 - `name`: trimmed display name, 1–80 UTF-8 bytes.
 - `icon` (optional): `{monogram, tint}`. `monogram` is 1–3 characters; `tint` is `#RRGGBB`. The fallback is the first
   letter of `name` with a neutral tint. File/SVG icons are not supported.
-- `topLevel` (optional): set to `true` to give an enabled plugin its own provider-switcher tab. The default is `false`.
+- `topLevel` (optional, default `true`): gives an enabled plugin its own provider-switcher tab when Merge Icons is on. Set to `false` to keep an appended card.
 - `endpoints`: 1–16 declared network origins. A fixed endpoint is a normalized HTTPS origin such as
   `https://api.example.com` (no path, query, fragment, or user info). A settings-derived endpoint is
   `{setting: "BASE_URL", policy: "https"}`, `{setting: "BASE_URL", policy: "https-or-loopback-http"}`, or
@@ -401,9 +401,10 @@ built-in provider.
 
 ## Provider switcher tabs
 
-Set `topLevel: true` in the manifest to give an enabled plugin its own tab when **Merge Icons** is enabled. The tab uses
-the manifest name and icon. Selecting it shows that plugin’s usage followed by any enabled plugins using the original
-appended-card placement. With Merge Icons disabled, plugins retain appended-card placement.
+Enabled user plugins get their own tab by default when **Merge Icons** is enabled; the manifest can omit `topLevel`.
+The tab uses the manifest name and icon. Selecting it shows that plugin’s usage followed by any enabled plugins with
+explicit `topLevel: false`, which keeps the appended-card placement under provider tabs and Overview. With Merge Icons
+disabled, all plugins retain appended-card placement regardless of `topLevel`.
 
 A single plugin works without a redundant switcher, and multiple plugin tabs work even with no built-in providers
 enabled. Refresh and Cmd-R refresh the selected plugin; each card’s refresh button targets that card. Completed
