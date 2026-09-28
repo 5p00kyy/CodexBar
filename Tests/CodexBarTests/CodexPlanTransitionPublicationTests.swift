@@ -4,6 +4,8 @@ import Testing
 @testable import CodexBar
 
 struct CodexPlanTransitionPublicationTests {
+    private let epoch = Int(Date().timeIntervalSince1970) - 30
+
     @Test
     func `new plan cannot borrow missing weekly usage from the old plan`() async throws {
         let previous = try self.snapshot(plan: "plus", usedPercent: 80, offset: 0, resetOffset: 86400)
@@ -53,6 +55,36 @@ struct CodexPlanTransitionPublicationTests {
         #expect(admission.outcome == nil)
     }
 
+    @Test(arguments: ["plus", ""], [false, true])
+    func `near zero confirmation must retain the initial plan`(plan: String, hasPrevious: Bool) async throws {
+        let previous = try self.snapshot(plan: "plus", usedPercent: 80, offset: 0, resetOffset: 86400)
+        let initial = try self.snapshot(plan: "pro", usedPercent: 0, offset: 10, resetOffset: 3600)
+        let confirmation = try self.snapshot(plan: plan, usedPercent: 0, offset: 20, resetOffset: 3600)
+        let admission = await UsageStore.codexOutcomeAdmittedForPublication(
+            initialOutcome: self.outcome(initial),
+            previousSnapshot: hasPrevious ? previous : nil,
+            previousSourceLabel: "oauth",
+            missingWindowBackfillSnapshot: hasPrevious ? previous : nil,
+            fetchConfirmation: { self.outcome(confirmation) })
+        #expect(admission.outcome == nil)
+        #expect(admission.pendingCandidate == nil)
+    }
+
+    @Test
+    func `fresh nonzero confirmation can publish its own plan`() async throws {
+        let initial = try self.snapshot(plan: "pro", usedPercent: 0, offset: 10, resetOffset: 3600)
+        let confirmation = try self.snapshot(plan: "plus", usedPercent: 5, offset: 20, resetOffset: 3600)
+        let admission = await UsageStore.codexOutcomeAdmittedForPublication(
+            initialOutcome: self.outcome(initial),
+            previousSnapshot: nil,
+            previousSourceLabel: nil,
+            missingWindowBackfillSnapshot: nil,
+            fetchConfirmation: { self.outcome(confirmation) })
+        let published = try #require(admission.outcome).result.get().usage
+        #expect(published.loginMethod(for: .codex) == "plus")
+        #expect(published.secondary?.usedPercent == 5)
+    }
+
     @Test(arguments: [false, true])
     func `older or incomplete new plan cannot discard previous quota evidence`(older: Bool) async throws {
         let previous = try self.snapshot(plan: "plus", usedPercent: 80, offset: 0, resetOffset: 86400)
@@ -68,7 +100,7 @@ struct CodexPlanTransitionPublicationTests {
     }
 
     fileprivate func snapshot(plan: String, usedPercent: Int, offset: Int, resetOffset: Int) throws -> UsageSnapshot {
-        let epoch = 1_800_000_000
+        let epoch = self.epoch
         let payload = try JSONSerialization.data(withJSONObject: [
             "email": "fixture@example.com",
             "https://api.openai.com/auth": ["chatgpt_plan_type": plan],
