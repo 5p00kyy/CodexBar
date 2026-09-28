@@ -4,6 +4,57 @@ import Testing
 
 @MainActor
 struct QuotaBurndownChartMenuViewTests {
+    @Test(arguments: [PlanUtilizationSeriesName.session, .weekly])
+    func `saved legacy Codex thirty day windows display as monthly`(name: PlanUtilizationSeriesName) throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let history = PlanUtilizationSeriesHistory(
+            name: name,
+            windowMinutes: 43200,
+            entries: [.init(capturedAt: now, usedPercent: 40, resetsAt: now.addingTimeInterval(86400))])
+        let saved = try JSONDecoder().decode(
+            PlanUtilizationSeriesHistory.self,
+            from: JSONEncoder().encode(history))
+        let view = QuotaBurndownChartMenuView(
+            provider: .codex,
+            histories: [saved],
+            width: 400,
+            referenceDate: now)
+
+        #expect(saved.name == name)
+        #expect(view._seriesTitlesForTesting == ["monthly:43200": L("Monthly")])
+        #expect(view._seriesRemainingForTesting == ["monthly:43200": 60])
+    }
+
+    @Test
+    func `legacy and migrated monthly captures merge without duplicate tabs or lost samples`() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let reset = now.addingTimeInterval(86400)
+        let histories = [
+            PlanUtilizationSeriesHistory(name: .session, windowMinutes: 43200, entries: [
+                .init(capturedAt: now.addingTimeInterval(-7200), usedPercent: 20, resetsAt: reset),
+            ]),
+            PlanUtilizationSeriesHistory(name: .weekly, windowMinutes: 43200, entries: [
+                .init(capturedAt: now.addingTimeInterval(-3600), usedPercent: 40, resetsAt: reset),
+            ]),
+            PlanUtilizationSeriesHistory(name: .monthly, windowMinutes: 43200, entries: [
+                .init(capturedAt: now.addingTimeInterval(-10800), usedPercent: 10, resetsAt: reset),
+                .init(capturedAt: now.addingTimeInterval(-7200), usedPercent: 20, resetsAt: reset),
+            ]),
+        ]
+        let view = QuotaBurndownChartMenuView(
+            provider: .codex,
+            histories: histories,
+            width: 400,
+            referenceDate: now)
+
+        #expect(view._seriesTitlesForTesting == ["monthly:43200": L("Monthly")])
+        #expect(view._seriesRemainingForTesting == ["monthly:43200": 60])
+        #expect(view._seriesSampleCountsForTesting == ["monthly:43200": 3])
+        #expect(view._seriesLastKnownMessagesForTesting["monthly:43200"] == LastKnownUsagePresentation.message(
+            capturedAt: now.addingTimeInterval(-3600),
+            now: now))
+    }
+
     @Test
     func `keeps same duration quota lanes separate`() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)

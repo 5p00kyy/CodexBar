@@ -23,7 +23,7 @@ struct QuotaBurndownChartMenuView: View {
         width: CGFloat,
         referenceDate: Date = Date())
     {
-        self.series = histories.compactMap { history in
+        self.series = Self.normalizedHistories(histories, provider: provider).compactMap { history in
             guard let latest = history.entries.last,
                   let reset = latest.resetsAt,
                   latest.capturedAt <= referenceDate,
@@ -146,6 +146,27 @@ struct QuotaBurndownChartMenuView: View {
         !self.series.isEmpty
     }
 
+    private static func normalizedHistories(
+        _ histories: [PlanUtilizationSeriesHistory],
+        provider: UsageProvider) -> [PlanUtilizationSeriesHistory]
+    {
+        var orderedIDs: [String] = []
+        var historiesByID: [String: PlanUtilizationSeriesHistory] = [:]
+        for history in histories {
+            guard [.session, .weekly, .monthly, .opus].contains(history.name) else { continue }
+            let name = PlanUtilizationHistoryChartMenuView.effectiveSeriesName(provider: provider, history: history)
+            let windowMinutes = name.canonicalWindowMinutes(history.windowMinutes)
+            let id = "\(name.rawValue):\(windowMinutes)"
+            if historiesByID[id] == nil { orderedIDs.append(id) }
+            historiesByID[id] = PlanUtilizationSeriesHistory(
+                name: name,
+                windowMinutes: windowMinutes,
+                entries: PlanUtilizationHistoryChartMenuView.mergedEntries(
+                    (historiesByID[id]?.entries ?? []) + history.entries))
+        }
+        return orderedIDs.compactMap { historiesByID[$0] }
+    }
+
     private func axisLabel(
         for date: Date,
         model: QuotaBurndownModel,
@@ -162,6 +183,14 @@ struct QuotaBurndownChartMenuView: View {
     }
 
     #if DEBUG
+    var _seriesTitlesForTesting: [String: String] {
+        Dictionary(uniqueKeysWithValues: self.series.map { ($0.id, $0.title) })
+    }
+
+    var _seriesSampleCountsForTesting: [String: Int] {
+        Dictionary(uniqueKeysWithValues: self.series.map { ($0.id, $0.model.samples.count) })
+    }
+
     var _seriesLastKnownMessagesForTesting: [String: String] {
         Dictionary(uniqueKeysWithValues: self.series.map { ($0.id, $0.lastKnownUsageMessage) })
     }

@@ -237,7 +237,7 @@ struct PlanUtilizationHistoryChartMenuView: View {
     /// Histories recorded before duration-based classification stored a 43,200-minute Codex window
     /// under its payload slot (session for primary, weekly for secondary). Fold those into the
     /// monthly series so the chart does not split or hide the window's history.
-    private nonisolated static func effectiveSeriesName(
+    nonisolated static func effectiveSeriesName(
         provider: UsageProvider,
         history: PlanUtilizationSeriesHistory) -> PlanUtilizationSeriesName
     {
