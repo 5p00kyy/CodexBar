@@ -4,10 +4,42 @@ import Testing
 
 struct ProviderPluginPersistentCookieSecurityTests {
     @Test(arguments: BundledPluginTestSupport.engines)
+    func `declared access gate preserves CLI refresh and prompt free import attempts`(
+        engine: ProviderPluginEngineKind) throws
+    {
+        let gated = try #require(Self.runtime(
+            engine,
+            policy: "{selection: 'request-url', cache: 'validated-single-entry', imports: 'access-gated'}",
+            body: "return {empty: true};").manifest.cookiePolicy)
+        #expect(gated.allowsImportAttempt(runtime: .cli, interaction: .userInitiated))
+        #expect(gated.allowsImportAttempt(runtime: .cli, interaction: .background))
+        #expect(gated.allowsImportAttempt(runtime: .app, interaction: .background))
+        let restricted = try #require(Self.runtime(engine, body: "return {empty: true};").manifest.cookiePolicy)
+        #expect(restricted.allowsImportAttempt(runtime: .app, interaction: .userInitiated))
+        #expect(!restricted.allowsImportAttempt(runtime: .cli, interaction: .userInitiated))
+        #expect(!restricted.allowsImportAttempt(runtime: .app, interaction: .background))
+        #if os(macOS)
+        let checks: [(KeychainAccessPreflight.Outcome, Bool)] = [
+            (.allowed, true), (.interactionRequired, false), (.notFound, false), (.failure(-25293), false),
+        ]
+        for (outcome, allowed) in checks {
+            KeychainAccessGate.withTaskOverrideForTesting(false) {
+                ProviderInteractionContext.$current.withValue(.background) {
+                    KeychainAccessPreflight.withCheckGenericPasswordOverrideForTesting { _, _ in outcome } operation: {
+                        #expect(BrowserCookieAccessGate.shouldAttempt(.chrome) == allowed)
+                    }
+                }
+            }
+        }
+        #endif
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
     func `cookie policy rejects malformed or undeclared authority`(engine: ProviderPluginEngineKind) {
         for policy in [
             "null", "[]", "{selection: 'unknown', cache: 'validated-single-entry'}",
             "{selection: 'request-url', cache: 'forever'}",
+            "{selection: 'request-url', cache: 'validated-single-entry', imports: 'always-prompt'}",
             "{selection: 'ranked-source-domains', cache: 'validated-single-entry', sourceDomains: ['evil.test']}",
             "{selection: 'ranked-source-domains', cache: 'validated-single-entry', sourceDomains: ['example.test', 'example.test']}",
             "{selection: 'request-url', cache: 'validated-single-entry', requiredCookies: ['bad\\nname']}",

@@ -13,6 +13,7 @@ defineProvider({
     sourceDomains: ["app.notion.com", "www.notion.com", "notion.com", "www.notion.so", "notion.so"],
     requiredCookies: ["token_v2"],
     cache: "validated-single-entry",
+    imports: "access-gated",
     sessionFile: { tokenField: "tokenV2", cookieName: "token_v2" },
   },
   snapshotPolicy: { percent: "preserve-overage" },

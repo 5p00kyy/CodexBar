@@ -12,6 +12,11 @@ public struct ProviderPluginCookiePolicy: Sendable {
         case validatedSingleEntry = "validated-single-entry"
     }
 
+    public enum Imports: String, Sendable {
+        case appInteractive = "app-interactive"
+        case accessGated = "access-gated"
+    }
+
     public enum MissingCookies: String, Sendable {
         case reject
         case omit
@@ -29,12 +34,13 @@ public struct ProviderPluginCookiePolicy: Sendable {
     let requestHosts: Set<String>
     let sessionFile: SessionFile?
     let missingCookies: MissingCookies
+    let imports: Imports
 
     init(_ value: any ProviderPluginValue, domains: Set<String>, endpoints: Set<ProviderPluginEndpoint>) throws {
         let invalid = ProviderPluginError.invalidManifest("invalid bundled cookiePolicy")
         guard value.isObject, !value.isArray,
               try Set(value.propertyNames()).isSubset(of: [
-                  "selection", "cache", "sourceDomains", "requiredCookies", "sessionFile", "missingCookies",
+                  "selection", "cache", "sourceDomains", "requiredCookies", "sessionFile", "missingCookies", "imports",
               ]),
               let selection = value.property("selection"), selection.isString,
               let selection = Selection(rawValue: selection.stringValue()),
@@ -46,6 +52,12 @@ public struct ProviderPluginCookiePolicy: Sendable {
             self.missingCookies = policy
         } else {
             self.missingCookies = .reject
+        }
+        if let imports = value.property("imports"), !imports.isUndefined {
+            guard imports.isString, let policy = Imports(rawValue: imports.stringValue()) else { throw invalid }
+            self.imports = policy
+        } else {
+            self.imports = .appInteractive
         }
         self.selection = selection
         self.cache = cache
@@ -77,6 +89,10 @@ public struct ProviderPluginCookiePolicy: Sendable {
         } else {
             self.sessionFile = nil
         }
+    }
+
+    func allowsImportAttempt(runtime: ProviderRuntime, interaction: ProviderInteraction) -> Bool {
+        self.imports == .accessGated || (runtime == .app && interaction == .userInitiated)
     }
 
     private static func strings(_ value: (any ProviderPluginValue)?) throws -> [String] {

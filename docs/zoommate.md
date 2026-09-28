@@ -232,8 +232,8 @@ descriptor allowlist and keeps showing every component their feed returns, uncha
 codexbar usage --provider zoommate
 ```
 
-The CLI reuses the host-scoped cookie headers cached by a previous validated refresh; it does not read Chrome's
-cookie store itself. If no cached session exists yet (`noSession`), refresh once from the app or
+The CLI first reuses the host-scoped cookies cached by a previous validated refresh. Browser fallback uses the shared
+access gate, which permits background reads only with existing prompt-free authorization. If no cached session exists yet (`noSession`), refresh once from the app or
 seed the cache from the terminal with `codexbar cookie --provider zoommate` (add
 `--allow-keychain-prompt` to acknowledge that Chrome cookie decryption may prompt).
 
@@ -245,7 +245,7 @@ includes the credits history dashboard and status page above — both are app-me
 | Error | Cause | Fix |
 |---|---|---|
 | `noCapture` | Manual mode is selected but the capture is empty, off-domain, or lacks a parseable `Authorization` header | Paste a fresh cURL capture of the HTTPS `credits/status` request from `ai.zoom.us` or `zoommate.zoom.us` |
-| `noSession` | Automatic mode found no cached session and no ZoomMate/Zoom session cookies it may read (background refreshes and the CLI never read Chrome directly) | Sign in to ZoomMate in Chrome and refresh once from the app (or `codexbar cookie --provider zoommate`), or switch to Manual and paste a capture |
+| `noSession` | Automatic mode found no cached session and no ZoomMate/Zoom session cookies it may read (browser fallback is limited by the shared access gate) | Sign in to ZoomMate in Chrome and refresh once from the app (or `codexbar cookie --provider zoommate`), or switch to Manual and paste a capture |
 | `invalidCredentials` | HTTP 401/403 — the token expired (~hourly) or was revoked | Re-sign-in (auto) or re-paste a fresh capture (manual) |
 | `apiError` | Any other non-200 HTTP status | Check ZoomMate's status; retry later |
 | `parseFailed` | HTTP 200 body did not contain the expected `credit_status` shape | Open a CodexBar issue with a redacted response sample |

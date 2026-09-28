@@ -9,7 +9,12 @@ defineProvider({
   endpoints: ["https://ai.zoom.us", "https://zoommate.zoom.us"],
   capabilities: ["browser-cookies", "http-status"],
   cookieDomains: ["zoom.us", "ai.zoom.us", "zoommate.zoom.us"],
-  cookiePolicy: { selection: "request-url", cache: "validated-single-entry", missingCookies: "omit" },
+  cookiePolicy: {
+    selection: "request-url",
+    cache: "validated-single-entry",
+    imports: "access-gated",
+    missingCookies: "omit",
+  },
   async fetchUsage(ctx) {
     type ObjectValue = Record<string, unknown>;
     type Token = { token: string; email?: string };

@@ -423,8 +423,12 @@ The default policy (`"clamp"`) remains 0–100. Notion opts in because its allow
 
 Bundled providers may declare `cookiePolicy: { selection: "request-url", cache: "nonpersistent" }` alongside
 `browser-cookies` and `cookieDomains`. This policy imports declared domains together as one candidate per browser
-profile. It never reads or writes the persistent cookie cache, and automatic imports require a user-initiated app
-refresh. Manual headers remain usable in the CLI; Off disables both sources.
+profile. It never reads or writes the persistent cookie cache. The default `imports: "app-interactive"` requires a
+user-initiated app refresh. `imports: "access-gated"` delegates import admission to the existing browser access gate,
+including explicit CLI cookie refreshes and already-authorized, strictly no-UI background reads. Notion and ZoomMate
+declare this policy to preserve their native source behavior. The caller's interaction and explicit-retry scope follow
+the importer across engine callbacks; background calls do not gain interactive authorization. Manual headers remain
+usable in the CLI; Off disables both sources.
 
 With this policy, `ctx.browser.sessions(domain)` exposes only the candidate's `id`, source label, and origin.
 The header and cookie records remain in Swift, and `ctx.browser.cookieHeader` is denied. Pass the candidate ID as

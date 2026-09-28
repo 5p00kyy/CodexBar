@@ -95,7 +95,9 @@ final class ProviderPluginCookieBroker: @unchecked Sendable {
         policy: ProviderPluginCookiePolicy? = nil,
         settingsOverride: ProviderSettingsSnapshot.CookieProviderSettings? = nil)
     {
-        let canImport = context.runtime == .app && ProviderInteractionContext.current == .userInitiated
+        let interaction = ProviderInteractionContext.current
+        let canImport = policy?.allowsImportAttempt(runtime: context.runtime, interaction: interaction)
+            ?? (context.runtime == .app && interaction == .userInitiated)
         let jarImporter: JarImporter? = if usesCookieJar || policy != nil {
             {
                 guard canImport else { return [] }
@@ -146,7 +148,11 @@ final class ProviderPluginCookieBroker: @unchecked Sendable {
         self.domains = domains
         self.settings = settings
         self.importer = batches
+        #if os(macOS)
+        self.jarImporter = jarImporter.map { BrowserCookieAccessGate.operationPreservingAccessContext($0) }
+        #else
         self.jarImporter = jarImporter
+        #endif
         self.policy = policy
         self.persistent = policy.flatMap {
             $0.cache == .validatedSingleEntry

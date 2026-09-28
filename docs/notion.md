@@ -42,8 +42,9 @@ the shared browser-cookie plumbing can still supply an explicit browser list. Ch
 require macOS Keychain approval.
 
 Validated sessions remain in the shared cookie cache. Background refreshes first reuse the existing owner-only
-`notion-session.json` token file, then the shared cache, without importing Chrome cookies. A successful allowance
-fetch updates both stores; a 401 conditionally clears the rejected session without erasing a newer one. An interactive
+`notion-session.json` token file, then the shared cache. If neither succeeds, browser reads remain subject to the shared
+access gate: background reads require existing prompt-free authorization, while explicit CLI cookie refreshes retain
+their acknowledged retry scope. A successful allowance fetch updates both stores; a 401 conditionally clears the rejected session without erasing a newer one. An interactive
 cookie refresh commits its replacement only after success, preserving both prior stores on failure.
 
 ### Manual

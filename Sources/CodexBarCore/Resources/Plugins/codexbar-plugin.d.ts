@@ -299,6 +299,7 @@ interface CodexBarProviderDefinition {
     sourceDomains?: string[];
     requiredCookies?: string[];
     missingCookies?: "reject" | "omit";
+    imports?: "app-interactive" | "access-gated";
     sessionFile?: { tokenField: string; cookieName: string };
   };
   fetchUsage(
