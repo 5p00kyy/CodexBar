@@ -706,7 +706,7 @@ struct CostUsageScannerPriorityTests {
             until: day,
             now: day,
             options: options)
-        let expected = (172_001.0 * 1e-5) + (100_000.0 * 1e-6) + (5.0 * 4.5e-5)
+        let expected = (172_001.0 * 8e-6) + (100_000.0 * 8e-7) + (5.0 * 3e-5)
 
         #expect(abs((report.summary?.totalCostUSD ?? 0) - expected) < 0.000_000_001)
         let breakdown = try #require(report.data.first?.modelBreakdowns?.first)

@@ -1,5 +1,6 @@
 import Foundation
 
+// swiftlint:disable:next type_body_length
 enum CostUsagePricing {
     private static let codexPriorityInputTokenLimit = 272_000
     static let codexUnattributedModel = "unknown"
@@ -191,17 +192,18 @@ enum CostUsagePricing {
         // Long context: prompts with >272K input tokens are 2x input / 1.5x output for the full
         // request. Cache writes: 1.25x uncached input. API Fast support and multipliers are applied
         // separately after Standard pricing resolves from models.dev or this bundled fallback.
+        // Sol was repriced from $5/$30 to $4/$20 on 2026-08-22.
         "gpt-5.6-sol": CodexPricing(
-            inputCostPerToken: 5e-6,
-            outputCostPerToken: 3e-5,
-            cacheReadInputCostPerToken: 5e-7,
+            inputCostPerToken: 4e-6,
+            outputCostPerToken: 2e-5,
+            cacheReadInputCostPerToken: 4e-7,
             displayLabel: nil,
-            cacheWriteInputCostPerToken: 6.25e-6,
+            cacheWriteInputCostPerToken: 5e-6,
             thresholdTokens: 272_000,
-            inputCostPerTokenAboveThreshold: 1e-5,
-            outputCostPerTokenAboveThreshold: 4.5e-5,
-            cacheReadInputCostPerTokenAboveThreshold: 1e-6,
-            cacheWriteInputCostPerTokenAboveThreshold: 1.25e-5),
+            inputCostPerTokenAboveThreshold: 8e-6,
+            outputCostPerTokenAboveThreshold: 3e-5,
+            cacheReadInputCostPerTokenAboveThreshold: 8e-7,
+            cacheWriteInputCostPerTokenAboveThreshold: 1e-5),
         "gpt-5.6-terra": CodexPricing(
             inputCostPerToken: 2e-6,
             outputCostPerToken: 1.2e-5,
@@ -224,6 +226,19 @@ enum CostUsagePricing {
             outputCostPerTokenAboveThreshold: 1.8e-6,
             cacheReadInputCostPerTokenAboveThreshold: 4e-8,
             cacheWriteInputCostPerTokenAboveThreshold: 5e-7),
+        // Daybreak Cyber models (OpenAI pricing page). No long-context tier is published, and
+        // gpt-5.5-cyber lists no cache-write rate.
+        "gpt-5.6-cyber": CodexPricing(
+            inputCostPerToken: 1.25e-5,
+            outputCostPerToken: 7.5e-5,
+            cacheReadInputCostPerToken: 1.25e-6,
+            displayLabel: nil,
+            cacheWriteInputCostPerToken: 1.5625e-5),
+        "gpt-5.5-cyber": CodexPricing(
+            inputCostPerToken: 1.25e-5,
+            outputCostPerToken: 7.5e-5,
+            cacheReadInputCostPerToken: 1.25e-6,
+            displayLabel: nil),
     ]
 
     static func codexBuiltInPricingFingerprint() -> String {
@@ -526,6 +541,15 @@ enum CostUsagePricing {
         // Codex uses gpt-reserve for the Luna Reserve quota bucket.
         if trimmed == "gpt-reserve" {
             return "gpt-5.6-luna"
+        }
+
+        // OpenAI's Daybreak aliases currently point to Sol (blue) and Cyber (red).
+        // https://developers.openai.com/api/docs/pricing
+        if trimmed == "gpt-daybreak-blue-latest" {
+            return "gpt-5.6-sol"
+        }
+        if trimmed == "gpt-daybreak-red-latest" {
+            return "gpt-5.6-cyber"
         }
 
         if self.codex[trimmed] != nil {
