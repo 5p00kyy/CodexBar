@@ -46,7 +46,12 @@ public struct AntigravityRemoteUsageFetcher: Sendable {
         #else
         let architecture = "amd64"
         #endif
-        return "antigravity/hub/2.9.1 darwin/\(architecture)"
+        #if os(Linux)
+        let platform = "linux"
+        #else
+        let platform = "darwin"
+        #endif
+        return "antigravity/hub/2.9.1 \(platform)/\(architecture)"
     }()
 
     private struct FetchContext {
