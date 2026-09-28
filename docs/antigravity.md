@@ -48,7 +48,8 @@ HTTPS results retain their verified identity. Failed command diagnostics do not 
 On macOS, when a Google account is selected or injected in Auto mode and the ambient paths cannot prove
 that account, CodexBar instead runs the same print command scoped to the account: its OAuth credentials
 are written as `agy`'s file-token payload into a fresh private `HOME` under the per-user temporary
-directory, the staged `id_token` claim is re-read from disk and verified against the selected account
+directory, the staged `id_token` claim — when present; saved credentials may omit it when the account
+was created without the `openid` scope — is re-read from disk and verified against the selected account
 before launch, and the child process receives an allowlist environment (login `PATH`, locale, proxy
 variables) without `ANTIGRAVITY_OAUTH_CREDENTIALS_JSON` or any ambient provider credentials. A non-empty
 `SSH_TTY` forces `agy` onto file-token storage so the scoped run never touches the OS keyring. The

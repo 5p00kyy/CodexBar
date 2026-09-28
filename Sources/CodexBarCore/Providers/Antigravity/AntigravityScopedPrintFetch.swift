@@ -6,6 +6,9 @@ import Glibc
 import Musl
 #endif
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 // MARK: - agy file token storage payload
 
@@ -135,9 +138,11 @@ enum AntigravityScopedAgyStaging {
     }
 
     /// Creates a fresh 0700 staging directory, writes the token file, then
-    /// re-reads and verifies that the staged `id_token` claim belongs to the
-    /// expected account — the identity `agy` will act as is proven from the
-    /// bytes it will read, not from the caller's label.
+    /// re-reads it and verifies the staged `id_token` claim against the
+    /// expected account when a claim is present. Saved credentials may carry
+    /// no `id_token` at all (the OAuth scopes CodexBar requests do not include
+    /// `openid`); those stage unchecked here because the post-run userinfo
+    /// verification binds the effective account anyway.
     static func stage(
         credentials: AntigravityOAuthCredentials,
         expectedAccountEmail: String,
@@ -162,11 +167,14 @@ enum AntigravityScopedAgyStaging {
             try CredentialFileWriter.writePrivate(tokenData, to: tokenURL)
 
             guard let staged = try? Data(contentsOf: tokenURL),
-                  let payload = AntigravityAgyFileTokenEncoder.decode(data: staged),
-                  Self.normalizedEmail(
-                      AntigravityOAuthCredentials.email(fromIDToken: payload.idToken)) ==
-                  Self.normalizedEmail(expectedAccountEmail)
+                  let payload = AntigravityAgyFileTokenEncoder.decode(data: staged)
             else {
+                throw AntigravityScopedStagingError.identityUnverifiable
+            }
+            if let stagedEmail = Self.normalizedEmail(
+                AntigravityOAuthCredentials.email(fromIDToken: payload.idToken)),
+                stagedEmail != Self.normalizedEmail(expectedAccountEmail)
+            {
                 throw AntigravityScopedStagingError.identityUnverifiable
             }
             return (root, home)
@@ -232,7 +240,8 @@ extension AntigravityCLIHTTPSFetchStrategy {
     /// Runs `agy -p /usage` scoped to the injected token account's credentials:
     /// the account's OAuth tokens are staged into a private per-run `HOME`, the
     /// child receives an allowlist environment, and the staged token's `id_token`
-    /// claim is verified against the selected account before launch. Because the
+    /// claim, when present, is verified against the selected account before
+    /// launch. Because the
     /// CLI authenticates with the staged access/refresh tokens — which could
     /// disagree with the `id_token` claim — the access token `agy` actually used
     /// is resolved through Google's `userinfo` endpoint after the run and must

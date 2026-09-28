@@ -94,17 +94,24 @@ struct AntigravityScopedPrintFetchTests {
     }
 
     @Test
-    func `staging rejects credentials without an identity claim`() throws {
+    func `staging accepts token-only credentials without an id_token claim`() throws {
+        // Saved accounts created without the `openid` scope carry email,
+        // tokens, and expiry but no ID token; they must still stage because
+        // the post-run userinfo check binds the effective account.
         let credentials = AntigravityOAuthCredentials(
             accessToken: "access",
             refreshToken: "refresh",
-            expiryDate: Date().addingTimeInterval(3600))
-        do {
-            _ = try AntigravityScopedAgyStaging.stage(
-                credentials: credentials, expectedAccountEmail: "scoped@example.com")
-            Issue.record("Unverifiable staged identity must fail closed")
-        } catch AntigravityScopedStagingError.identityUnverifiable {}
-        #expect(self.scopedStagingDirectories().isEmpty)
+            expiryDate: Date().addingTimeInterval(3600),
+            email: "scoped@example.com")
+        let staged = try AntigravityScopedAgyStaging.stage(
+            credentials: credentials, expectedAccountEmail: "scoped@example.com")
+        defer { try? FileManager.default.removeItem(at: staged.stagingRoot) }
+
+        let tokenURL = staged.home
+            .appendingPathComponent(".gemini/antigravity-cli/antigravity-oauth-token")
+        let payload = try AntigravityAgyFileTokenEncoder.decode(data: Data(contentsOf: tokenURL))
+        #expect(payload?.token.accessToken == "access")
+        #expect(payload?.idToken == nil)
     }
 
     // MARK: - Fallback wiring (platform-independent)
@@ -256,6 +263,26 @@ struct AntigravityScopedPrintFetchTests {
     }
 
     @Test
+    func `scoped print attributes token-only credentials after userinfo match`() async throws {
+        let report = try self.reportJSON()
+        let fixture = try self.scopedPrintFixture(body: """
+        /bin/cat <<'REPORT'
+        \(report)
+        REPORT
+        """)
+        defer { try? FileManager.default.removeItem(at: fixture.directory) }
+
+        var environment = self.tokenOnlyAccountEnv(email: "scoped@example.com")
+        environment.merge(fixture.environment) { _, new in new }
+
+        let result = try await AntigravityCLIHTTPSFetchStrategy().fetchScopedPrintUsage(
+            binary: fixture.binary.path,
+            environment: environment,
+            dataLoader: self.userinfoLoader(mapping: ["scoped-access-token": "scoped@example.com"]))
+        #expect(result.usage.identity?.accountEmail == "scoped@example.com")
+    }
+
+    @Test
     func `scoped print rejects a report when the effective account cannot be verified`() async throws {
         let report = try self.reportJSON()
         let fixture = try self.scopedPrintFixture(body: """
@@ -326,6 +353,18 @@ struct AntigravityScopedPrintFetchTests {
     private func accountEnv(email: String) -> [String: String] {
         guard let value = try? AntigravityOAuthCredentialsStore.tokenAccountValue(
             for: self.credentials(email: email))
+        else { return [:] }
+        return [AntigravityOAuthCredentialsStore.environmentCredentialsKey: value]
+    }
+
+    private func tokenOnlyAccountEnv(email: String) -> [String: String] {
+        let credentials = AntigravityOAuthCredentials(
+            accessToken: "scoped-access-token",
+            refreshToken: "refresh",
+            expiryDate: Date().addingTimeInterval(3600),
+            email: email)
+        guard let value = try? AntigravityOAuthCredentialsStore.tokenAccountValue(
+            for: credentials)
         else { return [:] }
         return [AntigravityOAuthCredentialsStore.environmentCredentialsKey: value]
     }
