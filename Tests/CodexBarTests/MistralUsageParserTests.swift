@@ -47,8 +47,8 @@ struct MistralUsageParserTests {
         #expect(snapshot.totalCost > 0)
     }
 
-    @Test
-    func `prices entries by event type zone and tier instead of the last matching metric`() throws {
+    @Test(arguments: [false, true])
+    func `prices entries by event type zone and tier instead of the last matching metric`(reversed: Bool) throws {
         // Trimmed from a real September 2026 response: the price table lists mistral-medium-3-5 input once per
         // zone and tier and then again as a per-second audio price, which is 100x the token price.
         let entry = { (group: String, value: Int) in
@@ -64,7 +64,7 @@ struct MistralUsageParserTests {
             "api_zone":"\(zone)","service_tier":"\(tier)","price":"\(price)"}
             """
         }
-        let prices = [
+        var prices = [
             price("api_tokens", "input", "global", "standard", "0.0000012750"),
             price("api_tokens", "input", "eu", "priority", "0.0000023588"),
             price("api_audio_seconds", "input", "global", "standard", "0.0001416667"),
@@ -73,6 +73,7 @@ struct MistralUsageParserTests {
             price("api_tokens", "output", "global", "standard", "0.0000063750"),
             price("api_tokens", "output", "eu", "priority", "0.0000117938"),
         ]
+        if reversed { prices.reverse() }
         let json = """
         {"vibe_code":{"completion":{"models":{"mistral-vibe-cli-latest::mistral-medium-3-5":{\
         "input":[\(entry("input", 4_375_190))],"cached":[\(entry("cached", 21_628_160))],\
@@ -85,9 +86,35 @@ struct MistralUsageParserTests {
         let snapshot = try MistralUsageFetcher.parseResponse(data: Data(json.utf8), updatedAt: updatedAt)
 
         let expected = 4_375_190 * 0.000001275 + 21_628_160 * 1.275e-7 + 458_774 * 0.000006375
+        #expect(snapshot.totalInputTokens == 4_375_190)
+        #expect(snapshot.totalCachedTokens == 21_628_160)
+        #expect(snapshot.totalOutputTokens == 458_774)
         #expect(abs(snapshot.totalCost - expected) < 1e-9)
         let history = snapshot.toCostUsageTokenSnapshot(historyDays: 30)
         #expect(abs((history.last30DaysCostUSD ?? 0) - expected) < 1e-9)
+    }
+
+    @Test(arguments: ["legacy", "zone", "tier"])
+    func `legacy prices match qualified usage without guessing a zone or tier`(dimension: String) throws {
+        let qualifier = switch dimension {
+        case "zone": #","api_zone":"eu","service_tier":"standard""#
+        case "tier": #","api_zone":"global","service_tier":"priority""#
+        default: ""
+        }
+        let json = """
+        {"completion":{"models":{"fixture":{"input":[{
+          "event_type":"api_tokens","billing_metric":"fixture","billing_group":"input",
+          "timestamp":"2026-09-16","value":100,"value_paid":40,
+          "api_zone":"global","service_tier":"standard"
+        }]}}},"prices":[{
+          "event_type":"api_tokens","billing_metric":"fixture","billing_group":"input","price":"0.25"
+          \(qualifier)
+        }]}
+        """
+        let snapshot = try MistralUsageFetcher.parseResponse(data: Data(json.utf8), updatedAt: Date())
+        #expect(snapshot.totalInputTokens == 100)
+        #expect(snapshot.totalCost == (dimension == "legacy" ? 10 : 0))
+        #expect(snapshot.daily.first?.cost == snapshot.totalCost)
     }
 
     @Test(arguments: ["NaN", "Infinity", "1e308"])

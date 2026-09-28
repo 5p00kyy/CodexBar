@@ -245,77 +245,33 @@ public enum MistralUsageFetcher {
         var modelCount = 0
         var daily: [String: DailyAccumulator] = [:]
 
-        // API, Le Chat, and Vibe completions share consumed-token and billed-cost accounting.
-        for category in [billing.completion, billing.chat, billing.vibeCode?.completion] {
-            for (modelName, modelData) in category?.models ?? [:] {
-                modelCount += 1
-                let aggregate = try Self.aggregateModel(modelData, prices: prices, countsTokens: true)
-                try totalTokens.add(aggregate.tokens)
+        // Library tokens count only in daily buckets; completion categories also own month totals/model counts.
+        let categories: [(models: [String: MistralModelUsageData]?, monthTokens: Bool, dailyTokens: Bool)] = [
+            (billing.completion?.models, true, true),
+            (billing.chat?.models, true, true),
+            (billing.vibeCode?.completion?.models, true, true),
+            (billing.ocr?.models, false, false),
+            (billing.connectors?.models, false, false),
+            (billing.audio?.models, false, false),
+            (billing.librariesApi?.pages?.models, false, false),
+            (billing.librariesApi?.tokens?.models, false, true),
+            (billing.fineTuning?.training, false, false),
+            (billing.fineTuning?.storage, false, false),
+        ]
+        for category in categories {
+            for (modelName, modelData) in category.models ?? [:] {
+                let aggregate = try Self.aggregateModel(modelData, prices: prices, countsTokens: category.monthTokens)
+                if category.monthTokens {
+                    modelCount += 1
+                    try totalTokens.add(aggregate.tokens)
+                }
                 Self.accumulateFiniteCost(aggregate.cost, into: &totalCost)
                 try Self.addDailyEntries(
                     modelName: modelName,
                     data: modelData,
                     prices: prices,
                     daily: &daily,
-                    countsTokens: true)
-            }
-        }
-
-        // Aggregate OCR, connectors, audio if present
-        for category in [billing.ocr, billing.connectors, billing.audio] {
-            if let models = category?.models {
-                for (modelName, modelData) in models {
-                    let (_, cost) = try Self.aggregateModel(modelData, prices: prices, countsTokens: false)
-                    Self.accumulateFiniteCost(cost, into: &totalCost)
-                    try Self.addDailyEntries(
-                        modelName: modelName,
-                        data: modelData,
-                        prices: prices,
-                        daily: &daily,
-                        countsTokens: false)
-                }
-            }
-        }
-
-        // Aggregate libraries_api (pages + tokens)
-        if let models = billing.librariesApi?.pages?.models {
-            for (modelName, modelData) in models {
-                let (_, cost) = try Self.aggregateModel(modelData, prices: prices, countsTokens: false)
-                Self.accumulateFiniteCost(cost, into: &totalCost)
-                try Self.addDailyEntries(
-                    modelName: modelName,
-                    data: modelData,
-                    prices: prices,
-                    daily: &daily,
-                    countsTokens: false)
-            }
-        }
-        if let models = billing.librariesApi?.tokens?.models {
-            for (modelName, modelData) in models {
-                let (_, cost) = try Self.aggregateModel(modelData, prices: prices, countsTokens: false)
-                Self.accumulateFiniteCost(cost, into: &totalCost)
-                try Self.addDailyEntries(
-                    modelName: modelName,
-                    data: modelData,
-                    prices: prices,
-                    daily: &daily,
-                    countsTokens: true)
-            }
-        }
-
-        // Aggregate fine_tuning (training + storage)
-        for models in [billing.fineTuning?.training, billing.fineTuning?.storage] {
-            if let models {
-                for (modelName, modelData) in models {
-                    let (_, cost) = try Self.aggregateModel(modelData, prices: prices, countsTokens: false)
-                    Self.accumulateFiniteCost(cost, into: &totalCost)
-                    try Self.addDailyEntries(
-                        modelName: modelName,
-                        data: modelData,
-                        prices: prices,
-                        daily: &daily,
-                        countsTokens: false)
-                }
+                    countsTokens: category.dailyTokens)
             }
         }
 
@@ -349,10 +305,9 @@ public enum MistralUsageFetcher {
 
     // MARK: - Private Helpers
 
-    /// Mistral lists one price per event type, metric, group, API zone, and service tier. The same metric and
-    /// group can carry a far higher per-second audio price or a priority-tier price, so every dimension is part of
-    /// the key; a price table without zone or tier still matches entries through the zone-less key.
-    fileprivate struct PriceKey: Hashable {
+    /// Event type, zone, and tier distinguish otherwise equal billing units. Legacy tables can omit both
+    /// zone and tier; only that explicitly unqualified row is a fallback.
+    private struct PriceKey: Hashable {
         let eventType: String?
         let metric: String
         let group: String
@@ -411,14 +366,18 @@ public enum MistralUsageFetcher {
             (.input, data.input), (.output, data.output), (.cached, data.cached),
         ]
         for (kind, entries) in lanes {
-            try self.addDaily(
-                entries: entries ?? [],
-                context: DailyEntryContext(
+            for entry in entries ?? [] {
+                guard let day = dayKey(from: entry.timestamp) else { continue }
+                let cost = Self.cost(for: entry, units: entry.valuePaid ?? entry.value ?? 0, prices: prices)
+                var accumulator = daily[day] ?? DailyAccumulator(day: day)
+                try accumulator.add(
+                    modelName: Self.displayModelName(modelName, entry: entry),
                     kind: kind,
-                    modelName: modelName,
-                    prices: prices,
-                    countsTokens: countsTokens),
-                daily: &daily)
+                    units: entry.value ?? entry.valuePaid ?? 0,
+                    cost: cost,
+                    countsTokens: countsTokens)
+                daily[day] = accumulator
+            }
         }
     }
 
@@ -426,26 +385,6 @@ public enum MistralUsageFetcher {
         case input
         case cached
         case output
-    }
-
-    private static func addDaily(
-        entries: [MistralUsageEntry],
-        context: DailyEntryContext,
-        daily: inout [String: DailyAccumulator]) throws
-    {
-        for entry in entries {
-            guard let day = dayKey(from: entry.timestamp) else { continue }
-            let units = entry.valuePaid ?? entry.value ?? 0
-            let cost = Self.cost(for: entry, units: units, prices: context.prices)
-            var accumulator = daily[day] ?? DailyAccumulator(day: day)
-            try accumulator.add(
-                modelName: Self.displayModelName(context.modelName, entry: entry),
-                kind: context.kind,
-                units: entry.value ?? entry.valuePaid ?? 0,
-                cost: cost,
-                countsTokens: context.countsTokens)
-            daily[day] = accumulator
-        }
     }
 
     private static func cost(for entry: MistralUsageEntry, units: Int, prices: [PriceKey: Double]) -> Double {
@@ -491,13 +430,6 @@ public enum MistralUsageFetcher {
         }
         return nil
     }
-}
-
-private struct DailyEntryContext {
-    let kind: MistralUsageFetcher.TokenKind
-    let modelName: String
-    let prices: [MistralUsageFetcher.PriceKey: Double]
-    let countsTokens: Bool
 }
 
 private struct TokenCounts {
