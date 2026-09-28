@@ -77,8 +77,11 @@ read_when:
   `/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`.
   The scanner requires an `app-server` argument, verifies the running PID's kernel-reported executable path and
   Apple-anchored OpenAI signing team (`2DC432GLL2`), rejects symlink redirects, and validates the outer ChatGPT
-  bundle (`com.openai.codex`) with the existing signature and Gatekeeper preflight. Trust is rechecked on each scan;
-  a matching process name or command line alone is insufficient. Home-directory installations, temporary paths,
+  bundle (`com.openai.codex`) with the existing signature and Gatekeeper preflight. Running-process trust is rechecked
+  on each scan. Successful bundle assessments are reused while the resolved paths and filesystem attributes
+  (including device, inode, and modification date) of the bundle, Info.plist, main executable, and CodeResources
+  remain unchanged. Updates trigger a new assessment; missing metadata and failed assessments are never cached.
+  A matching process name or command line alone is insufficient. Home-directory installations, temporary paths,
   and similarly named bundles do not qualify for this app-server gate. Recent rollout modification times determine
   coding activity; the app-server's presence alone never keeps the 5-minute cadence active.
 - Each adaptive tick recomputes the delay after the previous refresh completes, sleeps, then calls the same

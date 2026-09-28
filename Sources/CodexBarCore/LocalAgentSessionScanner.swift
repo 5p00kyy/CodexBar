@@ -30,7 +30,7 @@ enum ChatGPTCodexProcessTrust {
         executablePath: (Int32) -> String? = DarwinProcessEnumerator.executablePath,
         resolvePath: (String) -> String = { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path },
         processIsTrusted: (Int32) -> Bool = Self.isOpenAIProcess,
-        appIsTrusted: (String) -> Bool = { CodexLaunchPreflight.isLaunchCandidateAllowed(path: $0) }) -> Bool
+        appIsTrusted: (String) -> Bool = { ChatGPTBundleTrustCache.shared.isTrusted($0) }) -> Bool
     {
         guard let path = executablePath(pid),
               AgentPSOutputParser.chatGPTCodexExecutablePaths.contains(path),
@@ -60,6 +60,59 @@ enum ChatGPTCodexProcessTrust {
     }
     #endif
 }
+
+#if os(macOS)
+final class ChatGPTBundleTrustCache: @unchecked Sendable {
+    typealias Identity = [URL: NSDictionary]
+    static let shared = ChatGPTBundleTrustCache()
+    private let lock = NSLock()
+    private var trustedIdentity: Identity?
+
+    func isTrusted(
+        _ path: String,
+        identity: (String) -> Identity? = ChatGPTBundleTrustCache.identity,
+        assess: (String) -> Bool = { CodexLaunchPreflight.isLaunchCandidateAllowed(path: $0) }) -> Bool
+    {
+        self.lock.withLock {
+            guard let current = identity(path) else {
+                self.trustedIdentity = nil
+                return false
+            }
+            if self.trustedIdentity == current { return true }
+            self.trustedIdentity = nil
+            guard assess(path), identity(path) == current else { return false }
+            self.trustedIdentity = current
+            return true
+        }
+    }
+
+    static func identity(_ path: String) -> Identity? {
+        let bundle = URL(fileURLWithPath: path)
+        // Read Info.plist directly: Bundle caches it across in-process app updates.
+        let plist = bundle.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: plist),
+              let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+              let executable = info["CFBundleExecutable"] as? String,
+              !executable.isEmpty, !executable.contains("/"), executable != ".", executable != ".."
+        else { return nil }
+        var identity: Identity = [:]
+        for url in [
+            bundle,
+            plist,
+            bundle.appendingPathComponent("Contents/MacOS/\(executable)"),
+            bundle.appendingPathComponent("Contents/_CodeSignature/CodeResources"),
+        ] {
+            guard url.resolvingSymlinksInPath().path == url.path,
+                  let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+                  attributes[.systemNumber] != nil, attributes[.systemFileNumber] != nil,
+                  attributes[.modificationDate] != nil
+            else { return nil }
+            identity[url] = attributes as NSDictionary
+        }
+        return identity
+    }
+}
+#endif
 
 public struct LocalAgentSessionScanner: Sendable {
     typealias ProcessOutputProvider = @Sendable ([String: String]) async -> String
@@ -133,15 +186,9 @@ public struct LocalAgentSessionScanner: Sendable {
         else { return [] }
         let codexAppServerPresent = AgentPSOutputParser.hasCodexAppServer(in: allProcesses) ||
             trustedCodexAppServerPresent
-        let cwdByPID = if let cwdProvider = self.cwdProvider {
-            await cwdProvider(processes.map(\ .pid), environment)
-        } else {
-            await self.cwdByPID(processes.map(\ .pid), environment: environment)
-        }
-        let codexCWDs = processes.compactMap { process -> String? in
-            guard AgentPSOutputParser.provider(for: process) == .codex else { return nil }
-            return cwdByPID[process.pid]
-        }
+        let cwdByPID = await self.cwdByPID(processes.map(\.pid), environment: environment)
+        let codexCWDs = processes.filter { AgentPSOutputParser.provider(for: $0) == .codex }
+            .compactMap { cwdByPID[$0.pid] }
         let codexHomeDirectory = URL(
             fileURLWithPath: environment["CODEX_HOME"] ?? homeDirectory.appendingPathComponent(".codex").path,
             isDirectory: true)
@@ -200,12 +247,7 @@ public struct LocalAgentSessionScanner: Sendable {
     {
         let contexts = await self.piSessionProcessContexts(environment: environment)
         var seen = Set<String>()
-        return contexts.compactMap { context in
-            guard let workingDirectory = context.workingDirectory,
-                  seen.insert(workingDirectory.path).inserted
-            else { return nil }
-            return workingDirectory
-        }
+        return contexts.compactMap(\.workingDirectory).filter { seen.insert($0.path).inserted }
     }
 
     /// Returns the command selectors and project directories of live Pi-family processes so cost scans can
@@ -223,11 +265,7 @@ public struct LocalAgentSessionScanner: Sendable {
                 .filter { AgentPSOutputParser.provider(for: $0) == .pi })
         guard !processes.isEmpty, self.config.maxProcessCount > 0 else { return [] }
 
-        let cwdByPID = if let cwdProvider = self.cwdProvider {
-            await cwdProvider(processes.map(\.pid), environment)
-        } else {
-            await self.cwdByPID(processes.map(\.pid), environment: environment)
-        }
+        let cwdByPID = await self.cwdByPID(processes.map(\.pid), environment: environment)
         var seen = Set<String>()
         let distinctContexts: [PiSessionProcessContext] = processes.compactMap { process in
             let workingDirectory = cwdByPID[process.pid]
@@ -280,12 +318,7 @@ public struct LocalAgentSessionScanner: Sendable {
                 environment: environment,
                 resolvedWorkingDirectory: resolvedWorkingDirectory)
             let key = reader.databaseURL.path
-            if var group = groups[key] {
-                group.sessionIDs.insert(rollout.metadata.sessionID)
-                groups[key] = group
-            } else {
-                groups[key] = (reader, [rollout.metadata.sessionID])
-            }
+            groups[key, default: (reader, [])].sessionIDs.insert(rollout.metadata.sessionID)
         }
 
         var metadata: [String: CodexThreadMetadata] = [:]
@@ -328,58 +361,36 @@ public struct LocalAgentSessionScanner: Sendable {
             cwdByPID: cwdByPID)
 
         for process in processes {
-            guard let provider = AgentPSOutputParser.provider(for: process) else { continue }
-            let cwd = cwdByPID[process.pid]
-            switch provider {
-            case .claude:
-                let transcript = claudeTranscripts[process.pid]
-                sessions.append(AgentSession(
-                    id: transcript?.url.deletingPathExtension().lastPathComponent ?? "pid:\(process.pid)",
-                    provider: .claude,
-                    source: AgentPSOutputParser.source(for: process),
-                    state: self.config.state(
-                        lastActivityAt: transcript?.modifiedAt,
-                        now: context.now,
-                        hasLiveProcess: true),
-                    pid: process.pid,
-                    cwd: cwd,
-                    projectName: Self.projectName(cwd),
-                    startedAt: process.startedAt,
-                    lastActivityAt: transcript?.modifiedAt,
-                    transcriptPath: transcript?.url.path,
-                    host: context.host))
-            case .codex:
-                let rollout = rollouts.first { candidate in
-                    !matchedRolloutPaths.contains(candidate.url.path) &&
-                        AgentSessionCorrelation.codexWorkingDirectoriesMatch(candidate.metadata.cwd, cwd)
-                }
-                if let rollout {
-                    matchedRolloutPaths.insert(rollout.url.path)
-                }
-                let rolloutSource = rollout?.metadata.sessionSource
-                sessions.append(AgentSession(
-                    id: rollout?.metadata.sessionID ?? "pid:\(process.pid)",
-                    provider: .codex,
-                    source: rolloutSource == nil || rolloutSource == .unknown ? .cli : rolloutSource ?? .cli,
-                    state: self.config.state(
-                        lastActivityAt: rollout?.modifiedAt,
-                        now: context.now,
-                        hasLiveProcess: true),
-                    pid: process.pid,
-                    cwd: cwd ?? rollout?.metadata.cwd,
-                    projectName: Self.projectName(cwd ?? rollout?.metadata.cwd),
-                    sessionName: codexDescriptiveNamePIDs.contains(process.pid)
-                        ? rollout?.metadata.descriptiveName(
-                            threadMetadata: rollout.flatMap { context.threadMetadata[$0.metadata.sessionID] })
-                        : nil,
-                    startedAt: process.startedAt,
-                    lastActivityAt: rollout?.modifiedAt,
-                    transcriptPath: rollout?.url.path,
-                    host: context.host))
-            // Provider-specific by design: Pi-family processes are correlated by PiFamilySessionScanner.
-            case .pi:
-                continue
-            }
+            // Pi-family processes are correlated by PiFamilySessionScanner.
+            guard let provider = AgentPSOutputParser.provider(for: process), provider != .pi else { continue }
+            let processCWD = cwdByPID[process.pid]
+            let rollout = provider == .codex ? rollouts.first { candidate in
+                !matchedRolloutPaths.contains(candidate.url.path) &&
+                    AgentSessionCorrelation.codexWorkingDirectoriesMatch(candidate.metadata.cwd, processCWD)
+            } : nil
+            if let rollout { matchedRolloutPaths.insert(rollout.url.path) }
+            let transcript = provider == .claude ? claudeTranscripts[process.pid] : nil
+            let modifiedAt = rollout?.modifiedAt ?? transcript?.modifiedAt
+            let cwd = processCWD ?? rollout?.metadata.cwd
+            let rolloutSource = rollout?.metadata.sessionSource
+            sessions.append(AgentSession(
+                id: rollout?.metadata.sessionID ?? transcript?.url.deletingPathExtension().lastPathComponent ??
+                    "pid:\(process.pid)",
+                provider: provider,
+                source: provider == .claude ? AgentPSOutputParser.source(for: process) :
+                    (rolloutSource == .unknown ? nil : rolloutSource) ?? .cli,
+                state: self.config.state(lastActivityAt: modifiedAt, now: context.now, hasLiveProcess: true),
+                pid: process.pid,
+                cwd: cwd,
+                projectName: cwd.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0).lastPathComponent },
+                sessionName: codexDescriptiveNamePIDs.contains(process.pid)
+                    ? rollout?.metadata.descriptiveName(
+                        threadMetadata: rollout.flatMap { context.threadMetadata[$0.metadata.sessionID] })
+                    : nil,
+                startedAt: process.startedAt,
+                lastActivityAt: modifiedAt,
+                transcriptPath: rollout?.url.path ?? transcript?.url.path,
+                host: context.host))
         }
 
         for rollout in rollouts
@@ -487,6 +498,7 @@ public struct LocalAgentSessionScanner: Sendable {
     #endif
 
     private func cwdByPID(_ pids: [Int32], environment: [String: String]) async -> [Int32: String] {
+        if let cwdProvider = self.cwdProvider { return await cwdProvider(pids, environment) }
         guard !pids.isEmpty else { return [:] }
         #if canImport(Darwin)
         return Dictionary(uniqueKeysWithValues: pids.compactMap { pid in
@@ -567,14 +579,5 @@ public struct LocalAgentSessionScanner: Sendable {
         return path.split(separator: ":")
             .map { String($0) + "/" + name }
             .first { FileManager.default.isExecutableFile(atPath: $0) }
-    }
-
-    private static func standardized(_ path: String?) -> String? {
-        path.map { URL(fileURLWithPath: $0).standardizedFileURL.path }
-    }
-
-    private static func projectName(_ cwd: String?) -> String? {
-        guard let cwd, !cwd.isEmpty else { return nil }
-        return URL(fileURLWithPath: cwd).lastPathComponent
     }
 }

@@ -345,10 +345,7 @@ public enum AgentPSOutputParser {
     }
 
     private static func arguments(_ record: AgentProcessRecord) -> [String] {
-        if let arguments = record.arguments {
-            return Array(arguments.dropFirst())
-        }
-        return self.arguments(record.command)
+        Array((record.arguments ?? record.command.split(whereSeparator: \ .isWhitespace).map(String.init)).dropFirst())
     }
 
     private static func arguments(_ command: String) -> [String] {
