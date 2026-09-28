@@ -102,7 +102,7 @@ defineProvider({
 - `name`: trimmed display name, 1–80 UTF-8 bytes.
 - `icon` (optional): `{monogram, tint}`. `monogram` is 1–3 characters; `tint` is `#RRGGBB`. The fallback is the first
   letter of `name` with a neutral tint. File/SVG icons are not supported.
-- `topLevel` (optional): set to `true` to give an enabled plugin its own provider-switcher tab. The default is `false`.
+- `topLevel` (optional, default `true`): gives an enabled plugin its own provider-switcher tab when Merge Icons is on. Set to `false` to keep an appended card.
 - `endpoints`: 1–16 declared network origins. A fixed endpoint is a normalized HTTPS origin such as
   `https://api.example.com` (no path, query, fragment, or user info). A settings-derived endpoint is
   `{setting: "BASE_URL", policy: "https"}`, `{setting: "BASE_URL", policy: "https-or-loopback-http"}`, or
@@ -401,9 +401,10 @@ built-in provider.
 
 ## Provider switcher tabs
 
-Set `topLevel: true` in the manifest to give an enabled plugin its own tab when **Merge Icons** is enabled. The tab uses
-the manifest name and icon. Selecting it shows that plugin’s usage followed by any enabled plugins using the original
-appended-card placement. With Merge Icons disabled, plugins retain appended-card placement.
+Enabled user plugins get their own tab by default when **Merge Icons** is enabled; the manifest can omit `topLevel`.
+The tab uses the manifest name and icon. Selecting it shows that plugin’s usage followed by any enabled plugins with
+explicit `topLevel: false`, which keeps the appended-card placement under provider tabs and Overview. With Merge Icons
+disabled, all plugins retain appended-card placement regardless of `topLevel`.
 
 A single plugin works without a redundant switcher, and multiple plugin tabs work even with no built-in providers
 enabled. Refresh and Cmd-R refresh the selected plugin; each card’s refresh button targets that card. Completed
@@ -443,3 +444,17 @@ Bundled scripts own requests, error classification, and snapshot mapping; Swift 
 | [Zed](zed.md) | Swift discovers editor settings and Keychain credentials. Opt-in browser billing uses only the declared `zed.dev` cookie session, never editor credentials. |
 | [Aixy](aixy.md) | TypeScript maps key-scoped usage and budgets; the host validates the configured gateway origin and supplies the API key. |
 | [Raycast](raycast.md) | `ctx.browser.sessions` retries candidates for declared `raycast.com` / `www.raycast.com` domains. The broker prefers exact-host cookies over same-name parent cookies and excludes sibling/lookalike hosts. |
+
+## Native adapters with declarative registration
+
+Hugging Face, Nous, Fireworks, xAI, Venice, and Zed also declare `PluginProviderSpec` values. Hugging Face keeps its
+serialized, retained script runtime and CLI-token reader. Nous keeps Hermes credential validation and diagnostics;
+Fireworks keeps account-slug projection and its typed result-persistence policy. xAI shares the API-key and workspace
+fields, with provider-owned team-ID validation. Venice and Zed share their cookie-field declarations while retaining
+native source selection and app settings, including Zed's default-Off browser policy.
+
+The spec accepts typed status-page, token-cost, settings-section, and plugin-result-policy options. These contracts are
+also needed by the remaining OpenAI API, OpenRouter, Moonshot, and z.ai descriptors; their distinct branding, config
+normalization, credit, and pacing contracts still require a separate migration. Native fetch-plan and credential
+adapters remain provider-owned, as with ClinePass. A metadata migration must not replace a retained runtime or broaden
+credential discovery merely to use the default script builder.

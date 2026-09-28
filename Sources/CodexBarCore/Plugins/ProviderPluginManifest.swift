@@ -130,7 +130,7 @@ public struct ProviderPluginManifest: Sendable {
             }
             self.topLevel = topLevel.boolValue()
         } else {
-            self.topLevel = false
+            self.topLevel = true
         }
 
         let endpointValue = definition.property("endpoints")
