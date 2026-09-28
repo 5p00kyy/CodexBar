@@ -3,6 +3,50 @@ import Foundation
 import Testing
 
 struct CLIPluginConfigPreservationTests {
+    @Test(arguments: [nil, "", " \t\r\n "] as [String?])
+    func `missing and blank configs permit validation usage and settings writes`(_ contents: String?) async throws {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try fixture.installPlugin()
+        try FileManager.default.removeItem(at: fixture.configURL)
+        if let contents { try Data(contents.utf8).write(to: fixture.configURL) }
+
+        _ = try await fixture.run(["config", "validate", "--json"])
+        let usage = try await fixture.run(["usage", "--provider", "fixture-unavailable", "--json", "--json-only"])
+        let payloads = try #require(JSONSerialization.jsonObject(with: usage) as? [[String: Any]])
+        let payload = try #require(payloads.first)
+        #expect(payload["error"] == nil)
+        let snapshot = try #require(payload["usage"] as? [String: Any])
+        let primary = try #require(snapshot["primary"] as? [String: Any])
+        #expect(primary["usedPercent"] as? Double == 1)
+        #expect((try? Data(contentsOf: fixture.configURL)) == contents.map { Data($0.utf8) })
+
+        _ = try await fixture.run(["config", "enable", "--provider", "grok", "--json"])
+        let saved = try CodexBarConfigStore(fileURL: fixture.configURL).load()
+        #expect(saved?.providerConfig(for: .grok)?.enabled == true)
+    }
+
+    @Test(arguments: ["{", " \n{\"providers\":"])
+    func `malformed config reports an error and cannot be overwritten by config commands`(
+        _ contents: String) async throws
+    {
+        let fixture = try Fixture()
+        defer { fixture.remove() }
+        try Data(contents.utf8).write(to: fixture.configURL)
+        for arguments in [
+            ["config", "validate", "--json"],
+            ["usage", "--provider", "grok", "--json", "--json-only"],
+            ["config", "enable", "--provider", "grok", "--json"],
+        ] {
+            let output = try await fixture.run(arguments, acceptsNonZeroExit: true)
+            let payloads = try #require(JSONSerialization.jsonObject(with: output) as? [[String: Any]])
+            let error = try #require(payloads.first?["error"] as? [String: Any])
+            #expect(error["kind"] as? String == "config")
+            #expect((error["message"] as? String)?.hasPrefix("Failed to decode CodexBar config:") == true)
+            #expect(try Data(contentsOf: fixture.configURL) == Data(contents.utf8))
+        }
+    }
+
     @Test(arguments: ["enable", "disable", "set-api-key"], ["missing", "invalid", "loaded"])
     func `config writes preserve unavailable plugins`(_ command: String, discovery: String) async throws {
         let fixture = try Fixture(discoveryFails: discovery == "invalid")
@@ -86,7 +130,7 @@ struct CLIPluginConfigPreservationTests {
             try Data(source.utf8).write(to: self.providersDirectory.appendingPathComponent("fixture.js"))
         }
 
-        func run(_ arguments: [String]) async throws -> Data {
+        func run(_ arguments: [String], acceptsNonZeroExit: Bool = false) async throws -> Data {
             let result = try await SubprocessRunner.run(
                 binary: TestBuildProducts.executableURL(named: "CodexBarCLI").path,
                 arguments: arguments,
@@ -99,6 +143,7 @@ struct CLIPluginConfigPreservationTests {
                     "CODEXBAR_SUPPRESS_TEST_KEYCHAIN_ACCESS": "1",
                 ],
                 timeout: 30,
+                acceptsNonZeroExit: acceptsNonZeroExit,
                 label: "isolated plugin config")
             return Data(result.stdout.utf8)
         }
