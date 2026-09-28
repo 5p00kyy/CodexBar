@@ -8,6 +8,7 @@ struct QuotaBurndownChartMenuView: View {
         let id: String
         let title: String
         let model: QuotaBurndownModel
+        let lastKnownUsageMessage: String
     }
 
     private let series: [Series]
@@ -43,7 +44,13 @@ struct QuotaBurndownChartMenuView: View {
             case .opus: title = L("Opus")
             default: return nil
             }
-            return Series(id: "\(history.name.rawValue):\(history.windowMinutes)", title: title, model: model)
+            return Series(
+                id: "\(history.name.rawValue):\(history.windowMinutes)",
+                title: title,
+                model: model,
+                lastKnownUsageMessage: LastKnownUsagePresentation.message(
+                    capturedAt: latest.capturedAt,
+                    now: referenceDate))
         }
         self.width = width
         let accent = ProviderAccentPalette.color(for: provider)
@@ -106,9 +113,9 @@ struct QuotaBurndownChartMenuView: View {
                 .accessibilityLabel(L("Usage remaining"))
 
                 HStack {
-                    Text(selected.model.start.formatted(.dateTime.hour().minute()))
+                    self.axisLabel(for: selected.model.start, model: selected.model, alignment: .leading)
                     Spacer()
-                    Text(selected.model.reset.formatted(.dateTime.hour().minute()))
+                    self.axisLabel(for: selected.model.reset, model: selected.model, alignment: .trailing)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -118,6 +125,10 @@ struct QuotaBurndownChartMenuView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                Text(selected.lastKnownUsageMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text(L("No data"))
                     .font(.footnote)
@@ -135,7 +146,26 @@ struct QuotaBurndownChartMenuView: View {
         !self.series.isEmpty
     }
 
+    private func axisLabel(
+        for date: Date,
+        model: QuotaBurndownModel,
+        alignment: HorizontalAlignment) -> some View
+    {
+        VStack(alignment: alignment, spacing: 2) {
+            if model.reset.timeIntervalSince(model.start) >= 86400 {
+                Text(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()
+                        .locale(codexBarLocalizedLocale())))
+            }
+            Text(date.formatted(.dateTime.hour().minute().locale(codexBarLocalizedLocale())))
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     #if DEBUG
+    var _seriesLastKnownMessagesForTesting: [String: String] {
+        Dictionary(uniqueKeysWithValues: self.series.map { ($0.id, $0.lastKnownUsageMessage) })
+    }
+
     var _seriesRemainingForTesting: [String: Double] {
         Dictionary(uniqueKeysWithValues: self.series.compactMap { series in
             series.model.samples.last.map { (series.id, $0.remainingPercent) }

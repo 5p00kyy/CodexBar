@@ -9,19 +9,21 @@ struct QuotaBurndownRenderProofTests {
     @Test
     func `render current window from synthetic quota samples`() throws {
         guard let path = ProcessInfo.processInfo.environment["CODEXBAR_BURNDOWN_PROOF_PATH"] else { return }
+        let weekly = ProcessInfo.processInfo.environment["CODEXBAR_BURNDOWN_PROOF_WEEKLY"] == "1"
         let now = Date()
-        let reset = now.addingTimeInterval(2 * 3600)
+        let reset = now.addingTimeInterval(weekly ? 2 * 86400 : 2 * 3600)
+        let sampleInterval: TimeInterval = weekly ? 86400 : 3600
         let history = PlanUtilizationSeriesHistory(
-            name: .session,
-            windowMinutes: 300,
+            name: weekly ? .weekly : .session,
+            windowMinutes: weekly ? 10080 : 300,
             entries: [
-                .init(capturedAt: now.addingTimeInterval(-2 * 3600), usedPercent: 10, resetsAt: reset),
-                .init(capturedAt: now.addingTimeInterval(-3600), usedPercent: 35, resetsAt: reset),
-                .init(capturedAt: now.addingTimeInterval(-1800), usedPercent: 48, resetsAt: reset),
+                .init(capturedAt: now.addingTimeInterval(-2 * sampleInterval), usedPercent: 10, resetsAt: reset),
+                .init(capturedAt: now.addingTimeInterval(-sampleInterval), usedPercent: 35, resetsAt: reset),
+                .init(capturedAt: now.addingTimeInterval(-sampleInterval / 2), usedPercent: 48, resetsAt: reset),
             ])
         let current = PlanUtilizationSeriesHistory(
-            name: .session,
-            windowMinutes: 300,
+            name: history.name,
+            windowMinutes: history.windowMinutes,
             entries: history.entries + [
                 .init(capturedAt: now, usedPercent: 60, resetsAt: reset),
             ])

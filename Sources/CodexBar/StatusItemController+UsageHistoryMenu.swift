@@ -66,7 +66,7 @@ extension StatusItemController {
                 chartItem.representedObject = Self.usageHistoryChartID
                 chartItem.toolTip = provider.rawValue
                 submenu.addItem(chartItem)
-                return true
+                submenu.addItem(.separator())
             }
         }
 
