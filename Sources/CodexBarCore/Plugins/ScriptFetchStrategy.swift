@@ -25,11 +25,14 @@ public final class ScriptFetchStrategy: ProviderFetchStrategy, @unchecked Sendab
     public typealias ValuesResolver = @Sendable (ProviderFetchContext) -> Values?
     public typealias ContextValidator = @Sendable (ProviderFetchContext) throws -> Void
     public typealias EnabledResolver = @Sendable ([String: String]) -> Bool
+    public typealias CookieSettingsResolver = @Sendable (ProviderFetchContext)
+        -> ProviderSettingsSnapshot.CookieProviderSettings
 
     public let id: String
     public let kind: ProviderFetchKind
 
     private let cookieImport: CookieImport?
+    private let cookieSettings: CookieSettingsResolver?
     private let provider: UsageProvider
     private let bundledPlugin: String
     private let sourceLabel: String
@@ -62,6 +65,7 @@ public final class ScriptFetchStrategy: ProviderFetchStrategy, @unchecked Sendab
         self.kind = kind
         self.secretKey = secretKey
         self.cookieImport = nil
+        self.cookieSettings = nil
         self.transport = transport
         self.timeout = timeout
         self.validateContext = validateContext
@@ -83,6 +87,7 @@ public final class ScriptFetchStrategy: ProviderFetchStrategy, @unchecked Sendab
         timeout: TimeInterval = ProviderPluginRuntime.defaultTimeout,
         validateContext: @escaping ContextValidator = { _ in },
         cookieImport: CookieImport? = nil,
+        cookieSettings: CookieSettingsResolver? = nil,
         resolveValues: @escaping ValuesResolver,
         isEnabled: @escaping EnabledResolver = { ProviderPluginPrototype.isEnabled(environment: $0) })
     {
@@ -96,6 +101,7 @@ public final class ScriptFetchStrategy: ProviderFetchStrategy, @unchecked Sendab
         self.timeout = timeout
         self.validateContext = validateContext
         self.cookieImport = cookieImport
+        self.cookieSettings = cookieSettings
         self.resolveValues = resolveValues
         self.isEnabled = isEnabled
     }
@@ -128,7 +134,12 @@ public final class ScriptFetchStrategy: ProviderFetchStrategy, @unchecked Sendab
             nil
         }
         let cookies = ProviderPluginCookieBroker(
-            provider: self.provider, domains: runtime.manifest.cookieDomains, context: context, importer: importer)
+            provider: self.provider,
+            domains: runtime.manifest.cookieDomains,
+            context: context,
+            importer: importer,
+            usesCookieJar: runtime.manifest.usesCookieJar,
+            settingsOverride: self.cookieSettings?(context))
         let result = try await runtime.fetchResult(
             settings: values.settings,
             secrets: values.secrets,
