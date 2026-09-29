@@ -1825,10 +1825,10 @@ struct ProviderArchitectureGatekeeperTests {
             reason: "This exact shared renderer maps provider-owned presentation data into the generic UI model."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/MenuBarLayout.swift",
-            anchor: "ProviderDescriptorRegistry.descriptor(for: provider ?? .codex).presentation.primarySemanticWindow)",
+            anchor: "let presentation = ProviderDescriptorRegistry.descriptor(for: provider ?? .codex).presentation",
             expectedProviderIDs: ["codex"],
-            expectedReferenceCount: 2,
-            expectedReferenceFingerprint: ["codex@0", "codex@3"],
+            expectedReferenceCount: 1,
+            expectedReferenceFingerprint: ["codex@0"],
             reason: "This exact shared construct dispatches a provider-owned capability at the generic integration boundary."),
         AllowedProviderConstruct(
             path: "Sources/CodexBar/MenuBarLayoutEditor.swift",
