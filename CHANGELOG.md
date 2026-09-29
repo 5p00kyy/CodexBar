@@ -2,6 +2,10 @@
 
 ## 0.69.1 — Unreleased
 
+### Changed
+
+- Provider colors: refresh 16 verified brand accents while preserving readable menu colors and existing widget palettes; synchronize website and social preview colors (#4075). Thanks @elijahfriedman!
+
 ### Fixed
 
 - Costs: price documented Antigravity and Codex model aliases, add published Cyber fallback rates, and preserve Sol estimates across the August 21 price change (#4094). Thanks @urda!
