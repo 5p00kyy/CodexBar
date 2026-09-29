@@ -378,7 +378,9 @@ Model-scoped weekly-window proof (synthetic data, no real accounts or credential
   `ClaudeProbe` project directory so background `/usage` polling does not clutter the user's Claude project history.
 - Command flow:
   1) Start CLI with `--allowed-tools ""` (no tools).
-  2) Auto-respond to first-run prompts (trust files, workspace, telemetry).
+  2) Auto-respond to first-run prompts (trust files, workspace, telemetry). The workspace trust dialog ("Quick safety
+     check") preselects "No, exit", so the probe moves the `❯` selection to "Yes, I trust this folder" before pressing
+     Enter; Claude then remembers trust for the dedicated probe directory.
   3) Send `/usage`, wait for rendered panel; send Enter retries if needed.
   4) Dismiss the open panel with Escape before reusing the session for `/status` identity or the next `/usage` refresh.
   5) Optionally send `/status` to extract identity fields.

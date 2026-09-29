@@ -82,13 +82,17 @@ actor ClaudeCLISession {
         self.workingDirectory = workingDirectory
     }
 
+    /// The workspace trust dialog ("Quick safety check: ...") is answered in `waitForStartup()`: Claude Code 2.1.282
+    /// preselects "No, exit", so a bare Enter would quit.
     private let promptSends: [String: String] = [
         "Do you trust the files in this folder?": "y\r",
-        "Quick safety check:": "\r",
-        "Yes, I trust this folder": "\r",
         "Ready to code here?": "\r",
         "Press Enter to continue": "\r",
     ]
+
+    private static let startupDelay: TimeInterval = 2.0
+    private static let workspaceTrustOption = "Yes, I trust this folder"
+    private static let maxWorkspaceTrustKeys = 4
 
     private static func normalizedNeedle(_ text: String) -> String {
         String(text.lowercased().filter { !$0.isWhitespace })
@@ -161,15 +165,7 @@ actor ClaudeCLISession {
             try self.send("\u{1b}")
             try await Task.sleep(nanoseconds: 150_000_000)
         }
-        if let startedAt {
-            let sinceStart = Date().timeIntervalSince(startedAt)
-            // Claude's TUI can drop early keystrokes while it's still initializing. Wait a bit longer than the
-            // original 0.4s to ensure slash commands reliably open their panels.
-            if sinceStart < 2.0 {
-                let delay = UInt64((2.0 - sinceStart) * 1_000_000_000)
-                try await Task.sleep(nanoseconds: delay)
-            }
-        }
+        try await self.waitForStartup()
         _ = self.readChunk()
 
         let trimmed = request.subcommand.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -252,6 +248,9 @@ actor ClaudeCLISession {
             self.sendPeriodicEnterIfNeeded(every: request.sendEnterEvery, lastEnterAt: &lastEnterAt)
 
             if let proc = self.process, !proc.isRunning {
+                Self.log.warning(
+                    "Claude CLI session exited during capture",
+                    metadata: ["status": "\(proc.terminationStatus)"])
                 throw SessionError.processExited
             }
 
@@ -303,6 +302,74 @@ actor ClaudeCLISession {
 
         // If the data is still not UTF-8 decodable, keep only a small suffix to avoid unbounded growth.
         utf8Carry = Data(combined.suffix(12))
+    }
+
+    /// Claude's TUI can drop early keystrokes while it's still initializing. Wait a bit longer than the original 0.4s
+    /// to ensure slash commands reliably open their panels. A fresh launch in an untrusted folder shows the workspace
+    /// trust dialog in this window; CodexBar trusts its dedicated probe directory, so select the trust option
+    /// explicitly and give the main screen a fresh startup window.
+    private func waitForStartup() async throws {
+        guard let startedAt else { return }
+        var readyAt = startedAt.addingTimeInterval(Self.startupDelay)
+        var screenText = ""
+        var utf8Carry = Data()
+        var lastOutputAt = Date.distantPast
+        var hasUncheckedFrame = false
+        var trustKeysLeft = Self.maxWorkspaceTrustKeys
+        while Date() < readyAt {
+            let newData = self.readChunk()
+            if !newData.isEmpty {
+                Self.appendScanText(newData: newData, scanTailText: &screenText, utf8Carry: &utf8Carry)
+                if screenText.count > 8192 {
+                    screenText = String(screenText.suffix(8192))
+                }
+                lastOutputAt = Date()
+                hasUncheckedFrame = true
+            }
+
+            // Check each settled frame once, so no key is sent again before Claude redraws the selection.
+            if hasUncheckedFrame, trustKeysLeft > 0, Date().timeIntervalSince(lastOutputAt) >= 0.2 {
+                hasUncheckedFrame = false
+                if let keys = Self.workspaceTrustKeys(onScreen: ClaudeCLIScreen.render(screenText)) {
+                    try self.send(keys)
+                    trustKeysLeft -= 1
+                    if keys == "\r" {
+                        trustKeysLeft = 0
+                        readyAt = Date().addingTimeInterval(Self.startupDelay)
+                        Self.log.info("Claude CLI workspace trust accepted for the probe directory")
+                    } else {
+                        readyAt = max(readyAt, Date().addingTimeInterval(1.0))
+                    }
+                }
+            }
+
+            if let proc = self.process, !proc.isRunning { return }
+            try await Task.sleep(nanoseconds: 60_000_000)
+        }
+    }
+
+    /// Returns the arrow key that moves the workspace trust dialog's `❯` marker toward "Yes, I trust this folder", or
+    /// Enter once the marker is on it. Returns nil when the dialog or its marker is not on screen, so Enter can never
+    /// confirm a different option.
+    static func workspaceTrustKeys(onScreen screen: String) -> String? {
+        let lines = screen.components(separatedBy: "\n")
+        let option = Self.normalizedNeedle(Self.workspaceTrustOption)
+        guard let optionRow = lines.firstIndex(where: { Self.normalizedNeedle($0).contains(option) }) else {
+            return nil
+        }
+        // Only accept a marker from the same option list; blank lines separate it from the dialog's other text.
+        let isBlank = { (row: Int) in lines[row].allSatisfy(\.isWhitespace) }
+        var firstRow = optionRow
+        while firstRow > lines.startIndex, !isBlank(firstRow - 1) {
+            firstRow -= 1
+        }
+        var lastRow = optionRow
+        while lastRow < lines.endIndex - 1, !isBlank(lastRow + 1) {
+            lastRow += 1
+        }
+        guard let markerRow = (firstRow...lastRow).first(where: { lines[$0].contains("❯") }) else { return nil }
+        if markerRow == optionRow { return "\r" }
+        return markerRow < optionRow ? "\u{1b}[B" : "\u{1b}[A"
     }
 
     func reset() async {
