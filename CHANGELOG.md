@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Fixed
+
+- Agent Sessions: keep sessions that are still running after an in-place CLI update deleted their binary, such as Claude Code sessions started before an auto-update, instead of dropping them from the menu and `codexbar sessions` (#4120). Thanks @slavakurilyak!
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
