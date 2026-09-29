@@ -343,6 +343,9 @@ five-hour duration.
 
 ## Local token history
 
+Recognized Gemini 3.1 Pro product and effort aliases use the catalog’s preview-model rates while retaining their
+recorded breakdown names. See [model pricing](model-pricing.md) for the supported aliases.
+
 Local history reads only the existing recognized roots: `~/.gemini/antigravity-cli/conversations/*.db`,
 `~/.gemini/antigravity/*.db`, and `~/.gemini/antigravity/conversations/*.db`. `GEMINI_CLI_HOME` replaces
 `~/.gemini`. When SQLite discovery completes without any databases, the reader can use
