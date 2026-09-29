@@ -33,6 +33,11 @@ struct ProviderSettingsToggleRowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                ForEach(self.toggle.inlineFields) { field in
+                    TextField(L(field.title), text: field.binding, prompt: field.placeholder.map { Text($0) })
+                        .textFieldStyle(.roundedBorder)
+                }
+
                 let actions = self.toggle.actions.filter { $0.isVisible?() ?? true }
                 if !actions.isEmpty {
                     HStack(spacing: 10) {
