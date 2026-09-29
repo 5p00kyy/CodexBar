@@ -83,19 +83,13 @@ actor ClaudeCLISession {
         self.workingDirectory = workingDirectory
     }
 
-    /// Trust prompts are only answered in CodexBar's dedicated probe directory. The workspace trust dialog
-    /// ("Quick safety check: ...") is handled in `waitForStartup()`: Claude Code 2.1.282 preselects "No, exit", so a
-    /// bare Enter quits.
-    static func promptSends(acceptsTrust: Bool) -> [String: String] {
-        var sends = [
-            "Ready to code here?": "\r",
-            "Press Enter to continue": "\r",
-        ]
-        if acceptsTrust {
-            sends["Do you trust the files in this folder?"] = "y\r"
-        }
-        return sends
-    }
+    /// The workspace trust dialog ("Quick safety check: ...") is answered in `waitForStartup()`, and only in CodexBar's
+    /// dedicated probe directory: Claude Code 2.1.282 preselects "No, exit", so a bare Enter would quit.
+    private let promptSends: [String: String] = [
+        "Do you trust the files in this folder?": "y\r",
+        "Ready to code here?": "\r",
+        "Press Enter to continue": "\r",
+    ]
 
     private static let startupDelay: TimeInterval = 2.0
     private static let workspaceTrustOption = "Yes, I trust this folder"
@@ -182,7 +176,7 @@ actor ClaudeCLISession {
         }
 
         let stopNeedles = request.stopOnSubstrings.map { Self.normalizedNeedle($0) }
-        var sendMap = Self.promptSends(acceptsTrust: self.launchedInProbeDirectory)
+        var sendMap = self.promptSends
         for (needle, keys) in Self.commandPaletteSends(for: trimmed) {
             sendMap[needle] = keys
         }

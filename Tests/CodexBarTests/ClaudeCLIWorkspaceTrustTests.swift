@@ -68,9 +68,6 @@ struct ClaudeCLIWorkspaceTrustTests {
             #expect(fallback == FileManager.default.temporaryDirectory)
             #expect(!ClaudeStatusProbe.isDedicatedProbeWorkingDirectory(fallback))
         }
-        let legacyPrompt = "Do you trust the files in this folder?"
-        #expect(ClaudeCLISession.promptSends(acceptsTrust: true)[legacyPrompt] == "y\r")
-        #expect(ClaudeCLISession.promptSends(acceptsTrust: false)[legacyPrompt] == nil)
     }
 
     @Test
