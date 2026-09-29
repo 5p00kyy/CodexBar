@@ -2,6 +2,10 @@
 
 ## 0.68.1 — Unreleased
 
+### Fixed
+
+- Settings: keep the Usage & Spend title and Refresh button readable by giving the time-range picker its own row (#4064). Thanks @elijahfriedman!
+
 ## 0.68.0 — 2026-09-27
 
 ### Highlights

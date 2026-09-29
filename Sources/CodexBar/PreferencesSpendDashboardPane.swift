@@ -17,12 +17,8 @@ func spendDashboardDayRangeText(_ days: Int) -> String {
     if days >= SpendDashboardSource.scanDays {
         return L("All")
     }
-    let template: String
-    switch days {
-    case 7: template = L("7d")
-    case 30: template = L("30d")
-    case 90: template = L("90d")
-    default: return codexBarLocalizedInteger(days)
+    guard let template = [7: L("7d"), 30: L("30d"), 90: L("90d")][days] else {
+        return codexBarLocalizedInteger(days)
     }
     return template.replacingOccurrences(
         of: String(days),
@@ -231,7 +227,7 @@ struct SpendDashboardPane: View {
         self.store.sharedSpendDashboardController()
     }
 
-    private var header: some View {
+    var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 16) {
                 VStack(alignment: .leading, spacing: 4) {
@@ -245,40 +241,32 @@ struct SpendDashboardPane: View {
                 }
                 .layoutPriority(1)
                 Spacer(minLength: 0)
-                self.refreshButton
+                Button {
+                    self.store.refreshSpendDashboard(accounts: self.codexSpendScanRequests)
+                } label: {
+                    if self.controller.isRefreshing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label(L("Refresh"), systemImage: "arrow.clockwise")
+                    }
+                }
+                .disabled(self.controller.isRefreshing || !self.settings.costUsageEnabled)
             }
-            self.rangePicker
-        }
-    }
-
-    private var rangePicker: some View {
-        Picker(L("Time range"), selection: self.periodBinding) {
-            Text(spendDashboardDayRangeText(7)).tag(CostReportingPeriod.rolling(days: 7))
-            Text(spendDashboardDayRangeText(30)).tag(CostReportingPeriod.rolling(days: 30))
-            Text(spendDashboardDayRangeText(90)).tag(CostReportingPeriod.rolling(days: 90))
-            Text(L("Month to date")).tag(CostReportingPeriod.monthToDate)
-            Text(L("All")).tag(CostReportingPeriod.allTime)
-            if case let .rolling(days) = self.controller.selectedPeriod, ![7, 30, 90].contains(days) {
-                Text(spendDashboardDayRangeText(days)).tag(self.controller.selectedPeriod)
+            Picker(L("Time range"), selection: self.periodBinding) {
+                Text(spendDashboardDayRangeText(7)).tag(CostReportingPeriod.rolling(days: 7))
+                Text(spendDashboardDayRangeText(30)).tag(CostReportingPeriod.rolling(days: 30))
+                Text(spendDashboardDayRangeText(90)).tag(CostReportingPeriod.rolling(days: 90))
+                Text(L("Month to date")).tag(CostReportingPeriod.monthToDate)
+                Text(L("All")).tag(CostReportingPeriod.allTime)
+                if case let .rolling(days) = self.controller.selectedPeriod, ![7, 30, 90].contains(days) {
+                    Text(spendDashboardDayRangeText(days)).tag(self.controller.selectedPeriod)
+                }
             }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 480, alignment: .leading)
+            .accessibilityIdentifier("spend-dashboard-range-picker")
         }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-        .frame(maxWidth: 480, alignment: .leading)
-        .accessibilityIdentifier("spend-dashboard-range-picker")
-    }
-
-    private var refreshButton: some View {
-        Button {
-            self.store.refreshSpendDashboard(accounts: self.codexSpendScanRequests)
-        } label: {
-            if self.controller.isRefreshing {
-                ProgressView().controlSize(.small)
-            } else {
-                Label(L("Refresh"), systemImage: "arrow.clockwise")
-            }
-        }
-        .disabled(self.controller.isRefreshing || !self.settings.costUsageEnabled)
     }
 
     @ViewBuilder
