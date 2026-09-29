@@ -54,7 +54,16 @@ public enum GeminiProviderDescriptor {
                     let display = UsageFormatter.cleanPlanName(plan)
                     return ProviderIdentityPresentation(badge: display, plan: display)
                 },
-                iconDecorations: [.gemini]),
+                iconDecorations: [.gemini],
+                menuBarWindowResolver: { context in
+                    // The shared metric paths read only the Pro and Flash lanes, so a Flash Lite-only
+                    // account would show no menu bar value.
+                    guard context.snapshot.primary == nil,
+                          context.snapshot.secondary == nil,
+                          let flashLite = context.snapshot.tertiary
+                    else { return .unhandled }
+                    return .resolved(flashLite)
+                }),
             fetchPlan: ProviderFetchPlan(
                 sourceModes: [.auto, .api],
                 pipeline: ProviderFetchPipeline(resolveStrategies: { _ in [GeminiStatusFetchStrategy()] })),
