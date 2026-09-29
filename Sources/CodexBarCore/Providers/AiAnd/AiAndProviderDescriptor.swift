@@ -9,9 +9,8 @@ public enum AiAndProviderDescriptor {
         weeklyLabel: "Spend",
         debugLogUnavailableMessage: "ai& debug log not yet implemented",
         dashboardURL: "https://console.aiand.com",
-        color: .init(hex: 0xC70007),
-        confetti: [0xC70007, 0xF2A17E, 0x33231C],
-        widgetColor: .init(hex: 0xE25C2B),
+        color: ProviderColor(hex: 0xE25C2B),
+        confetti: [0xE25C2B, 0xF2A17E, 0x33231C],
         noDataMessage: "ai& spend is summed from the request logs API.",
         environmentKey: "AIAND_API_KEY",
         presentation: ProviderUsagePresentation(costPresenter: { snapshot in

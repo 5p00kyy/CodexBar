@@ -657,7 +657,8 @@ final class QuickJSProviderPluginEngine: ProviderPluginEngine, @unchecked Sendab
                 secrets: state.secrets,
                 manifest: self.manifest,
                 enforcesUserResponsePolicy: self.enforcesUserResponsePolicy,
-                redactionValues: state.redactionValues)
+                redactionValues: state.redactionValues,
+                cookieJar: state.contextOptions.cookieJar)
             // Paired GETs run in the host, even while this confined worker waits for their result.
             let payload = try self.blockingValue(timeout: self.timeout) {
                 try await ProviderPluginHTTPResponse.fetch(
@@ -683,6 +684,9 @@ final class QuickJSProviderPluginEngine: ProviderPluginEngine, @unchecked Sendab
         }
         do {
             let domain = try self.manifest.cookieDomain(self.string(from: arguments[0]))
+            guard session || !self.manifest.usesCookieJar else {
+                throw ProviderPluginError.secretAccess("cookie jars do not expose headers")
+            }
             guard state.contextOptions.cookieSource != .off else {
                 throw ProviderPluginError.secretAccess("browser cookies are disabled for this provider")
             }
@@ -695,7 +699,10 @@ final class QuickJSProviderPluginEngine: ProviderPluginEngine, @unchecked Sendab
                     throw ProviderPluginError.secretAccess("cookie session origin does not match its domain")
                 }
                 header = candidate?.header ?? ""
-                payload = try candidate?.json() ?? "null"
+                for record in candidate?.records ?? [] {
+                    state.redactionValues.insert(record.value)
+                }
+                payload = try candidate?.json(opaque: self.manifest.usesCookieJar) ?? "null"
             } else if !session, let provider = self.manifest.id.firstPartyProvider,
                       let resolver = state.cookieResolver
             {

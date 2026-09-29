@@ -11,7 +11,7 @@ public enum ChutesProviderDescriptor {
         debugLogUnavailableMessage: "Chutes debug log not yet implemented",
         usesDetailBackedWindow: true,
         dashboardURL: "https://chutes.ai",
-        color: ProviderColor(hex: 0x63D297),
+        color: ProviderColor(hex: 0x3184FF),
         confetti: [0x121212, 0xFFFFFF, 0x63D297],
         widgetColor: ProviderColor(hex: 0x18A058),
         noDataMessage: "Chutes cost history is not available from CodexBar.",

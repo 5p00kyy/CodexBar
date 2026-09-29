@@ -62,13 +62,13 @@ public enum CursorProviderDescriptor {
             branding: ProviderBranding(
                 iconStyle: .init(provider: .cursor),
                 iconResourceName: "ProviderIcon-cursor",
-                color: ProviderColor(red: 245 / 255, green: 78 / 255, blue: 0 / 255),
+                color: ProviderColor(hex: 0xF54E00),
                 confettiPalette: [
                     ProviderColor(hex: 0xF54E00),
                     ProviderColor(hex: 0x1B1913),
                     ProviderColor(hex: 0xEDECEC),
                 ],
-                widgetColor: ProviderColor(red: 0 / 255, green: 191 / 255, blue: 165 / 255)),
+                widgetColor: ProviderColor(hex: 0x00BFA5)),
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: true,
                 noDataMessage: { "No Cursor cost usage found. Sign in to Cursor in your browser or the Cursor app." },

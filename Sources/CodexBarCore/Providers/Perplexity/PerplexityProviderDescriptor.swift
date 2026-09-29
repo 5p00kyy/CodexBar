@@ -13,9 +13,8 @@ public enum PerplexityProviderDescriptor {
         usesDetailBackedWindow: true,
         dashboardURL: "https://www.perplexity.ai/account/usage",
         statusLinkURL: "https://status.perplexity.com/",
-        color: .init(hex: 0x20808D),
-        confetti: [0x20808D, 0x313131, 0xFDFBFA],
-        widgetColor: .init(hex: 0x20B2AA),
+        color: ProviderColor(hex: 0x20B2AA),
+        confetti: [0x016A71, 0x313131, 0xFDFBFA],
         noDataMessage: "Perplexity cost tracking is not supported.",
         menuBarMetrics: ProviderMenuBarMetricCapabilities(
             supported: [.automatic, .primary, .secondary, .tertiary]),

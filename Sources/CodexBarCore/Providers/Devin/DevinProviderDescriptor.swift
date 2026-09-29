@@ -53,13 +53,13 @@ public enum DevinProviderDescriptor {
             branding: ProviderBranding(
                 iconStyle: .init(provider: .devin),
                 iconResourceName: "ProviderIcon-devin",
-                color: ProviderColor(red: 49 / 255, green: 124 / 255, blue: 255 / 255),
+                color: ProviderColor(hex: 0x317CFF),
                 confettiPalette: [
                     ProviderColor(hex: 0x317CFF),
                     ProviderColor(hex: 0x000000),
                     ProviderColor(hex: 0xFFFFFF),
                 ],
-                widgetColor: ProviderColor(red: 70 / 255, green: 180 / 255, blue: 130 / 255)),
+                widgetColor: ProviderColor(hex: 0x46B482)),
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "Devin cost summary is not supported." }),

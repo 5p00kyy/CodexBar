@@ -60,13 +60,12 @@ public enum OpenCodeProviderDescriptor {
             branding: ProviderBranding(
                 iconStyle: .init(provider: .opencode),
                 iconResourceName: "ProviderIcon-opencode",
-                color: ProviderColor(red: 59 / 255, green: 125 / 255, blue: 216 / 255),
+                color: ProviderColor(hex: 0x3B82F6),
                 confettiPalette: [
                     ProviderColor(hex: 0x211E1E),
                     ProviderColor(hex: 0xCFCECD),
-                    ProviderColor(hex: 0x3B7DD8),
-                ],
-                widgetColor: ProviderColor(red: 59 / 255, green: 130 / 255, blue: 246 / 255)),
+                    ProviderColor(hex: 0xFAB283),
+                ]),
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "OpenCode cost summary is not supported." }),

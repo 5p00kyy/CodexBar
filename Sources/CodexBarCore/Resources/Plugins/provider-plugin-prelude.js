@@ -53,7 +53,7 @@
       hostOptions.bodyJSON = JSON.stringify(opts.body);
       if (hostOptions.bodyJSON === undefined) throw new TypeError("postJSON body is not JSON-serializable");
     }
-    for (const key of ["headers", "timeoutSeconds", "retryPolicy", "openRouterManagementAuth"]) {
+    for (const key of ["headers", "timeoutSeconds", "retryPolicy", "openRouterManagementAuth", "cookieSession"]) {
       if (opts[key] !== undefined) hostOptions[key] = opts[key];
     }
     return hostOptions;
