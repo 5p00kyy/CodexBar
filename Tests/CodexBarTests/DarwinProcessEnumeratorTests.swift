@@ -189,6 +189,44 @@ struct DarwinProcessEnumeratorTests {
 
         #expect(DarwinProcessEnumerator.listeningTCPPorts(pid: getpid()).contains(listener.port))
     }
+
+    @Test
+    func `darwin process record keeps agent argv when the executable was deleted`() throws {
+        // proc_pidpath returns ENOENT after an updater removes the package directory of a running binary.
+        let record = try #require(LocalAgentSessionScanner.darwinProcessRecord(
+            pid: 4242,
+            bsdInfo: { _ in (ppid: 1, startTime: Date(timeIntervalSince1970: 1_700_000_000)) },
+            processArguments: { _ in (arguments: ["claude"], piSelectorEnvironment: nil) },
+            executablePath: { _ in nil }))
+
+        #expect(record.command == "claude")
+        #expect(record.arguments == ["claude"])
+        #expect(AgentPSOutputParser.provider(for: record) == .claude)
+        #expect(AgentPSOutputParser.agentProcesses(from: [record]).map(\.pid) == [4242])
+    }
+
+    @Test
+    func `darwin process record falls back to the executable path without argv`() throws {
+        let record = try #require(LocalAgentSessionScanner.darwinProcessRecord(
+            pid: 4243,
+            bsdInfo: { _ in (ppid: 1, startTime: Date(timeIntervalSince1970: 1_700_000_000)) },
+            processArguments: { _ in nil },
+            executablePath: { _ in "/opt/homebrew/bin/codex" }))
+
+        #expect(record.command == "/opt/homebrew/bin/codex")
+        #expect(record.arguments == nil)
+    }
+
+    @Test
+    func `darwin process record skips processes without argv or executable path`() {
+        let record = LocalAgentSessionScanner.darwinProcessRecord(
+            pid: 4244,
+            bsdInfo: { _ in (ppid: 1, startTime: Date(timeIntervalSince1970: 1_700_000_000)) },
+            processArguments: { _ in nil },
+            executablePath: { _ in nil })
+
+        #expect(record == nil)
+    }
     #endif
 
     private static func procArgsData(arguments: [String], environment: [String] = []) -> Data {

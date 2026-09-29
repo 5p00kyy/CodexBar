@@ -440,19 +440,7 @@ public struct LocalAgentSessionScanner: Sendable {
         }
         #if canImport(Darwin)
         return DarwinProcessEnumerator.allPIDs().compactMap { pid in
-            guard let bsdInfo = DarwinProcessEnumerator.bsdInfo(pid: pid),
-                  let executablePath = DarwinProcessEnumerator.executablePath(pid: pid)
-            else { return nil }
-            let processArguments = DarwinProcessEnumerator.argumentsWithPiSelectorEnvironment(pid: pid)
-            let arguments = processArguments?.arguments
-            let command = arguments?.joined(separator: " ") ?? executablePath
-            return AgentProcessRecord(
-                pid: pid,
-                ppid: bsdInfo.ppid,
-                startedAt: bsdInfo.startTime,
-                command: command,
-                arguments: arguments,
-                piSelectorEnvironment: processArguments?.piSelectorEnvironment)
+            Self.darwinProcessRecord(pid: pid)
         }
         #else
         let records = await AgentPSOutputParser.parse(self.processOutput(environment: environment))
@@ -468,6 +456,31 @@ public struct LocalAgentSessionScanner: Sendable {
         #endif
         #endif
     }
+
+    #if canImport(Darwin)
+    /// Builds a process record from libproc data. `proc_pidpath` fails with ENOENT once an updater deletes the
+    /// running binary (for example the old package directory after a Claude Code update), so argv is preferred
+    /// and the executable path is only the fallback command when argv is unavailable.
+    static func darwinProcessRecord(
+        pid: Int32,
+        bsdInfo: (Int32) -> (ppid: Int32, startTime: Date)? = DarwinProcessEnumerator.bsdInfo,
+        processArguments: (Int32) -> (arguments: [String], piSelectorEnvironment: [String: String]?)? =
+            DarwinProcessEnumerator.argumentsWithPiSelectorEnvironment,
+        executablePath: (Int32) -> String? = DarwinProcessEnumerator.executablePath) -> AgentProcessRecord?
+    {
+        guard let bsdInfo = bsdInfo(pid) else { return nil }
+        let processArguments = processArguments(pid)
+        let arguments = processArguments?.arguments
+        guard let command = arguments?.joined(separator: " ") ?? executablePath(pid) else { return nil }
+        return AgentProcessRecord(
+            pid: pid,
+            ppid: bsdInfo.ppid,
+            startedAt: bsdInfo.startTime,
+            command: command,
+            arguments: arguments,
+            piSelectorEnvironment: processArguments?.piSelectorEnvironment)
+    }
+    #endif
 
     private static func withPiSelectorEnvironment(
         _ environment: [String: String]?,
