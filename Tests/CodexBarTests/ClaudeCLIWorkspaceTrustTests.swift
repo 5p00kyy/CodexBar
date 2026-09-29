@@ -10,14 +10,16 @@ struct ClaudeCLIWorkspaceTrustTests {
         let lines = screen.components(separatedBy: "\n")
         #expect(lines.contains(" ❯ No, exit"))
         #expect(lines.contains("   Yes, I trust this folder"))
-        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen) == "\u{1b}[B")
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen, acceptsTrust: true) == "\u{1b}[B")
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen, acceptsTrust: false) == "\u{1b}")
 
         let redrawn = try ClaudeCLIScreen.render(dialog + ClaudeCLIScreenProbeTests.capture(
             "workspace-trust-select-down"))
         let redrawnLines = redrawn.components(separatedBy: "\n")
         #expect(redrawnLines.contains("   No, exit"))
         #expect(redrawnLines.contains(" ❯ Yes, I trust this folder"))
-        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: redrawn) == "\r")
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: redrawn, acceptsTrust: true) == "\r")
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: redrawn, acceptsTrust: false) == "\u{1b}")
     }
 
     @Test(arguments: [
@@ -26,33 +28,126 @@ struct ClaudeCLIWorkspaceTrustTests {
         (" Quick safety check:\n\n ❯ No, exit\n   Cancel\n   Yes, I trust this folder", "\u{1b}[B"),
     ])
     func `trust option is reached from either side before it is confirmed`(screen: String, expected: String) {
-        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen) == expected)
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen, acceptsTrust: true) == expected)
     }
 
     @Test(arguments: [
         "",
         " Do you trust the files in this folder?\n\n ❯ 1. Yes, proceed\n   2. No, exit",
-        " Quick safety check:\n\n   No, exit\n   Yes, I trust this folder\n\n Enter to confirm",
-        " ❯ Quick safety check:\n\n   No, exit\n   Yes, I trust this folder",
         "────\n❯ \n────\n  ? for shortcuts",
     ])
-    func `screens without a marked trust option send no keys`(screen: String) {
-        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen) == nil)
+    func `screens without the trust dialog send no keys`(screen: String) {
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen, acceptsTrust: true) == nil)
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen, acceptsTrust: false) == nil)
+    }
+
+    @Test(arguments: [
+        " Quick safety check:\n\n   No, exit\n   Yes, I trust this folder\n\n Enter to confirm",
+        " ❯ Quick safety check:\n\n   No, exit\n   Yes, I trust this folder",
+    ])
+    func `trust dialog without a marked option is never confirmed`(screen: String) {
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen, acceptsTrust: true) == nil)
+        #expect(ClaudeCLISession.workspaceTrustKeys(onScreen: screen, acceptsTrust: false) == "\u{1b}")
     }
 
     @Test
-    func `fresh probe session trusts its directory before typing the command`() async throws {
+    func `only the dedicated probe directory accepts workspace trust`() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claude-probe-trust-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dedicated = root.appendingPathComponent("ClaudeProbe", isDirectory: true)
+        ClaudeStatusProbe.$dedicatedProbeDirectoryOverrideForTesting.withValue(dedicated) {
+            #expect(ClaudeStatusProbe.probeWorkingDirectoryURL() == dedicated)
+            #expect(ClaudeStatusProbe.isDedicatedProbeWorkingDirectory(dedicated))
+            #expect(!ClaudeStatusProbe.isDedicatedProbeWorkingDirectory(root))
+        }
+        // When the dedicated directory cannot be created, probes fall back to the shared temporary directory.
+        let unavailable = URL(fileURLWithPath: "/dev/null/CodexBar/ClaudeProbe", isDirectory: true)
+        ClaudeStatusProbe.$dedicatedProbeDirectoryOverrideForTesting.withValue(unavailable) {
+            let fallback = ClaudeStatusProbe.probeWorkingDirectoryURL()
+            #expect(fallback == FileManager.default.temporaryDirectory)
+            #expect(!ClaudeStatusProbe.isDedicatedProbeWorkingDirectory(fallback))
+        }
+        let legacyPrompt = "Do you trust the files in this folder?"
+        #expect(ClaudeCLISession.promptSends(acceptsTrust: true)[legacyPrompt] == "y\r")
+        #expect(ClaudeCLISession.promptSends(acceptsTrust: false)[legacyPrompt] == nil)
+    }
+
+    @Test
+    func `fresh probe session trusts its dedicated directory before typing the command`() async throws {
+        let directory = try Self.makeFakeClaude()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let probeDirectory = directory.appendingPathComponent("ClaudeProbe", isDirectory: true)
+        try await ClaudeStatusProbe.$dedicatedProbeDirectoryOverrideForTesting.withValue(probeDirectory) {
+            let session = ClaudeCLISession()
+            do {
+                let status = try await Self.captureStatus(session: session, directory: directory)
+                await session.reset()
+                #expect(status.contains("Account: trusted"))
+            } catch {
+                print("Synthetic CLI keys:\n" + Self.keysLog(in: directory))
+                await session.reset()
+                throw error
+            }
+        }
+        #expect(Self.keysLog(in: directory) == """
+        key:[B
+        confirm:yes
+        command:/status
+
+        """)
+    }
+
+    @Test
+    func `probe session outside its dedicated directory cancels the trust dialog`() async throws {
+        let directory = try Self.makeFakeClaude()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let probeDirectory = directory.appendingPathComponent("ClaudeProbe", isDirectory: true)
+        let error = await ClaudeStatusProbe.$dedicatedProbeDirectoryOverrideForTesting.withValue(probeDirectory) {
+            // Like the temporary-directory fallback, the launch directory is not the dedicated probe directory.
+            let session = ClaudeCLISession(workingDirectory: directory)
+            let thrown = await #expect(throws: ClaudeCLISession.SessionError.self) {
+                try await Self.captureStatus(session: session, directory: directory)
+            }
+            await session.reset()
+            return thrown
+        }
+        #expect(error.map { String(describing: $0) } == "processExited")
+        #expect(Self.keysLog(in: directory) == "cancel\n")
+    }
+
+    private static func captureStatus(session: ClaudeCLISession, directory: URL) async throws -> String {
+        try await session.capture(
+            subcommand: "/status",
+            binary: directory.appendingPathComponent("fake-claude").path,
+            accountScope: "synthetic-account",
+            timeout: 5,
+            environment: [
+                "HOME": directory.path,
+                "CLAUDE_CONFIG_DIR": directory.path,
+                "CLAUDE_SECURESTORAGE_CONFIG_DIR": directory.path,
+                "CODEXBAR_DISABLE_CLAUDE_WATCHDOG": "1",
+            ],
+            idleTimeout: nil,
+            stopOnSubstrings: ["DONE"],
+            settleAfterStop: 0)
+    }
+
+    private static func keysLog(in directory: URL) -> String {
+        (try? String(contentsOf: directory.appendingPathComponent("keys.log"), encoding: .utf8)) ?? "<none>"
+    }
+
+    /// Replays the captured Claude Code 2.1.282 frames: Enter on the preselected "No, exit" quits with status 1, and
+    /// Escape cancels the dialog with status 0.
+    private static func makeFakeClaude() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("claude-workspace-trust-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: directory) }
         for name in ["workspace-trust-dialog", "workspace-trust-select-down"] {
             try Data(ClaudeCLIScreenProbeTests.capture(name).utf8)
                 .write(to: directory.appendingPathComponent("\(name).ansi"))
         }
         let binary = directory.appendingPathComponent("fake-claude")
-        let log = directory.appendingPathComponent("keys.log")
-        // Replays the captured Claude Code 2.1.282 frames: Enter on the preselected "No, exit" quits with status 1.
         let script = #"""
         #!/bin/bash
         /bin/stty raw -echo -icrnl
@@ -61,7 +156,12 @@ struct ClaudeCLIWorkspaceTrustTests {
         while IFS= read -r -n 1 key; do
           case "$key" in
             $'\e')
-              IFS= read -r -n 2 key
+              key=''
+              IFS= read -r -t 1 -n 2 key
+              if [[ -z "$key" ]]; then
+                printf 'cancel\n' >> "$HOME/keys.log"
+                exit 0
+              fi
               printf 'key:%s\n' "$key" >> "$HOME/keys.log"
               if [[ "$key" == '[B' && "$selected" == no ]]; then
                 selected=yes
@@ -92,35 +192,6 @@ struct ClaudeCLIWorkspaceTrustTests {
         """#
         try script.write(to: binary, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
-        let session = ClaudeCLISession(workingDirectory: directory)
-        let environment = [
-            "HOME": directory.path,
-            "CLAUDE_CONFIG_DIR": directory.path,
-            "CLAUDE_SECURESTORAGE_CONFIG_DIR": directory.path,
-            "CODEXBAR_DISABLE_CLAUDE_WATCHDOG": "1",
-        ]
-        do {
-            let status = try await session.capture(
-                subcommand: "/status",
-                binary: binary.path,
-                accountScope: "synthetic-account",
-                timeout: 5,
-                environment: environment,
-                idleTimeout: nil,
-                stopOnSubstrings: ["DONE"],
-                settleAfterStop: 0)
-            await session.reset()
-            #expect(status.contains("Account: trusted"))
-        } catch {
-            print("Synthetic CLI keys:\n" + ((try? String(contentsOf: log, encoding: .utf8)) ?? "<none>"))
-            await session.reset()
-            throw error
-        }
-        #expect(try String(contentsOf: log, encoding: .utf8) == """
-        key:[B
-        confirm:yes
-        command:/status
-
-        """)
+        return directory
     }
 }

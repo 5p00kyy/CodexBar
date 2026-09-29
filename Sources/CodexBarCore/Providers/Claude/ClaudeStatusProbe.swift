@@ -89,6 +89,8 @@ public struct ClaudeStatusProbe: Sendable {
     #if DEBUG
     public typealias FetchOverride = @Sendable (String, TimeInterval, Bool) async throws -> ClaudeStatusSnapshot
     @TaskLocal static var fetchOverride: FetchOverride?
+    /// Stands in for CodexBar's dedicated probe directory, so tests never use the real Application Support folder.
+    @TaskLocal static var dedicatedProbeDirectoryOverrideForTesting: URL?
     #endif
 
     public init(
@@ -1398,16 +1400,32 @@ extension ClaudeStatusProbe {
 
     static func probeWorkingDirectoryURL() -> URL {
         let fm = FileManager.default
-        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
-        let dir = base
-            .appendingPathComponent("CodexBar", isDirectory: true)
-            .appendingPathComponent("ClaudeProbe", isDirectory: true)
+        let dir = self.dedicatedProbeWorkingDirectoryURL()
         do {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             return dir
         } catch {
             return fm.temporaryDirectory
         }
+    }
+
+    /// CodexBar's own probe directory. `probeWorkingDirectoryURL()` falls back to the shared temporary directory when
+    /// it cannot be created; only this directory may have Claude's workspace trust accepted on the user's behalf.
+    static func dedicatedProbeWorkingDirectoryURL() -> URL {
+        #if DEBUG
+        if let override = self.dedicatedProbeDirectoryOverrideForTesting {
+            return override
+        }
+        #endif
+        let fm = FileManager.default
+        let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
+        return base
+            .appendingPathComponent("CodexBar", isDirectory: true)
+            .appendingPathComponent("ClaudeProbe", isDirectory: true)
+    }
+
+    static func isDedicatedProbeWorkingDirectory(_ directory: URL) -> Bool {
+        directory.standardizedFileURL.path == self.dedicatedProbeWorkingDirectoryURL().standardizedFileURL.path
     }
 
     static func preparedProbeWorkingDirectoryURL() -> URL {

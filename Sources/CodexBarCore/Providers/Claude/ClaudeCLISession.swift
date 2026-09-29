@@ -75,6 +75,7 @@ actor ClaudeCLISession {
     private var processGroup: pid_t?
     private var sessionIdentity: SessionIdentity?
     private var startedAt: Date?
+    private var launchedInProbeDirectory = false
     private let operationGate = AsyncOperationGate()
     private let workingDirectory: URL?
 
@@ -82,13 +83,19 @@ actor ClaudeCLISession {
         self.workingDirectory = workingDirectory
     }
 
-    /// The workspace trust dialog ("Quick safety check: ...") is answered in `waitForStartup()`: Claude Code 2.1.282
-    /// preselects "No, exit", so a bare Enter would quit.
-    private let promptSends: [String: String] = [
-        "Do you trust the files in this folder?": "y\r",
-        "Ready to code here?": "\r",
-        "Press Enter to continue": "\r",
-    ]
+    /// Trust prompts are only answered in CodexBar's dedicated probe directory. The workspace trust dialog
+    /// ("Quick safety check: ...") is handled in `waitForStartup()`: Claude Code 2.1.282 preselects "No, exit", so a
+    /// bare Enter quits.
+    static func promptSends(acceptsTrust: Bool) -> [String: String] {
+        var sends = [
+            "Ready to code here?": "\r",
+            "Press Enter to continue": "\r",
+        ]
+        if acceptsTrust {
+            sends["Do you trust the files in this folder?"] = "y\r"
+        }
+        return sends
+    }
 
     private static let startupDelay: TimeInterval = 2.0
     private static let workspaceTrustOption = "Yes, I trust this folder"
@@ -175,7 +182,7 @@ actor ClaudeCLISession {
         }
 
         let stopNeedles = request.stopOnSubstrings.map { Self.normalizedNeedle($0) }
-        var sendMap = self.promptSends
+        var sendMap = Self.promptSends(acceptsTrust: self.launchedInProbeDirectory)
         for (needle, keys) in Self.commandPaletteSends(for: trimmed) {
             sendMap[needle] = keys
         }
@@ -306,8 +313,8 @@ actor ClaudeCLISession {
 
     /// Claude's TUI can drop early keystrokes while it's still initializing. Wait a bit longer than the original 0.4s
     /// to ensure slash commands reliably open their panels. A fresh launch in an untrusted folder shows the workspace
-    /// trust dialog in this window; CodexBar trusts its dedicated probe directory, so select the trust option
-    /// explicitly and give the main screen a fresh startup window.
+    /// trust dialog in this window. CodexBar only trusts its dedicated probe directory: there it selects the trust
+    /// option explicitly and gives the main screen a fresh startup window; anywhere else it cancels the dialog.
     private func waitForStartup() async throws {
         guard let startedAt else { return }
         var readyAt = startedAt.addingTimeInterval(Self.startupDelay)
@@ -330,14 +337,20 @@ actor ClaudeCLISession {
             // Check each settled frame once, so no key is sent again before Claude redraws the selection.
             if hasUncheckedFrame, trustKeysLeft > 0, Date().timeIntervalSince(lastOutputAt) >= 0.2 {
                 hasUncheckedFrame = false
-                if let keys = Self.workspaceTrustKeys(onScreen: ClaudeCLIScreen.render(screenText)) {
+                let screen = ClaudeCLIScreen.render(screenText)
+                if let keys = Self.workspaceTrustKeys(onScreen: screen, acceptsTrust: self.launchedInProbeDirectory) {
                     try self.send(keys)
                     trustKeysLeft -= 1
-                    if keys == "\r" {
+                    switch keys {
+                    case "\r":
                         trustKeysLeft = 0
                         readyAt = Date().addingTimeInterval(Self.startupDelay)
                         Self.log.info("Claude CLI workspace trust accepted for the probe directory")
-                    } else {
+                    case "\u{1b}":
+                        trustKeysLeft = 0
+                        readyAt = max(readyAt, Date().addingTimeInterval(1.0))
+                        Self.log.warning("Claude CLI workspace trust declined outside the probe directory")
+                    default:
                         readyAt = max(readyAt, Date().addingTimeInterval(1.0))
                     }
                 }
@@ -348,15 +361,17 @@ actor ClaudeCLISession {
         }
     }
 
-    /// Returns the arrow key that moves the workspace trust dialog's `❯` marker toward "Yes, I trust this folder", or
-    /// Enter once the marker is on it. Returns nil when the dialog or its marker is not on screen, so Enter can never
+    /// Returns the key for the workspace trust dialog on screen, or nil when it is not shown. Without `acceptsTrust`,
+    /// Escape cancels the dialog whichever option is selected. With it, an arrow moves the `❯` marker toward "Yes, I
+    /// trust this folder" and Enter follows once the marker is on it; nil while no marker is found, so Enter can never
     /// confirm a different option.
-    static func workspaceTrustKeys(onScreen screen: String) -> String? {
+    static func workspaceTrustKeys(onScreen screen: String, acceptsTrust: Bool) -> String? {
         let lines = screen.components(separatedBy: "\n")
         let option = Self.normalizedNeedle(Self.workspaceTrustOption)
         guard let optionRow = lines.firstIndex(where: { Self.normalizedNeedle($0).contains(option) }) else {
             return nil
         }
+        guard acceptsTrust else { return "\u{1b}" }
         // Only accept a marker from the same option list; blank lines separate it from the dialog's other text.
         let isBlank = { (row: Int) in lines[row].allSatisfy(\.isWhitespace) }
         var firstRow = optionRow
@@ -481,6 +496,8 @@ actor ClaudeCLISession {
         self.processGroup = processGroup
         self.sessionIdentity = sessionIdentity
         self.startedAt = Date()
+        // Only the dedicated probe directory may be trusted, never `probeWorkingDirectoryURL()`'s temporary fallback.
+        self.launchedInProbeDirectory = ClaudeStatusProbe.isDedicatedProbeWorkingDirectory(workingDirectory)
         return false
     }
 
@@ -603,6 +620,7 @@ actor ClaudeCLISession {
         self.processGroup = nil
         self.sessionIdentity = nil
         self.startedAt = nil
+        self.launchedInProbeDirectory = false
     }
 
     private func readChunk() -> Data {
