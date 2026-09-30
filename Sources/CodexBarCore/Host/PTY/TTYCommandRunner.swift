@@ -446,53 +446,24 @@ public struct TTYCommandRunner {
     }
 
     static func locateBundledHelper(_ name: String) -> String? {
-        let fm = FileManager.default
-
-        func isExecutable(_ path: String) -> Bool {
-            fm.isExecutableFile(atPath: path)
-        }
-
         if let override = ProcessInfo.processInfo.environment["CODEXBAR_HELPER_\(name.uppercased())"],
-           isExecutable(override)
+           FileManager.default.isExecutableFile(atPath: override)
         {
             return override
         }
-
-        func candidate(inAppBundleURL appURL: URL) -> String? {
-            let path = appURL
-                .appendingPathComponent("Contents", isDirectory: true)
-                .appendingPathComponent("Helpers", isDirectory: true)
-                .appendingPathComponent(name, isDirectory: false)
-                .path
-            return isExecutable(path) ? path : nil
-        }
-
-        let mainURL = Bundle.main.bundleURL
-        if mainURL.pathExtension == "app", let found = candidate(inAppBundleURL: mainURL) {
-            return found
-        }
-
-        // Real, symlink-resolved location of the running binary. Never argv0/cwd.
-        guard let exe = Self.realExecutableURL() else { return nil }
-        // Expect <X>.app/Contents/{Helpers,MacOS}/<exe>
-        let contents = exe.deletingLastPathComponent().deletingLastPathComponent()
-        let app = contents.deletingLastPathComponent()
-        guard contents.lastPathComponent == "Contents", app.pathExtension == "app" else { return nil }
-        return candidate(inAppBundleURL: app)
+        guard let exe = Bundle.main.executableURL else { return nil }
+        return self.bundledHelperPath(name, executableURL: exe)
     }
-    
-    private static func realExecutableURL() -> URL? {
-        #if os(macOS)
-        var size: UInt32 = 0
-        _NSGetExecutablePath(nil, &size)
-        var buf = [CChar](repeating: 0, count: Int(size))
-        guard _NSGetExecutablePath(&buf, &size) == 0,
-              let resolved = realpath(buf, nil) else { return nil }
-        defer { free(resolved) }
-        return URL(fileURLWithPath: String(cString: resolved))
-        #else
-        return nil
-        #endif
+
+    /// Expects the real location to be `<X>.app/Contents/{MacOS,Helpers}/<exe>`, even when launched via a symlink.
+    static func bundledHelperPath(_ name: String, executableURL: URL) -> String? {
+        let app = executableURL.resolvingSymlinksInPath()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        guard app.pathExtension == "app" else { return nil }
+        let helper = app.appendingPathComponent("Contents/Helpers/\(name)").path
+        return FileManager.default.isExecutableFile(atPath: helper) ? helper : nil
     }
 
     // swiftlint:disable function_body_length
