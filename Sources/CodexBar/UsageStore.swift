@@ -434,6 +434,7 @@ final class UsageStore {
     @ObservationIgnored var claudeHistoryFallbackEligible = false
     @ObservationIgnored var deepseekProfileTransition: DeepSeekProfileTransition?
     @ObservationIgnored var sessionQuotaTransitionStates: [ProviderInstanceID: SessionQuotaTransitionState] = [:]
+    @ObservationIgnored var sessionRestoredNotificationPostedAt: [ProviderInstanceID: Date] = [:]
     @ObservationIgnored var codexSessionQuotaBaselineRequirement: CodexSessionQuotaBaselineRequirement?
     var codexSessionQuotaBaselineRequired: Bool {
         self.codexSessionQuotaBaselineRequirement != nil

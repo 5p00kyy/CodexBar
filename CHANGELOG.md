@@ -2,6 +2,10 @@
 
 ## 0.69.1 — Unreleased
 
+### Added
+
+- Notifications: opt-in reset notifications (Settings → Notifications) name the provider, the session or weekly window, and the account unless Hide personal info is on, so a reset confetti burst is no longer a mystery. A session reset already announced as "session restored" is not notified twice.
+
 ### Changed
 
 - Provider colors: refresh 16 verified brand accents while preserving readable menu colors and existing widget palettes; synchronize website and social preview colors (#4075). Thanks @elijahfriedman!

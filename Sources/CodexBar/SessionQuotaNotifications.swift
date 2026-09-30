@@ -508,6 +508,7 @@ protocol SessionQuotaNotifying: AnyObject {
         soundEnabled: Bool,
         onScreenAlertEnabled: Bool,
         now: Date)
+    func postLimitReset(provider: UsageProvider, window: QuotaWarningWindow, accountDisplayName: String?)
 }
 
 @MainActor
@@ -519,6 +520,8 @@ extension SessionQuotaNotifying {
         onScreenAlertEnabled _: Bool,
         now _: Date)
     {}
+
+    func postLimitReset(provider _: UsageProvider, window _: QuotaWarningWindow, accountDisplayName _: String?) {}
 }
 
 @MainActor
@@ -598,6 +601,17 @@ final class SessionQuotaNotifier: SessionQuotaNotifying {
             self.alertOverlay.show(title: copy.title, message: copy.body)
         }
         AppNotifications.shared.post(idPrefix: idPrefix, title: copy.title, body: copy.body, soundEnabled: false)
+    }
+
+    func postLimitReset(provider: UsageProvider, window: QuotaWarningWindow, accountDisplayName: String?) {
+        let providerName = ProviderDescriptorRegistry.descriptor(for: provider).metadata.displayName
+        let copy = LimitResetNotificationLogic.notificationCopy(
+            providerName: providerName,
+            window: window,
+            accountDisplayName: accountDisplayName)
+        let idPrefix = LimitResetNotificationLogic.notificationIDPrefix(provider: provider, window: window)
+        self.logger.info("enqueuing", metadata: ["prefix": idPrefix])
+        AppNotifications.shared.post(idPrefix: idPrefix, title: copy.title, body: copy.body)
     }
 }
 

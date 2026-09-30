@@ -235,6 +235,10 @@ extension UsageStore {
                 window: .session,
                 usedPercent: currentUsed,
                 accountLabel: accountLabel)
+            self.postLimitResetNotificationIfNeeded(
+                provider: context.provider,
+                window: .session,
+                accountLabel: accountLabel)
             let event = SessionLimitResetEvent(
                 provider: context.provider,
                 accountIdentifier: accountIdentifier,
@@ -246,6 +250,10 @@ extension UsageStore {
                 provider: context.provider,
                 window: .weekly,
                 usedPercent: currentUsed,
+                accountLabel: accountLabel)
+            self.postLimitResetNotificationIfNeeded(
+                provider: context.provider,
+                window: .weekly,
                 accountLabel: accountLabel)
             let event = WeeklyLimitResetEvent(
                 provider: context.provider,

@@ -116,6 +116,9 @@ extension UsageStore {
                 sessionWindow: sessionWindow,
                 snapshot: snapshot,
                 notificationsEnabled: notificationsEnabled)
+            if transition == .restored, notificationsEnabled {
+                self.sessionRestoredNotificationPostedAt[provider.instanceID] = now
+            }
         }
     }
 
