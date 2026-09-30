@@ -472,25 +472,27 @@ public struct TTYCommandRunner {
             return found
         }
 
-        if let argv0 = CommandLine.arguments.first {
-            var url = URL(fileURLWithPath: argv0)
-            if !argv0.hasPrefix("/") {
-                url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(argv0)
-            }
-            var probe = url
-            for _ in 0..<6 {
-                let parent = probe.deletingLastPathComponent()
-                if parent.pathExtension == "app", let found = candidate(inAppBundleURL: parent) {
-                    return found
-                }
-                if parent.path == probe.path {
-                    break
-                }
-                probe = parent
-            }
-        }
-
+        // Real, symlink-resolved location of the running binary. Never argv0/cwd.
+        guard let exe = Self.realExecutableURL() else { return nil }
+        // Expect <X>.app/Contents/{Helpers,MacOS}/<exe>
+        let contents = exe.deletingLastPathComponent().deletingLastPathComponent()
+        let app = contents.deletingLastPathComponent()
+        guard contents.lastPathComponent == "Contents", app.pathExtension == "app" else { return nil }
+        return candidate(inAppBundleURL: app)
+    }
+    
+    private static func realExecutableURL() -> URL? {
+        #if os(macOS)
+        var size: UInt32 = 0
+        _NSGetExecutablePath(nil, &size)
+        var buf = [CChar](repeating: 0, count: Int(size))
+        guard _NSGetExecutablePath(&buf, &size) == 0,
+              let resolved = realpath(buf, nil) else { return nil }
+        defer { free(resolved) }
+        return URL(fileURLWithPath: String(cString: resolved))
+        #else
         return nil
+        #endif
     }
 
     // swiftlint:disable function_body_length
