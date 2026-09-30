@@ -177,8 +177,10 @@ public enum BinaryLocator {
         #if os(macOS)
         [
             "\(home)/Applications/ChatGPT.app/Contents/Resources/codex",
+            "\(home)/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
             "\(home)/Applications/Codex.app/Contents/Resources/codex",
             "/Applications/ChatGPT.app/Contents/Resources/codex",
+            "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
             "/Applications/Codex.app/Contents/Resources/codex",
         ]
         #else
@@ -487,10 +489,11 @@ public enum CodexLaunchPreflight {
             appBundlePath = resolvedAppBundlePath
         }
         let appBundlePaths = [sourceAppBundlePath, appBundlePath].compactMap(\.self)
-        let pathsToCheck = [path, realPath] + appBundlePaths + self
-            .nativeCodexExecutableCandidates(
-                for: realPath,
-                fileManager: fileManager)
+        let nativeCandidates = self.nativeCodexExecutableCandidates(for: realPath, fileManager: fileManager)
+        // An npm launcher can remain executable after its native payload has disappeared.
+        // Do not let that broken installation shadow a working bundled CLI.
+        if self.isNPMCodexLauncher(realPath), nativeCandidates.isEmpty { return false }
+        let pathsToCheck = [path, realPath] + appBundlePaths + nativeCandidates
 
         for candidate in Set(pathsToCheck) where hasExtendedAttribute(candidate, "com.apple.malware") {
             return false
@@ -534,6 +537,10 @@ public enum CodexLaunchPreflight {
         return nil
     }
 
+    private static func isNPMCodexLauncher(_ path: String) -> Bool {
+        path.hasSuffix("/node_modules/@openai/codex/bin/codex.js")
+    }
+
     private static func nativeCodexExecutableCandidates(for path: String, fileManager: FileManager) -> [String] {
         let url = URL(fileURLWithPath: path)
         guard url.lastPathComponent == "codex.js" else { return [] }
@@ -551,10 +558,17 @@ public enum CodexLaunchPreflight {
             .appendingPathComponent("@openai")
             .appendingPathComponent(target.packageName)
 
-        return [
-            optionalPackage,
-            packageRoot,
-        ].map {
+        // Node also resolves optional dependencies hoisted into an ancestor node_modules.
+        var roots = [optionalPackage]
+        var ancestor = packageRoot.deletingLastPathComponent()
+        while ancestor.path != "/" {
+            if ancestor.lastPathComponent == "node_modules" {
+                roots.append(ancestor.appendingPathComponent("@openai/\(target.packageName)"))
+            }
+            ancestor.deleteLastPathComponent()
+        }
+        roots.append(packageRoot)
+        return roots.map {
             $0.appendingPathComponent("vendor")
                 .appendingPathComponent(target.triple)
                 .appendingPathComponent("codex")
