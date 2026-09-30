@@ -153,8 +153,8 @@ struct OpenCodeUsageFetcherErrorTests {
             session: self.makeSession())
 
         let payAsYouGo = try #require(snapshot.payAsYouGo)
-        #expect(payAsYouGo.monthlyUsageUSD == 15)
-        #expect(payAsYouGo.monthlyLimitUSD == 20)
+        #expect(payAsYouGo.usageUSD == 15)
+        #expect(payAsYouGo.limitUSD == 20)
         #expect(payAsYouGo.balanceUSD == 12.5)
         #expect(payAsYouGo.usedPercent == 75)
         #expect(methods == ["GET", "GET"])

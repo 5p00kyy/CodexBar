@@ -281,8 +281,8 @@ struct OpenCodeUsageParserTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let snapshot = OpenCodeUsageSnapshot.payAsYouGo(
             OpenCodeUsageSnapshot.PayAsYouGoUsage(
-                monthlyUsageUSD: 15,
-                monthlyLimitUSD: 20,
+                usageUSD: 15,
+                limitUSD: 20,
                 balanceUSD: 12.5),
             updatedAt: now)
 
@@ -303,8 +303,8 @@ struct OpenCodeUsageParserTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let snapshot = OpenCodeUsageSnapshot.payAsYouGo(
             OpenCodeUsageSnapshot.PayAsYouGoUsage(
-                monthlyUsageUSD: 3,
-                monthlyLimitUSD: nil,
+                usageUSD: 3,
+                limitUSD: nil,
                 balanceUSD: 1),
             updatedAt: now)
 
@@ -319,8 +319,8 @@ struct OpenCodeUsageParserTests {
     @Test
     func `pay as you go spend above the monthly limit clamps to 100 percent`() {
         let usage = OpenCodeUsageSnapshot.PayAsYouGoUsage(
-            monthlyUsageUSD: 25,
-            monthlyLimitUSD: 20,
+            usageUSD: 25,
+            limitUSD: 20,
             balanceUSD: 0)
 
         #expect(usage.usedPercent == 100)

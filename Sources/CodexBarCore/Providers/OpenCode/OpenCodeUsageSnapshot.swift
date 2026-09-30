@@ -1,43 +1,54 @@
 import Foundation
 
 public struct OpenCodeUsageSnapshot: Sendable {
-    /// Monthly spend of a pay-as-you-go Zen workspace, which bills per request instead of
+    /// Spend of a pay-as-you-go Zen workspace, which bills per request instead of
     /// exposing the rolling/weekly quota windows subscription workspaces report.
     public struct PayAsYouGoUsage: Equatable, Sendable {
-        public let monthlyUsageUSD: Double
-        public let monthlyLimitUSD: Double?
-        public let balanceUSD: Double?
-
-        public init(monthlyUsageUSD: Double, monthlyLimitUSD: Double?, balanceUSD: Double?) {
-            self.monthlyUsageUSD = monthlyUsageUSD
-            self.monthlyLimitUSD = monthlyLimitUSD
-            self.balanceUSD = balanceUSD
+        public enum Period: Equatable, Sendable {
+            case monthly
+            case last30Days
         }
 
-        /// Percent of the configured monthly limit consumed, or `nil` when no limit is set.
+        public let usageUSD: Double
+        public let limitUSD: Double?
+        public let balanceUSD: Double?
+        public let period: Period
+
+        public init(usageUSD: Double, limitUSD: Double?, balanceUSD: Double?, period: Period = .monthly) {
+            self.usageUSD = usageUSD
+            self.limitUSD = limitUSD
+            self.balanceUSD = balanceUSD
+            self.period = period
+        }
+
+        /// Percent of the configured monthly limit consumed. Rolling spend cannot be compared
+        /// with a calendar-month limit, so it has no percentage even if a limit is supplied.
         public var usedPercent: Double? {
-            guard let limit = self.monthlyLimitUSD, limit > 0 else { return nil }
-            return min(100, max(0, (self.monthlyUsageUSD / limit) * 100))
+            guard self.period == .monthly, let limit = self.limitUSD, limit > 0 else { return nil }
+            return min(100, max(0, (self.usageUSD / limit) * 100))
         }
     }
 
+    public let hasWeeklyUsage: Bool
     public let rollingUsagePercent: Double
     public let weeklyUsagePercent: Double
-    public let rollingResetInSec: Int
-    public let weeklyResetInSec: Int
+    public let rollingResetInSec: Int?
+    public let weeklyResetInSec: Int?
     public let renewsAt: Date?
     public let payAsYouGo: PayAsYouGoUsage?
     public let updatedAt: Date
 
     public init(
+        hasWeeklyUsage: Bool = true,
         rollingUsagePercent: Double,
         weeklyUsagePercent: Double,
-        rollingResetInSec: Int,
-        weeklyResetInSec: Int,
+        rollingResetInSec: Int?,
+        weeklyResetInSec: Int?,
         renewsAt: Date? = nil,
         payAsYouGo: PayAsYouGoUsage? = nil,
         updatedAt: Date)
     {
+        self.hasWeeklyUsage = hasWeeklyUsage
         self.rollingUsagePercent = rollingUsagePercent
         self.weeklyUsagePercent = weeklyUsagePercent
         self.rollingResetInSec = rollingResetInSec
@@ -65,19 +76,23 @@ public struct OpenCodeUsageSnapshot: Sendable {
             return self.payAsYouGoUsageSnapshot(payAsYouGo)
         }
 
-        let rollingReset = self.updatedAt.addingTimeInterval(TimeInterval(self.rollingResetInSec))
-        let weeklyReset = self.updatedAt.addingTimeInterval(TimeInterval(self.weeklyResetInSec))
-
+        let rollingReset = self.rollingResetInSec.map { self.updatedAt.addingTimeInterval(TimeInterval($0)) }
         let primary = RateWindow(
             usedPercent: self.rollingUsagePercent,
             windowMinutes: 5 * 60,
             resetsAt: rollingReset,
             resetDescription: nil)
-        let secondary = RateWindow(
-            usedPercent: self.weeklyUsagePercent,
-            windowMinutes: 7 * 24 * 60,
-            resetsAt: weeklyReset,
-            resetDescription: nil)
+        let secondary: RateWindow?
+        if self.hasWeeklyUsage {
+            let weeklyReset = self.weeklyResetInSec.map { self.updatedAt.addingTimeInterval(TimeInterval($0)) }
+            secondary = RateWindow(
+                usedPercent: self.weeklyUsagePercent,
+                windowMinutes: 7 * 24 * 60,
+                resetsAt: weeklyReset,
+                resetDescription: nil)
+        } else {
+            secondary = nil
+        }
 
         var extraWindows: [NamedRateWindow]?
         if let renewsAt = self.renewsAt {
@@ -113,10 +128,10 @@ public struct OpenCodeUsageSnapshot: Sendable {
                 resetDescription: nil)
         }
         let cost = ProviderCostSnapshot(
-            used: usage.monthlyUsageUSD,
-            limit: usage.monthlyLimitUSD ?? 0,
+            used: usage.usageUSD,
+            limit: usage.period == .monthly ? usage.limitUSD ?? 0 : 0,
             currencyCode: "USD",
-            period: "Monthly",
+            period: usage.period == .monthly ? "Monthly" : "Last 30 days",
             balance: usage.balanceUSD,
             updatedAt: self.updatedAt)
 

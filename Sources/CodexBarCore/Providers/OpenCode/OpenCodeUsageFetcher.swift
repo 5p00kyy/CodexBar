@@ -53,18 +53,51 @@ public struct OpenCodeUsageFetcher: Sendable {
         guard let requestCookieHeader = OpenCodeWebCookieSupport.requestCookieHeader(from: cookieHeader) else {
             throw OpenCodeUsageError.invalidCredentials
         }
-        let workspaceID: String = if let override = OpenCodeWebParsing.normalizeWorkspaceID(workspaceIDOverride) {
+        let normalizedOverride = OpenCodeGoUsageFetcher.normalizeWorkspaceID(workspaceIDOverride)
+        if let rawOverride = workspaceIDOverride?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !rawOverride.isEmpty, normalizedOverride == nil
+        {
+            throw OpenCodeUsageError.apiError("Invalid workspace override.")
+        }
+        let workspaceID: String = if let override = normalizedOverride {
             override
         } else {
-            try await self.fetchWorkspaceID(
+            try await OpenCodeConsoleUsageFetcher.withLegacyFallback(cookieHeader: requestCookieHeader) {
+                try await OpenCodeConsoleUsageFetcher.fetchWorkspaceID(
+                    cookieHeader: requestCookieHeader, timeout: timeout, transport: transport)
+            } legacy: {
+                try await self.fetchWorkspaceID(
+                    cookieHeader: requestCookieHeader, timeout: timeout, transport: transport)
+            }
+        }
+        return try await OpenCodeConsoleUsageFetcher.withLegacyFallback(cookieHeader: requestCookieHeader) {
+            try await OpenCodeConsoleUsageFetcher.fetchUsage(
+                workspaceID: workspaceID,
                 cookieHeader: requestCookieHeader,
                 timeout: timeout,
+                now: now,
+                transport: transport)
+        } legacy: {
+            try await self.fetchLegacyUsage(
+                workspaceID: workspaceID,
+                cookieHeader: requestCookieHeader,
+                timeout: timeout,
+                now: now,
                 transport: transport)
         }
+    }
+
+    private static func fetchLegacyUsage(
+        workspaceID: String,
+        cookieHeader: String,
+        timeout: TimeInterval,
+        now: Date,
+        transport: any ProviderHTTPTransport) async throws -> OpenCodeUsageSnapshot
+    {
         do {
             let subscriptionText = try await self.fetchSubscriptionInfo(
                 workspaceID: workspaceID,
-                cookieHeader: requestCookieHeader,
+                cookieHeader: cookieHeader,
                 timeout: timeout,
                 transport: transport)
             return try self.parseSubscription(text: subscriptionText, now: now)
@@ -76,7 +109,7 @@ public struct OpenCodeUsageFetcher: Sendable {
             do {
                 if let snapshot = try await self.fetchPayAsYouGoUsage(
                     workspaceID: workspaceID,
-                    cookieHeader: requestCookieHeader,
+                    cookieHeader: cookieHeader,
                     timeout: timeout,
                     now: now,
                     transport: transport)
@@ -85,6 +118,10 @@ public struct OpenCodeUsageFetcher: Sendable {
                 }
             } catch OpenCodeUsageError.invalidCredentials {
                 throw OpenCodeUsageError.invalidCredentials
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let error as URLError where error.code == .cancelled {
+                throw CancellationError()
             } catch {
                 Self.log.error("OpenCode billing fallback failed: \(error.localizedDescription)")
             }
@@ -138,8 +175,8 @@ extension OpenCodeUsageFetcher {
                 "limit \(billing.monthlyLimitUSD == nil ? "unset" : "set")).")
         return .payAsYouGo(
             OpenCodeUsageSnapshot.PayAsYouGoUsage(
-                monthlyUsageUSD: billing.monthlyUsageUSD,
-                monthlyLimitUSD: billing.monthlyLimitUSD,
+                usageUSD: billing.monthlyUsageUSD,
+                limitUSD: billing.monthlyLimitUSD,
                 balanceUSD: billing.balanceUSD),
             updatedAt: now)
     }

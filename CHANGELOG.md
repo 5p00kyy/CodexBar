@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- OpenCode: read migrated Console workspaces with the Console session, preserve workspace-scoped quota and prepaid balance, and label explicit 30-day spend without inventing a monthly spending limit (#4131).
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
