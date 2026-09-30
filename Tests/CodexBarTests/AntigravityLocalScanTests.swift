@@ -38,7 +38,7 @@ struct AntigravityLocalScanTests {
         limits.databases = 1
         let exact = try fixture.report(limits: limits)
         #expect(exact.coverage == .complete)
-        #expect(exact.report.summary?.totalTokens == 198)
+        #expect(exact.report.summary?.totalTokens == 187)
 
         try fixture.database("second", blobs: [Fixture.blob()])
         let exceeded = try fixture.report(limits: limits)
@@ -55,7 +55,7 @@ struct AntigravityLocalScanTests {
         try fixture.database("session-1", blobs: [Fixture.blob()])
         let initial = try fixture.report()
         #expect(initial.coverage == .complete)
-        #expect(initial.report.summary?.totalTokens == 198)
+        #expect(initial.report.summary?.totalTokens == 187)
 
         try fixture.database("session-2", blobs: [Fixture.blob()])
         var limits = AntigravityLocalReader.Limits()
@@ -63,7 +63,7 @@ struct AntigravityLocalScanTests {
         let partial = try fixture.report(limits: limits)
         #expect(partial.coverage == .partial)
         #expect(!partial.report.data.isEmpty)
-        #expect(partial.report.summary?.totalTokens == 198)
+        #expect(partial.report.summary?.totalTokens == 187)
         #expect(partial.statistics.files == 2)
         #expect(partial.statistics.rows == 1)
         #expect(partial.statistics.schemaBytes > limits.schemaBytes)

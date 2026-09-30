@@ -384,9 +384,15 @@ Hard database-count, row-count, cumulative-byte, or duration budget exhaustion d
 Schema-budget exhaustion preserves validated rows from earlier databases as partial history, subject to the same lower-bound labeling and prior-complete-report rules. The schema cap remains 64 KiB.
 
 The schema evidence is [Tokscale's pinned SQLite parser](https://github.com/junhoyeo/tokscale/blob/62ca1eb1677556972ba963fdfa3a41ab23c1eb4b/crates/tokscale-core/src/sessions/antigravity_cli.rs),
-whose header records six databases and 140 turns. SQLite usage fields 1 + 2 are input, 5 is cache read,
-9 is text output, and 10 is thinking output: text and thinking are separate counts. Historical model IDs are retained;
-missing models stay unknown unless an unambiguous raw label maps to a model within the same session.
+whose header records six databases and 140 turns and establishes the table layout below. SQLite usage
+field 2 is input. Field 1 is the model enum ID (for example 1298 for `gemini-3.7-flash`), and CodexBar
+does not count it. Field 5 is cache read. Field 9 is reasoning (thinking) output, and field 10 is text
+(visible) output: reasoning and text are separate counts. CodexBar follows
+[ccusage's Antigravity adapter](https://github.com/ccusage/ccusage/blob/d41bf3d48a911e9742793087142e323093ae6a4f/rust/adapters/antigravity/src/parser.rs)
+for this field 1/9/10 reading, confirmed independently by decoding real local databases. This reading differs
+from Tokscale's own reading of fields 9/10.
+Historical model IDs are retained; missing models stay unknown unless an unambiguous raw label maps to a
+model within the same session.
 Conflicting mappings remain unresolved. Every repeated known protobuf envelope is validated and merged.
 The supported database layout is an ordinary `gen_metadata` table with stored `idx` and `data` columns.
 Extra ordinary columns and `WITHOUT ROWID` tables are supported; views, virtual tables, and generated/hidden columns

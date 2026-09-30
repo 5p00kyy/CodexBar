@@ -52,15 +52,14 @@ enum AntigravityLocalReader {
 
         init?(session: String, row: Int64, turn: AntigravityProtoReader.ParsedTurn, cacheWrite: Int) {
             guard let usage = turn.usage, turn.timestampMs != nil,
-                  let input = AntigravityLocalReader.checkedAdd(usage.systemPrompt, usage.newInput),
                   let total = CheckedSum.integers(
-                      [input, usage.output, usage.cacheRead, cacheWrite, usage.reasoning])
+                      [usage.newInput, usage.output, usage.cacheRead, cacheWrite, usage.reasoning])
             else { return nil }
             self.session = session
             self.row = row
             self.turn = turn
             self.cacheWrite = cacheWrite
-            self.input = input
+            self.input = usage.newInput
             self.total = total
         }
     }
@@ -108,12 +107,15 @@ enum AntigravityLocalReader {
 
     /// Gemini 3.1 Pro is catalogued only as `gemini-3.1-pro-preview`. Antigravity records it under
     /// its product aliases and effort tiers; ccusage's Antigravity adapter maps the same IDs.
+    /// Antigravity also records safety-routed Gemini 3.7 Flash turns under `gemini-3.7-flash-safety-le`
+    /// while the usage record's model enum ID matches ordinary `gemini-3.7-flash` turns.
     private static let pricingModelAliases = [
         "gemini-pro-default": "gemini-3.1-pro-preview",
         "gemini-pro-agent": "gemini-3.1-pro-preview",
         "gemini-3.1-pro": "gemini-3.1-pro-preview",
         "gemini-3.1-pro-high": "gemini-3.1-pro-preview",
         "gemini-3.1-pro-low": "gemini-3.1-pro-preview",
+        "gemini-3.7-flash-safety-le": "gemini-3.7-flash",
     ]
 
     static func checkedAdd(_ lhs: Int, _ rhs: Int) -> Int? {
