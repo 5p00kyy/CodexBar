@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Added
+
+- Antigravity: fetch quotas for saved Google accounts through private, temporary `agy` sessions, verify each account's identity, and retain refreshed credentials without changing the ambient CLI login (#4103). Thanks @Sogl!
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights

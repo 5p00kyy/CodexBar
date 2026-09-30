@@ -57,6 +57,7 @@ struct TokenAccountCLIContext {
     let accountsByProvider: [UsageProvider: ProviderTokenAccountData]
     @ProcessEnvironment private var baseEnvironment: [String: String]
     private let managedCodexAccountStoreURL: URL?
+    private let configStore: CodexBarConfigStore
 
     init(
         selection: TokenAccountCLISelection,
@@ -64,12 +65,14 @@ struct TokenAccountCLIContext {
         verbose _: Bool,
         resolutionScope: TokenAccountCLIResolutionScope = .configuredAccounts,
         baseEnvironment: [String: String] = ProcessInfo.processInfo.environment,
-        managedCodexAccountStoreURL: URL? = nil) throws
+        managedCodexAccountStoreURL: URL? = nil,
+        configStore: CodexBarConfigStore = CodexBarConfigStore()) throws
     {
         self.selection = selection
         self.config = config
         self.baseEnvironment = baseEnvironment
         self.managedCodexAccountStoreURL = managedCodexAccountStoreURL
+        self.configStore = configStore
         self.accountsByProvider = switch resolutionScope {
         case .configuredAccounts:
             Dictionary(uniqueKeysWithValues: config.providers.compactMap { provider in
@@ -189,9 +192,16 @@ struct TokenAccountCLIContext {
 
     func tokenUpdater(for account: ProviderTokenAccount?) -> ProviderFetchContext.TokenAccountTokenUpdater? {
         guard let account else { return nil }
+        let configStore = self.configStore
+        let expectedToken = account.token
         return { provider, accountID, token in
             guard accountID == account.id else { return }
-            try? Self.updateStoredTokenAccount(provider: provider, accountID: accountID, token: token)
+            try? Self.updateStoredTokenAccount(
+                store: configStore,
+                provider: provider,
+                accountID: accountID,
+                expectedToken: expectedToken,
+                token: token)
         }
     }
 
@@ -201,42 +211,50 @@ struct TokenAccountCLIContext {
         }
     }
 
-    private static func updateStoredTokenAccount(
+    static func updateStoredTokenAccount(
+        store: CodexBarConfigStore,
         provider: UsageProvider,
         accountID: UUID,
+        expectedToken: String,
         token: String) throws
     {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        let store = CodexBarConfigStore()
-        guard var config = try store.load() else { return }
-        guard var providerConfig = config.providerConfig(for: provider.instanceID),
-              let data = providerConfig.tokenAccounts,
-              let index = data.accounts.firstIndex(where: { $0.id == accountID })
-        else {
-            return
-        }
+        try store.updateIfAvailable { config in
+            guard var providerConfig = config.providerConfig(for: provider.instanceID),
+                  let data = providerConfig.tokenAccounts,
+                  let index = data.accounts.firstIndex(where: { $0.id == accountID })
+            else {
+                return false
+            }
 
-        let existing = data.accounts[index]
-        var accounts = data.accounts
-        accounts[index] = ProviderTokenAccount(
-            id: existing.id,
-            label: existing.label,
-            token: trimmed,
-            addedAt: existing.addedAt,
-            lastUsed: existing.lastUsed,
-            externalIdentifier: existing.externalIdentifier,
-            usageScope: existing.usageScope,
-            organizationID: existing.organizationID,
-            workspaceID: existing.workspaceID,
-            seatCreditEntitlement: existing.seatCreditEntitlement)
-        providerConfig.tokenAccounts = ProviderTokenAccountData(
-            version: data.version,
-            accounts: accounts,
-            activeIndex: data.clampedActiveIndex())
-        config.setProviderConfig(providerConfig)
-        try store.save(config)
+            let existing = data.accounts[index]
+            guard existing.token == expectedToken else {
+                CodexBarLog.logger(LogCategories.tokenAccounts).warning(
+                    "Skipped token account writeback: the stored credential changed during the fetch",
+                    metadata: ["provider": provider.rawValue])
+                return false
+            }
+            var accounts = data.accounts
+            accounts[index] = ProviderTokenAccount(
+                id: existing.id,
+                label: existing.label,
+                token: trimmed,
+                addedAt: existing.addedAt,
+                lastUsed: existing.lastUsed,
+                externalIdentifier: existing.externalIdentifier,
+                usageScope: existing.usageScope,
+                organizationID: existing.organizationID,
+                workspaceID: existing.workspaceID,
+                seatCreditEntitlement: existing.seatCreditEntitlement)
+            providerConfig.tokenAccounts = ProviderTokenAccountData(
+                version: data.version,
+                accounts: accounts,
+                activeIndex: data.clampedActiveIndex())
+            config.setProviderConfig(providerConfig)
+            return true
+        }
     }
 
     func fetcher(base: UsageFetcher, provider: UsageProvider, env: [String: String]) -> UsageFetcher {
