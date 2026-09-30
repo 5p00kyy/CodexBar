@@ -1,6 +1,21 @@
 # Changelog
 
-## 0.69.1 — Unreleased
+## 0.70.0 — 2026-09-29
+
+### Highlights
+
+- Quota burndown: Plan Usage now shows the recorded remaining-quota burndown for Codex and Claude next to utilization history, with capture age and calendar endpoints (#4085). Thanks @callmejustdodo!
+- Refreshed provider colors: 16 accents now match official brand sources, while colors that would hurt menu bar or widget readability keep their current values (#4075). Thanks @elijahfriedman!
+- More accurate costs: Mistral usage is priced by event type, API zone, and service tier, Antigravity and Codex model aliases and published Cyber rates are priced, and Mistral's Monthly Plan can drive the menu bar metric (#4076, #4094, #4072). Thanks @T0mSIlver and @urda!
+- Hardened diagnostics: every stored process environment is redacted from debug and test output, with a repository guard against regressions (#4106).
+
+### Security
+
+- Redact every remaining stored process environment in the app, CLI, provider contexts, and session scanners, and guard against new unredacted environment properties with a repository check (#4106).
+
+### Added
+
+- Plan Usage: show recorded remaining-quota burndown for Codex and Claude alongside utilization history, with capture age and calendar endpoints (#4085). Thanks @callmejustdodo!
 
 ### Changed
 
@@ -12,13 +27,7 @@
 - Costs: price documented Antigravity and Codex model aliases, add published Cyber fallback rates, and preserve Sol estimates across the August 21 price change (#4094). Thanks @urda!
 - Mistral: offer Monthly Plan in the provider's Menu bar metric picker, so the menu bar and widgets can show the Vibe allowance without a `defaults write` (#4072). Thanks @T0mSIlver!
 - Mistral: price billing usage by event type, API zone, and service tier, so a per-second audio or priority price no longer inflates API spend and 30-day token cost (#4076). Thanks @T0mSIlver!
-### Security
-
-- Redact every remaining stored process environment in the app, CLI, provider contexts, and session scanners, and guard against new unredacted environment properties with a repository check (#4106).
-
-### Fixed
-
-- CLI: keep probe timeout and cancellation cleanup responsive when other processes have large environments (#4077).
+- CLI: keep probe timeout and cancellation cleanup responsive on busy hosts with large process tables (#4108).
 
 ## 0.69.0 — 2026-09-28
 
@@ -41,8 +50,6 @@
 
 ### Changed
 
-- Menu bar: align the persistent Refresh row with other menu actions by removing its decorative icon, preserving the shortcut and accessibility action (#4057). Thanks @elijahfriedman!
-- Plan Usage: show recorded remaining-quota burndown for Codex and Claude alongside utilization history, with capture age and calendar endpoints (#4085). Thanks @callmejustdodo!
 - Plugins: user plugins now get their own switcher tab by default when Merge Icons is on; set `topLevel: false` to keep the appended card (#4074).
 - Notion AI, ZoomMate, and LongCat: usage fetching runs through bundled plugins with host-owned cookie sessions, preserving browser-session reuse, validated cache migration, Notion over-quota values, ZoomMate credits history, and LongCat fuel-pack data (#4098, #4059).
 - Menu bar: the persistent Refresh row drops its decorative icon to match other menu actions, keeping the shortcut and accessibility action (#4057). Thanks @elijahfriedman!
