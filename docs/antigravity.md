@@ -381,7 +381,7 @@ the menu, Usage & Spend, exported JSON, and the CLI; they never establish empty 
 zero. Failed or retained-partial dashboard attempts do not acknowledge successful incorporation of a refresh trigger. Overflowed aggregate
 totals remain unknown rather than becoming saturated or wrapping.
 Hard database-count, row-count, cumulative-byte, or duration budget exhaustion does not publish a newly truncated report; it remains unavailable and preserves prior complete history.
-Schema-budget exhaustion preserves validated rows from earlier databases as partial history, subject to the same lower-bound labeling and prior-complete-report rules. The schema cap remains 64 KiB.
+Schema-budget exhaustion withholds only the database whose schema exceeded a limit. Validated rows from the other databases remain partial history, subject to the same lower-bound labeling and prior-complete-report rules.
 
 The schema evidence is [Tokscale's pinned SQLite parser](https://github.com/junhoyeo/tokscale/blob/62ca1eb1677556972ba963fdfa3a41ab23c1eb4b/crates/tokscale-core/src/sessions/antigravity_cli.rs),
 whose header records six databases and 140 turns. SQLite usage fields 1 + 2 are input, 5 is cache read,
@@ -435,7 +435,9 @@ One cancellable job on `CostUsageScanExecutor` owns discovery, SQL, decoding, an
 128 MiB of attempted payload bytes overall, and a five-second cooperative scan deadline. Rejected rows consume the budget;
 exactly 500 complete databases are accepted. Discovery is incremental and JSONL is read in bounded chunks.
 Schema inspection accepts at most 128 catalogue entries and 64 columns per database (one additional row detects
-truncation), with a cumulative 64 KiB allowance for inspected schema text and the same cooperative deadline/cancellation.
+truncation), with a 64 KiB allowance per database for inspected schema text and the same cooperative deadline/cancellation.
+An ordinary conversation database uses a few hundred bytes of that allowance. A job-wide allowance let a long history of
+small schemas add up to it: about 240 databases exhausted 64 KiB, well below the 500-database cap.
 SQLite values are capped at 64 KiB during
 inspection (or the smaller payload limit plus record overhead). SQLite then uses one streaming payload SELECT over the
 validated ordinary table. A length-based conditional projection checks the remaining

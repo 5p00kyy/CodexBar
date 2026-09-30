@@ -313,7 +313,7 @@ struct AntigravityLocalIntegrityTests {
     }
 
     @Test
-    func `schema entry column and cumulative byte limits reject before payload reads`() throws {
+    func `schema entry column and byte limits reject before payload reads`() throws {
         let fixture = try Fixture()
         let url = try fixture.database()
         let database = try Fixture.open(url)
@@ -340,14 +340,12 @@ struct AntigravityLocalIntegrityTests {
         limits.schemaColumns = 64
         let complete = try fixture.report(limits: limits)
         #expect(complete.coverage == .complete)
-        limits.schemaBytes = complete.statistics.schemaBytes
-        try fixture.database("session-b", blobs: [Fixture.blob()])
-        let cumulative = try fixture.report(limits: limits)
-        #expect(cumulative.coverage == .partial)
-        #expect(cumulative.statistics.files == 2)
-        #expect(cumulative.statistics.rows == 1)
-        #expect(cumulative.statistics.schemaBytes > limits.schemaBytes)
-        #expect(cumulative.statistics.sqliteHandlesOpened == cumulative.statistics.sqliteHandlesClosed)
+        limits.schemaBytes = complete.statistics.schemaBytes - 1
+        let bytes = try fixture.report(limits: limits)
+        #expect(bytes.coverage == .partial)
+        #expect(bytes.statistics.rows == 0)
+        #expect(bytes.statistics.schemaBytes > limits.schemaBytes)
+        #expect(bytes.statistics.sqliteHandlesOpened == bytes.statistics.sqliteHandlesClosed)
     }
 
     @Test(arguments: [false, true])

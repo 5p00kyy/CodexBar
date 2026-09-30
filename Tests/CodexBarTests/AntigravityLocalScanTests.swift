@@ -50,23 +50,50 @@ struct AntigravityLocalScanTests {
     }
 
     @Test
-    func `database reading preserves decoded rows when subsequent databases exhaust the schema budget`() throws {
+    func `the schema byte allowance applies to each database rather than the whole history`() throws {
         let fixture = try Fixture()
         try fixture.database("session-1", blobs: [Fixture.blob()])
         let initial = try fixture.report()
         #expect(initial.coverage == .complete)
         #expect(initial.report.summary?.totalTokens == 198)
 
+        // Many small schemas together exceed one database's allowance without truncating the scan.
         try fixture.database("session-2", blobs: [Fixture.blob()])
+        try fixture.database("session-3", blobs: [Fixture.blob()])
+        var limits = AntigravityLocalReader.Limits()
+        limits.schemaBytes = initial.statistics.schemaBytes
+        let report = try fixture.report(limits: limits)
+        #expect(report.coverage == .complete)
+        #expect(report.report.summary?.totalTokens == 594)
+        #expect(report.statistics.files == 3)
+        #expect(report.statistics.schemaBytes > limits.schemaBytes)
+    }
+
+    @Test
+    func `an oversized schema withholds only its own database and keeps the other rows as partial history`() throws {
+        let fixture = try Fixture()
+        try fixture.database("session-1", blobs: [Fixture.blob()])
+        let initial = try fixture.report()
+        #expect(initial.coverage == .complete)
+
+        // Catalogue entries before gen_metadata are inspected, so this schema is larger than session-1's.
+        let url = try fixture.database("session-2")
+        let database = try Fixture.open(url)
+        defer { sqlite3_close(database) }
+        try Fixture.execute(database, """
+        DROP TABLE gen_metadata;
+        CREATE TABLE an_unrelated_table_with_a_long_name (value);
+        CREATE TABLE gen_metadata (idx INTEGER, data BLOB);
+        """)
+        try Fixture.insert(database, row: 0, blob: Fixture.blob())
+        try fixture.database("session-3", blobs: [Fixture.blob()])
         var limits = AntigravityLocalReader.Limits()
         limits.schemaBytes = initial.statistics.schemaBytes
         let partial = try fixture.report(limits: limits)
         #expect(partial.coverage == .partial)
-        #expect(!partial.report.data.isEmpty)
-        #expect(partial.report.summary?.totalTokens == 198)
-        #expect(partial.statistics.files == 2)
-        #expect(partial.statistics.rows == 1)
-        #expect(partial.statistics.schemaBytes > limits.schemaBytes)
+        #expect(partial.report.summary?.totalTokens == 396)
+        #expect(partial.statistics.files == 3)
+        #expect(partial.statistics.rows == 2)
     }
 
     @Test
