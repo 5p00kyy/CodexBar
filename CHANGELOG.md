@@ -2,6 +2,12 @@
 
 ## 0.70.1 — Unreleased
 
+### Fixed
+
+- Cursor: keep Linux serve refreshes authenticated when earlier HTTP responses leave stale cookies in the process session (#4137).
+- Menu bar: apply explicit provider reordering to existing separate icons while retaining stable identities and saved menu bar slots (#4125).
+- Pi: include Amazon Bedrock history with regional catalog prices, price one-hour cache writes correctly, and refresh older cached estimates (#4121).
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights

@@ -7,6 +7,43 @@ import Testing
 @Suite(.serialized)
 struct StatusItemControllerShutdownTests {
     @Test
+    func `explicit provider reorder reassigns existing slots under stable identities`() throws {
+        let statusBar = RecordingStatusBar()
+        let controller = self.makeController(
+            statusBar: statusBar, merged: false, enabledProviders: [.codex, .claude])
+        defer {
+            controller.releaseStatusItemsForTesting()
+            StatusItemController.menuCardRenderingEnabled = !SettingsStore.isRunningTests
+            StatusItemController.resetMenuRefreshEnabledForTesting()
+        }
+        let defaults = controller.settings.userDefaults
+        let codexKey = MenuBarStatusItemPlacementPreflight.preferredPositionKey(autosaveName: "codexbar-codex")
+        let claudeKey = MenuBarStatusItemPlacementPreflight.preferredPositionKey(autosaveName: "codexbar-claude")
+        let mergedKey = MenuBarStatusItemPlacementPreflight.preferredPositionKey(autosaveName: "codexbar-merged")
+        let original = try #require(controller.statusItems[.codex])
+        defaults.set(200, forKey: codexKey)
+        defaults.set(400, forKey: claudeKey)
+        defaults.set(600, forKey: mergedKey)
+        controller.settings.setProviderOrder([.claude, .codex])
+        controller.handleProviderConfigChange(reason: "test reorder")
+        #expect(defaults.double(forKey: claudeKey) == 200)
+        #expect(defaults.double(forKey: codexKey) == 400)
+        #expect(defaults.double(forKey: mergedKey) == 600)
+        #expect(controller.statusItems[.codex] !== original)
+        #expect(controller.statusItems[.codex]?.autosaveName == "codexbar-codex")
+        #expect(controller.statusItems[.claude]?.autosaveName == "codexbar-claude")
+        let identitiesStayedVisible = statusBar.createdItems.allSatisfy(\.unnamedVisibleEvents.isEmpty)
+        #expect(identitiesStayedVisible)
+        let reordered = controller.statusItems[.codex]
+        controller.handleProviderConfigChange(reason: "ordinary refresh")
+        #expect(controller.statusItems[.codex] === reordered)
+        controller.settings.setProviderOrder([.gemini, .claude, .codex])
+        controller.handleProviderConfigChange(reason: "disabled provider reorder")
+        #expect(controller.statusItems[.codex] === reordered)
+        #expect(defaults.double(forKey: claudeKey) == 200)
+    }
+
+    @Test
     func `app shutdown closes tracked menus and removes status items`() {
         StatusItemController.menuCardRenderingEnabled = false
         StatusItemController.setMenuRefreshEnabledForTesting(true)
