@@ -2,6 +2,9 @@
 
 ## 0.70.1 — Unreleased
 
+### Changed
+
+- Docs: link the community codexbar-kde Plasma widget for Linux usage meters and agent-session views (#4117). Thanks @materemias!
 ### Fixed
 
 - Codex: discover the current ChatGPT bundled CLI launcher and skip broken npm launchers with missing native payloads so managed login can use a working fallback (#4143). Thanks @Yuxin-Qiao!
