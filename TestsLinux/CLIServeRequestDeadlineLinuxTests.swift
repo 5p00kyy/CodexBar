@@ -72,9 +72,10 @@ struct CLIServeRequestDeadlineLinuxTests {
                 if count < 0, errno == EINTR { continue }
                 // A close/reset after a response is normal while the peer is still writing.
                 if count == 0 || (count < 0 && errno == ECONNRESET) {
-                    return try #require(String(bytes: data, encoding: .utf8))
+                    guard let response = String(bytes: data, encoding: .utf8) else { throw POSIXError(.EILSEQ) }
+                    return response
                 }
-                try #require(count > 0, "Server did not finish its response before the hang guard")
+                guard count > 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
                 data.append(contentsOf: buffer.prefix(count))
             }
         }
@@ -88,6 +89,22 @@ struct CLIServeRequestDeadlineLinuxTests {
                 return
             }
             close(self.fd)
+        }
+    }
+
+    /// The accept loop and handlers use the cooperative executor. Keep blocking
+    /// fixture I/O off it so a two-core runner still has a thread to serve clients.
+    private static func onBackgroundThread<Value: Sendable>(
+        _ operation: @escaping @Sendable () throws -> Value) async throws -> Value
+    {
+        try await withCheckedThrowingContinuation { continuation in
+            Thread.detachNewThread {
+                do {
+                    try continuation.resume(returning: operation())
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
         }
     }
 
@@ -106,7 +123,8 @@ struct CLIServeRequestDeadlineLinuxTests {
         }
         let task = Task { try await server.run { listening.signal() } }
         defer { server.stop() }
-        try #require(listening.wait(timeout: .now() + 60) == .success)
+        let didListen = try await Self.onBackgroundThread { listening.wait(timeout: .now() + 60) == .success }
+        try #require(didListen)
         let port = try #require(server.listeningPort)
 
         var clients: [Client] = []
@@ -121,7 +139,7 @@ struct CLIServeRequestDeadlineLinuxTests {
         for client in clients {
             // Requiring the rejection (not merely a later healthy probe) proves each
             // connection was admitted and evicted with its incomplete writer still open.
-            let response = try client.response()
+            let response = try await Self.onBackgroundThread { try client.response() }
             #expect(response.hasPrefix("HTTP/1.1 400 Bad Request\r\n"))
             #expect(response.hasSuffix(#"{"error":"invalid request"}"#))
         }
@@ -134,7 +152,7 @@ struct CLIServeRequestDeadlineLinuxTests {
             let client = try Client(port: port)
             defer { client.stop() }
             if client.sendRequest("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n") {
-                let response = try client.response()
+                let response = try await Self.onBackgroundThread { try client.response() }
                 healthy = response.hasPrefix("HTTP/1.1 200 OK\r\n") && response.hasSuffix(#"{"ok":true}"#)
             }
             if !healthy { try await Task.sleep(for: .milliseconds(20)) }
