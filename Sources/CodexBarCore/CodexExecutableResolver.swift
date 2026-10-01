@@ -18,7 +18,10 @@ private func executableIsScript(_ path: String) -> Bool {
 func resolveCodexExecutableForRPC(
     environment: [String: String],
     executable: String,
-    captureLoginPATH: () -> [String]?) -> CodexExecutableResolution?
+    captureLoginPATH: () -> [String]?,
+    locateBinary: ([String: String], [String]?) -> String? = {
+        BinaryLocator.resolveCodexBinary(env: $0, loginPATH: $1)
+    }) -> CodexExecutableResolution?
 {
     if let override = environment["CODEX_CLI_PATH"],
        FileManager.default.isExecutableFile(atPath: override)
@@ -32,8 +35,8 @@ func resolveCodexExecutableForRPC(
     // Capture before the general resolver to preserve login-shell PATH precedence
     // over bundled fallbacks and to make `/usr/bin/env node` launchers usable.
     let loginPATH = captureLoginPATH()
-    guard let resolved = BinaryLocator.resolveCodexBinary(env: environment, loginPATH: loginPATH)
-        ?? TTYCommandRunner.which(executable)
+    // A failed preflight is authoritative: plain which can rediscover the rejected launcher.
+    guard let resolved = locateBinary(environment, loginPATH)
     else { return nil }
     return CodexExecutableResolution(executable: resolved, loginPATH: loginPATH)
 }

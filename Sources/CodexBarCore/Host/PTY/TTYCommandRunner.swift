@@ -1155,10 +1155,11 @@ extension TTYCommandRunner {
 
     public static func which(_ tool: String) -> String? {
         if let cli = ProviderDescriptorRegistry.all.first(where: { $0.cli.name == tool })?.cli,
-           cli.prefersBinaryLocatorForWhich,
-           let located = cli.binaryLocator?()
+           cli.prefersBinaryLocatorForWhich
         {
-            return located
+            // The provider locator owns fallback discovery and launch preflight.
+            // Do not undo a rejection with an unfiltered system lookup.
+            return cli.binaryLocator?()
         }
         return self.runWhich(tool)
     }

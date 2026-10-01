@@ -182,7 +182,8 @@ and stable account numbers distinguish rows while usable workspace labels remain
   npm launchers whose selected native payload is unavailable, with a diagnostic to reinstall `@openai/codex`.
   The launcher's Node interpreter resolves the architecture and optional package location without evaluating `codex.js`;
   the recognized current `bin/codex` or legacy `codex/codex` layout selects the one payload to assess. Stale payloads
-  in other layouts or architectures cannot substitute for it. Unknown layouts fail closed. Healthy npm launchers retain
+  in other layouts or architectures cannot substitute for it. Unknown layouts fail closed. RPC and PTY discovery
+  preserve locator rejection instead of repeating an unfiltered `which` lookup. Healthy npm launchers retain
   PATH precedence; bundled fallbacks still require the existing app trust checks.
 - If managed Codex account login still reports a missing executable, turn on **Show debug settings** in
   **Settings > Advanced**, then check **Settings > Debug > CLI Paths**. When no Codex binary appears there, confirm

@@ -32,3 +32,16 @@ PathBuilderTests, ProviderArchitectureGatekeeperTests: 103 tests passed.
 The permanent mixed-payload tests inject arm64 and x64 Node identities and
 prove only the launcher-selected path is assessed; missing/rejected selected
 payloads fail closed even when stale/other-architecture executables remain.
+
+4. No usable bundled CLI, with the same rejected selected Mach-O and healthy
+   obsolete payload. The fixture FileManager exposed only the npm launcher,
+   selected native executable and real Node; shell discovery was disabled.
+   Real Node package resolution and real Gatekeeper assessment were retained.
+   Production resolveCodexExecutableForRPC was used by UsageFetcher.
+   Result: codexNotInstalled from the RPC initializer before process I/O.
+   The forbidden marker remained absent: the rejected launcher was not executed.
+
+Follow-up validation: 157 tests in 8 suites passed, including the temporary
+production proof, RPC resolution, discovery, PATH, provider architecture, usage
+fallback, RPC teardown and PTY command runner tests. The temporary proof test
+was removed after execution. No account login or provider request was made.

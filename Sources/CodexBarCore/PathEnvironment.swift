@@ -510,7 +510,7 @@ public enum CodexLaunchPreflight {
         // Do not let that broken installation shadow a working bundled CLI.
         if isNPMLauncher, nativeCandidates.isEmpty {
             CodexBarLog.logger(LogCategories.subprocess).warning(
-                "Skipping npm Codex launcher: selected native payload unavailable. Reinstall @openai/codex to repair it.")
+                "Skipping npm Codex launcher: native payload unavailable. Reinstall @openai/codex to repair it.")
             return false
         }
         let pathsToCheck = [path, realPath] + appBundlePaths + nativeCandidates

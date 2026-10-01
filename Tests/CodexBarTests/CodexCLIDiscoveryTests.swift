@@ -103,7 +103,10 @@ struct CodexCLIDiscoveryTests {
             default: root
             }
             let native = "\(payloadRoot)/vendor/\(triple)/\(directory)/codex"
-            let source = directory == "bin" ? "path.join(vendorRoot, targetTriple, \"bin\")" : "path.join(archRoot, \"codex\")"
+            let source = switch directory {
+            case "bin": "path.join(vendorRoot, targetTriple, \"bin\")"
+            default: "path.join(archRoot, \"codex\")"
+            }
             let fm = MockFileManager(
                 executables: layout == "missing" ? [wrapper] : [wrapper, native],
                 contents: [wrapper: Data(source.utf8)])
