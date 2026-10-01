@@ -16,6 +16,7 @@
 - Costs: reduce CPU use while reconciling cached local Codex logs.
 - Codex: reduce CPU use when loading conversation titles for large local cost histories.
 - Reduce CPU use while scanning local Codex logs for cost data.
+- Costs: reduce CPU use when separating Claude and Vertex AI usage in local transcripts.
 
 ## 0.70.0 — 2026-09-29
 

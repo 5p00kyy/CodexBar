@@ -211,6 +211,8 @@ extension CostUsageScanner {
         case cacheEncode
         case reprice
         case normalizationCacheMiss
+        case vertexMetadataWalk
+        case claudeLineDecode
         case catalogModelLookup(found: Bool)
     }
 
@@ -222,6 +224,8 @@ extension CostUsageScanner {
         var cacheEncodes = 0
         var repricedRows = 0
         var normalizationCacheMisses = 0
+        var vertexMetadataWalks = 0
+        var claudeLineDecodes = 0
         var catalogModelLookups = 0
         var catalogModelHits = 0
         var catalogModelMisses = 0
@@ -245,6 +249,8 @@ extension CostUsageScanner {
             case .cacheEncode: self.metrics.cacheEncodes += 1
             case .reprice: self.metrics.repricedRows += 1
             case .normalizationCacheMiss: self.metrics.normalizationCacheMisses += 1
+            case .vertexMetadataWalk: self.metrics.vertexMetadataWalks += 1
+            case .claudeLineDecode: self.metrics.claudeLineDecodes += 1
             case let .catalogModelLookup(found):
                 self.metrics.catalogModelLookups += 1
                 if found {
