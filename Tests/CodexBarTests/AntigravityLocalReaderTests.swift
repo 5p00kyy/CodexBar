@@ -410,14 +410,13 @@ struct AntigravityLocalReaderTests {
 
     @Test
     func `repeated known messages merge scalar fields after validating every occurrence`() throws {
-        // Field 1 (model ID) is deliberately not used here: it is validated but never stored, so it
-        // cannot demonstrate that a later occurrence's fields merge onto an earlier one's.
-        let usage = Fixture.message(4, Fixture.varint(2, 100))
+        let usage = Fixture.message(4, Fixture.varint(1, 1298) + Fixture.varint(2, 100))
             + Fixture.message(4, Fixture.varint(5, 50))
         let time = Fixture.message(9, Fixture.message(4, Fixture.varint(1, 1_787_832_000)))
             + Fixture.message(9, Fixture.message(4, Fixture.varint(2, 123_000_000)))
         let bytes = Fixture.message(1, usage) + Fixture.message(1, time)
         let turn = try #require(try AntigravityProtoReader.parseTurn(bytes))
+        #expect(turn.usage?.modelID == 1298)
         #expect(turn.usage?.newInput == 100)
         #expect(turn.usage?.cacheRead == 50)
         #expect(turn.timestampMs == 1_787_832_000_123)

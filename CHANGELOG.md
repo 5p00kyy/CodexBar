@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Fixed
+
+- Antigravity: exclude model IDs from local token totals, correct visible and reasoning output counts, and estimate safety-routed Gemini Flash usage (#4124). Thanks @urda!
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights

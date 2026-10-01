@@ -276,11 +276,8 @@ enum AntigravityLocalReader {
                 pricing: $0,
                 model: model,
                 date: date,
-                tokens: PricedTokens(
-                    input: input,
-                    cacheRead: usage.cacheRead,
-                    cacheCreation: event.cacheWrite,
-                    output: usage.output + usage.reasoning))
+                usage: usage,
+                cacheWrite: event.cacheWrite)
         }
         let day = CostUsageLocalDay.key(from: date, calendar: calendar)
         return .init(
@@ -308,28 +305,22 @@ enum AntigravityLocalReader {
             estimatedRequestCount: cost == nil ? 0 : 1)
     }
 
-    private struct PricedTokens {
-        let input: Int
-        let cacheRead: Int
-        let cacheCreation: Int
-        let output: Int
-    }
-
     /// Prices the exact recorded model ID first so an explicitly catalogued variant keeps its own
     /// price, then falls back to the base model of a known routing variant.
     private static func costUSD(
         pricing: CostUsagePricing.ClaudeResolver,
         model: String,
         date: Date,
-        tokens: PricedTokens) -> Double?
+        usage: AntigravityProtoReader.ParsedUsage,
+        cacheWrite: Int) -> Double?
     {
         func resolve(_ candidate: String) -> Double? {
             pricing.costUSD(
                 model: candidate,
-                inputTokens: tokens.input,
-                cacheReadInputTokens: tokens.cacheRead,
-                cacheCreationInputTokens: tokens.cacheCreation,
-                outputTokens: tokens.output,
+                inputTokens: usage.newInput,
+                cacheReadInputTokens: usage.cacheRead,
+                cacheCreationInputTokens: cacheWrite,
+                outputTokens: usage.output + usage.reasoning,
                 pricingDate: date)
         }
         if let cost = resolve(model) { return cost }
