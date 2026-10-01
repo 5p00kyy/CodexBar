@@ -20,6 +20,7 @@
 - Reduce CPU use while scanning local Codex logs for cost data.
 - Costs: reduce CPU use when separating Claude and Vertex AI usage in local transcripts.
 - Antigravity: exclude model IDs from local token totals, correct visible and reasoning output counts, and estimate safety-routed Gemini Flash usage (#4124). Thanks @urda!
+- Antigravity: apply schema text limits per database so normal histories do not become partial after a few hundred sessions, and retain valid rows around oversized schemas (#4133). Thanks @urda!
 
 ## 0.70.0 — 2026-09-29
 
