@@ -102,7 +102,7 @@ enum PiSessionCostScanner {
 
     static let costScale = 1_000_000_000.0
     /// Bump for Pi-only cost formula changes not represented by the parser or pricing fingerprints.
-    private static let costFormulaVersion = 3
+    static let costFormulaVersion = 4
     private static let maxLineBytes = 16 * 1024 * 1024
     private static let sessionStartFilenameRegex = try? NSRegularExpression(
         pattern: "^(\\d{4}-\\d{2}-\\d{2})T(\\d{2})-(\\d{2})-(\\d{2})-(\\d{3})Z_")
@@ -1199,7 +1199,10 @@ enum PiSessionCostScanner {
                 ?? usage["cache_creation_tokens"]
                 ?? usage["cacheCreationInputTokens"]
                 ?? usage["cache_creation_input_tokens"])
-        let cacheWrite1h = read(usage["cacheWrite1h"])
+        // Pi records Anthropic's 1-hour cache-write subset as `cacheWrite1h`; OMP records the
+        // same split under `cttl.ephemeral1h`. Both are subsets of `cacheWrite`, never added
+        // on top of it, so `totalTokens` stays untouched.
+        let cacheWrite1h = Self.readCacheWrite1hTokens(from: usage)
         let output = read(
             usage["output"]
                 ?? usage["outputTokens"]
@@ -1294,6 +1297,28 @@ enum PiSessionCostScanner {
         default:
             return nil
         }
+    }
+
+    /// Reads the optional Anthropic 1-hour cache-write subset. Pi records `cacheWrite1h` while
+    /// OMP records `cttl.ephemeral1h`/`cttl.ephemeral_1h`; each is a subset of `cacheWrite`.
+    /// The first present spelling wins: absent keys skip to the next candidate, a present but
+    /// malformed value returns nil so the caller drops the row, and a row with none of the
+    /// spellings reads as zero.
+    private static func readCacheWrite1hTokens(from usage: [String: Any]) -> Int? {
+        let cttl = usage["cttl"] as? [String: Any]
+        // flatMap flattens the nested Optional produced by dictionary subscripts so absent
+        // keys skip cleanly instead of boxing `nil` into `.some(nil)`.
+        let candidates: [Any?] = [
+            usage["cacheWrite1h"],
+            usage["cache_write_1h"],
+            cttl.flatMap { $0["ephemeral1h"] },
+            cttl.flatMap { $0["ephemeral_1h"] },
+        ]
+        for candidate in candidates {
+            guard let candidate else { continue }
+            return Self.readNonNegativeInt(candidate)
+        }
+        return 0
     }
 
     private static func readNonNegativeInt(_ value: Any?) -> Int? {
