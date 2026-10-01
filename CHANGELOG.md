@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Fixed
+
+- Claude: show the claude-swap executable field and its help beneath the enabled account toggle (#4122). Thanks @laitifranz!
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
