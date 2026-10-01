@@ -60,7 +60,8 @@ keeping the ambient CLI login and Keychain untouched. Credentials without an ID 
 Before attributing usage, CodexBar checks the effective access token through Google's userinfo endpoint
 and rejects a different or unverifiable account, including conflicting refreshed ID-token claims.
 Only verified refreshed credentials reach the existing saved-account updater. The CLI compares and saves
-under the shared config-file lock; a concurrent writer or changed credential skips the best-effort update.
+under the shared config-file lock, advancing its comparison only after its own successful write. A concurrent
+writer or externally changed credential skips the best-effort update.
 The app retains its account-token and config-revision guards. The temporary home is removed on success,
 failure, and cancellation. Scoped failures retain the ambient diagnostic and allow account-scoped OAuth
 fallback; cancellation stops the pipeline. Linux keeps its existing OAuth fallback.

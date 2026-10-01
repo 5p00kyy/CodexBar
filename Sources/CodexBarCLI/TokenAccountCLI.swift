@@ -192,16 +192,9 @@ struct TokenAccountCLIContext {
 
     func tokenUpdater(for account: ProviderTokenAccount?) -> ProviderFetchContext.TokenAccountTokenUpdater? {
         guard let account else { return nil }
-        let configStore = self.configStore
-        let expectedToken = account.token
+        let writeback = TokenAccountCLIWriteback(account: account, store: self.configStore)
         return { provider, accountID, token in
-            guard accountID == account.id else { return }
-            try? Self.updateStoredTokenAccount(
-                store: configStore,
-                provider: provider,
-                accountID: accountID,
-                expectedToken: expectedToken,
-                token: token)
+            await writeback.update(provider: provider, accountID: accountID, token: token)
         }
     }
 
@@ -211,16 +204,18 @@ struct TokenAccountCLIContext {
         }
     }
 
+    @discardableResult
     static func updateStoredTokenAccount(
         store: CodexBarConfigStore,
         provider: UsageProvider,
         accountID: UUID,
         expectedToken: String,
-        token: String) throws
+        token: String) throws -> Bool
     {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return false }
 
+        var didUpdate = false
         try store.updateIfAvailable { config in
             guard var providerConfig = config.providerConfig(for: provider.instanceID),
                   let data = providerConfig.tokenAccounts,
@@ -253,8 +248,10 @@ struct TokenAccountCLIContext {
                 accounts: accounts,
                 activeIndex: data.clampedActiveIndex())
             config.setProviderConfig(providerConfig)
+            didUpdate = true
             return true
         }
+        return didUpdate
     }
 
     func fetcher(base: UsageFetcher, provider: UsageProvider, env: [String: String]) -> UsageFetcher {
@@ -344,6 +341,32 @@ struct TokenAccountCLIContext {
             return configuredPaths.contains {
                 CodexHomeScope.normalizedHomePath($0) == normalizedPath
             } ? normalizedPath : nil
+        }
+    }
+}
+
+/// A fetch may persist a refreshed token and then discovered account metadata.
+private actor TokenAccountCLIWriteback {
+    private let accountID: UUID
+    private let store: CodexBarConfigStore
+    private var expectedToken: String
+
+    init(account: ProviderTokenAccount, store: CodexBarConfigStore) {
+        self.accountID = account.id
+        self.store = store
+        self.expectedToken = account.token
+    }
+
+    func update(provider: UsageProvider, accountID: UUID, token: String) {
+        guard accountID == self.accountID else { return }
+        if (try? TokenAccountCLIContext.updateStoredTokenAccount(
+            store: self.store,
+            provider: provider,
+            accountID: accountID,
+            expectedToken: self.expectedToken,
+            token: token)) == true
+        {
+            self.expectedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 }

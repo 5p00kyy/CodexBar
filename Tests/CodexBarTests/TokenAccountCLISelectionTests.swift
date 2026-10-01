@@ -103,6 +103,26 @@ struct TokenAccountCLISelectionTests {
     }
 
     @Test
+    func `cli token updater accepts successive owned writes but rejects external reauthorization`() async throws {
+        let account = Self.account(token: "original-token")
+        let config = Self.config(with: account)
+        let store = try Self.configStore()
+        defer { try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent()) }
+        try store.save(config)
+        let context = try Self.writebackContext(config: config, store: store)
+        let updater = try #require(context.tokenUpdater(for: account))
+
+        // OAuth first refreshes the grant, then persists the discovered project on the same fetch.
+        await updater(.antigravity, account.id, "refreshed-token")
+        await updater(.antigravity, account.id, "refreshed-token-with-project")
+        #expect(try Self.storedToken(store: store, accountID: account.id) == "refreshed-token-with-project")
+
+        try store.save(Self.config(with: Self.account(id: account.id, token: "reauthorized-token")))
+        await updater(.antigravity, account.id, "late-owned-update")
+        #expect(try Self.storedToken(store: store, accountID: account.id) == "reauthorized-token")
+    }
+
+    @Test
     func `cli refresh cannot publish during another config writer transaction`() throws {
         let account = Self.account(token: "original-token")
         let store = try Self.configStore()
