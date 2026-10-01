@@ -352,7 +352,7 @@ extension CostUsageScanner {
         return lhs.path < rhs.path
     }
 
-    private static func reconciledClaudeRows(cache: CostUsageCache) -> [ClaudeUsageRow] {
+    static func reconciledClaudeRows(cache: CostUsageCache) -> [ClaudeUsageRow] {
         #if DEBUG
         recordClaudeScanWork(.reconcile)
         #endif
@@ -381,46 +381,45 @@ extension CostUsageScanner {
         return rows
     }
 
-    private static func rebuildClaudeDays(cache: inout CostUsageCache) {
+    static func rebuildClaudeDays(cache: inout CostUsageCache, rows: [ClaudeUsageRow]) {
         var days: [String: [String: [Int]]] = [:]
         var overflowed: Set<ClaudeDayModelKey> = []
 
-        for row in Self.reconciledClaudeRows(cache: cache) {
+        for row in rows {
             let key = ClaudeDayModelKey(day: row.dayKey, model: row.model)
             guard !overflowed.contains(key) else { continue }
-            var dayModels = days[row.dayKey] ?? [:]
-            let packed = dayModels[row.model] ?? [0, 0, 0, 0, 0, 0, 0, 0]
-            if row.isIncomplete == true {
-                // Retain the day/model so missing usage is visible without treating it as zero activity.
-                dayModels[row.model] = packed
-                days[row.dayKey] = dayModels
-                continue
-            }
-            let delta = [
-                row.input,
-                row.cacheRead,
-                row.cacheCreate,
-                row.output,
-                row.costNanos,
-                1,
-                (row.costPriced ?? (row.costNanos > 0)) ? 1 : 0,
-                row.cacheCreate1h ?? 0,
-            ]
-            let summed = zip(packed, delta).compactMap { current, incoming -> Int? in
-                let sum = current.addingReportingOverflow(incoming)
-                return sum.overflow ? nil : sum.partialValue
-            }
-            if summed.count == packed.count {
-                dayModels[row.model] = summed
-            } else {
+            if !Self.addClaudeRow(
+                row,
+                to: &days[row.dayKey, default: [:]][row.model, default: [0, 0, 0, 0, 0, 0, 0, 0]])
+            {
                 // Raw rows retain every metric; the legacy packed format cannot represent an unavailable total.
                 overflowed.insert(key)
-                dayModels.removeValue(forKey: row.model)
+                days[row.dayKey]?.removeValue(forKey: row.model)
             }
-            days[row.dayKey] = dayModels
         }
 
         cache.days = days
+    }
+
+    private static func addClaudeRow(_ row: ClaudeUsageRow, to packed: inout [Int]) -> Bool {
+        // Retain incomplete day/models without treating their missing usage as zero activity.
+        guard row.isIncomplete != true else { return true }
+        let delta = [
+            row.input,
+            row.cacheRead,
+            row.cacheCreate,
+            row.output,
+            row.costNanos,
+            1,
+            (row.costPriced ?? (row.costNanos > 0)) ? 1 : 0,
+            row.cacheCreate1h ?? 0,
+        ]
+        for (index, incoming) in delta.enumerated() {
+            let sum = packed[index].addingReportingOverflow(incoming)
+            guard !sum.overflow else { return false }
+            packed[index] = sum.partialValue
+        }
+        return true
     }
 
     private static let vertexProviderKeys: Set<String> = [
@@ -778,8 +777,12 @@ extension CostUsageScanner {
             for key in cache.files.keys where sourceInventory[key] == nil {
                 cache.files.removeValue(forKey: key)
             }
+        }
 
-            Self.rebuildClaudeDays(cache: &cache)
+        // Keep the same winner and summation order for both projections of this cache snapshot.
+        let rows = Self.reconciledClaudeRows(cache: cache)
+        if shouldMutateCache {
+            Self.rebuildClaudeDays(cache: &cache, rows: rows)
             Self.pruneDays(cache: &cache, sinceKey: range.scanSinceKey, untilKey: range.scanUntilKey)
             cache.scanSinceKey = range.scanSinceKey
             cache.scanUntilKey = range.scanUntilKey
@@ -791,6 +794,7 @@ extension CostUsageScanner {
 
         let report = Self.buildClaudeReportFromCache(
             cache: cache,
+            rows: rows,
             range: range,
             pricingResolver: pricingResolver)
         try checkCancellation?()
@@ -867,12 +871,14 @@ extension CostUsageScanner {
     {
         self.buildClaudeReportFromCache(
             cache: cache,
+            rows: self.reconciledClaudeRows(cache: cache),
             range: range,
             pricingResolver: CostUsagePricing.ClaudeResolver(now: now, cacheRoot: modelsDevCacheRoot))
     }
 
     private static func buildClaudeReportFromCache(
         cache: CostUsageCache,
+        rows: [ClaudeUsageRow],
         range: CostUsageDayRange,
         pricingResolver: CostUsagePricing.ClaudeResolver) -> CostUsageDailyReport
     {
@@ -887,7 +893,7 @@ extension CostUsageScanner {
         var costSeen = false
         var hasTokens = false
         let repricedCosts = self.claudeTemporalPricing(
-            rows: Self.reconciledClaudeRows(cache: cache),
+            rows: rows,
             range: range,
             pricingResolver: pricingResolver,
             temporalBuckets: &temporalBuckets)

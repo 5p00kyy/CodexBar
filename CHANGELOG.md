@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Claude costs: reduce CPU use when rebuilding reports after local transcripts grow.
 - Menu bar: show the remaining quota when only the third usage window is available, including Gemini Flash Lite-only accounts, through the shared metric fallback (#4128). Thanks @devYRPauli!
 - Reduce CPU and filesystem work while identifying local agent processes during refreshes.
 - Reduce CPU use when refreshing model pricing while preserving historical fallback rates.
