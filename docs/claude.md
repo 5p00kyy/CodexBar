@@ -233,6 +233,7 @@ the cookie import.
   - `GET https://claude.ai/api/account` → email + plan hints.
 - Outputs:
   - Session + weekly + model-specific percent used.
+  - A missing session measurement does not render as 100% remaining. Measured weekly and extra windows stay visible; when only a synthetic session placeholder exists, menus and plain CLI output report that limits are unavailable. Raw JSON retains the placeholder for diagnostics.
   - Daily Routines extra window when returned by the usage API.
   - Extra usage spend/limit (if enabled).
   - Remaining Usage credits balance (if enabled).
