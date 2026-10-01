@@ -2,7 +2,7 @@
 
 The menu's **History window** supports rolling days, **Month to date**, and **All**. Usage & Spend uses the same period model and keeps its own range selection. Existing saved day counts retain their rolling windows; the dashboard's former All selection migrates to All available history.
 
-Month to date starts at midnight on the first day of the current month and includes today. It uses the pinned cost-bucketing time zone from Settings, falling back to the current local zone. Calendar arithmetic handles leap years and 23/25-hour daylight-saving days. Each operation resolves its window again, and cache identities include the selection, dates, and time zone.
+Month to date starts at midnight on the first day of the current month and includes today. It uses the pinned cost-bucketing time zone from Settings, falling back to the current local zone. Calendar arithmetic handles leap years and 23/25-hour daylight-saving days. Local log scans reuse Gregorian calendars and the latest day interval for up to eight time zones; crossing a day boundary or changing zones resolves the day again without changing stored cost-cache identities. Each operation resolves its window again, and cache identities include the selection, dates, and time zone.
 
 The menu selection also supplies the default for `codexbar cost`, the HTTP `/cost` endpoint, and widget cost summaries. The widget metric is named **Cost**; its displayed period comes from the app's snapshot. Explicit CLI options override the saved selection:
 
