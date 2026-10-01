@@ -11,6 +11,7 @@
 - Reduce CPU and filesystem work while identifying local agent processes during refreshes.
 - Reduce CPU use when refreshing model pricing while preserving historical fallback rates.
 - Costs: reduce CPU use while bucketing local agent logs into daily usage.
+- Costs: reduce CPU use while reconciling cached local Codex logs.
 
 ## 0.70.0 — 2026-09-29
 
