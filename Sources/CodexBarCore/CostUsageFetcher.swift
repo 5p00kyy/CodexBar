@@ -897,9 +897,10 @@ public struct CostUsageFetcher: Sendable {
                     staleSnapshotUpdatedAt = previous.updatedAt
                 } else {
                     daily = view.dailyReport(range: range, cacheRoot: options.scanOptions.cacheRoot)
-                    projects = view.projects(
-                        range: range,
-                        cacheRoot: options.scanOptions.cacheRoot)
+                    projects = Self.codexProjectsWithDisplayNames(
+                        view.projects(range: range, cacheRoot: options.scanOptions.cacheRoot),
+                        sessionsRoot: roots.first,
+                        environment: options.environment)
                     sessions = Self.codexSessionsWithThreadTitles(
                         view.sessions(
                             range: range,
@@ -964,6 +965,40 @@ public struct CostUsageFetcher: Sendable {
         }
     }
 
+    /// Refresh labels from the selected Codex home without changing paths, usage, or persisted history.
+    static func codexProjectsWithDisplayNames(
+        _ projects: [CostUsageProjectBreakdown],
+        sessionsRoot: URL?,
+        environment: [String: String] = ProcessInfo.processInfo.environment) -> [CostUsageProjectBreakdown]
+    {
+        guard !projects.isEmpty, let sessionsRoot, sessionsRoot.lastPathComponent == "sessions" else {
+            return projects
+        }
+        let home = sessionsRoot.deletingLastPathComponent()
+        // Canonical project paths can combine worktrees with different relative SQLite homes.
+        // Resolve from each original source directory, just like the session-title overlay.
+        let databases = projects.map { project -> Set<URL> in
+            let sources = project.sources.compactMap(\.path)
+            return Set((sources.isEmpty ? [project.path].compactMap(\.self) : sources).map { path in
+                CodexThreadMetadataReader(
+                    codexHomeDirectory: home,
+                    environment: environment,
+                    resolvedWorkingDirectory: URL(fileURLWithPath: path, isDirectory: true)).databaseURL
+            })
+        }
+        let paths = Set(projects.compactMap(\.path))
+        var namesByDatabase: [URL: [String: String]] = [:]
+        for database in Set(databases.flatMap(\.self)) {
+            namesByDatabase[database] = CodexThreadMetadataReader(databaseURL: database).projectNames(for: paths)
+        }
+        return zip(projects, databases).map { project, databases in
+            guard let path = project.path, !databases.isEmpty else { return project }
+            let names = databases.compactMap { namesByDatabase[$0]?[path] }
+            guard names.count == databases.count, Set(names).count == 1, let name = names.first else { return project }
+            return project.withName(name)
+        }
+    }
+
     /// Codex keeps thread names outside the rollout files, so overlay them after the cost scan.
     static func codexSessionsWithThreadTitles(
         _ sessions: [CostUsageSessionBreakdown],
@@ -988,13 +1023,21 @@ public struct CostUsageFetcher: Sendable {
                 }).databaseURL
         }
         var metadata: [String: CodexThreadMetadata] = [:]
+        var projectNames: [String: String] = [:]
         for (database, sessions) in groups {
             metadata.merge(CodexThreadMetadataReader(databaseURL: database).metadata(
                 for: Set(sessions.map(\.sessionID)), indexedNames: indexedNames)) { _, latest in latest }
+            let names = CodexThreadMetadataReader(databaseURL: database).projectNames(
+                for: Set(sessions.compactMap(\.projectPath)))
+            for session in sessions {
+                if let path = session.projectPath { projectNames[session.sessionID] = names[path] }
+            }
         }
         return sessions.map { session in
-            guard let title = metadata[session.sessionID]?.title else { return session }
-            return session.withTitle(title)
+            var result = session
+            if let title = metadata[session.sessionID]?.title { result = result.withTitle(title) }
+            if let name = projectNames[session.sessionID] { result = result.withProjectName(name) }
+            return result
         }
     }
 
