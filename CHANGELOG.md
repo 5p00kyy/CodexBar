@@ -5,6 +5,7 @@
 ### Fixed
 
 - Codex: discover the current ChatGPT bundled CLI launcher and skip broken npm launchers with missing native payloads so managed login can use a working fallback (#4143). Thanks @Yuxin-Qiao!
+- Menu bar: show the remaining quota when only the third usage window is available, including Gemini Flash Lite-only accounts, through the shared metric fallback (#4128). Thanks @devYRPauli!
 
 ## 0.70.0 — 2026-09-29
 
