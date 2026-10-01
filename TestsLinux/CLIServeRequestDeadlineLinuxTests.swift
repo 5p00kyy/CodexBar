@@ -81,7 +81,12 @@ struct CLIServeRequestDeadlineLinuxTests {
         }
 
         func stop() {
-            self.lock.withLock { self.stopped = true }
+            let shouldStop = self.lock.withLock {
+                guard !self.stopped else { return false }
+                self.stopped = true
+                return true
+            }
+            guard shouldStop else { return }
             // Wake any blocked send, then join before closing/reusing the descriptor.
             _ = shutdown(self.fd, Int32(SHUT_RDWR))
             guard self.writerFinished.wait(timeout: .now() + 60) == .success else {
@@ -95,6 +100,7 @@ struct CLIServeRequestDeadlineLinuxTests {
     /// The accept loop and handlers use the cooperative executor. Keep blocking
     /// fixture I/O off it so a two-core runner still has a thread to serve clients.
     private static func onBackgroundThread<Value: Sendable>(
+        onFailure: @escaping @Sendable () -> Void = {},
         _ operation: @escaping @Sendable () throws -> Value) async throws -> Value
     {
         try await withCheckedThrowingContinuation { continuation in
@@ -102,6 +108,8 @@ struct CLIServeRequestDeadlineLinuxTests {
                 do {
                     try continuation.resume(returning: operation())
                 } catch {
+                    // Release blocked server workers before resuming on their executor.
+                    onFailure()
                     continuation.resume(throwing: error)
                 }
             }
@@ -135,11 +143,15 @@ struct CLIServeRequestDeadlineLinuxTests {
             try #require(client.sendRequest("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Pad: "))
             client.startTrickling()
         }
+        let stopConnections: @Sendable () -> Void = { [clients] in
+            server.stop()
+            clients.forEach { $0.stop() }
+        }
 
         for client in clients {
             // Requiring the rejection (not merely a later healthy probe) proves each
             // connection was admitted and evicted with its incomplete writer still open.
-            let response = try await Self.onBackgroundThread { try client.response() }
+            let response = try await Self.onBackgroundThread(onFailure: stopConnections) { try client.response() }
             #expect(response.hasPrefix("HTTP/1.1 400 Bad Request\r\n"))
             #expect(response.hasSuffix(#"{"error":"invalid request"}"#))
         }
@@ -152,7 +164,12 @@ struct CLIServeRequestDeadlineLinuxTests {
             let client = try Client(port: port)
             defer { client.stop() }
             if client.sendRequest("GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n") {
-                let response = try await Self.onBackgroundThread { try client.response() }
+                let response = try await Self.onBackgroundThread(
+                    onFailure: {
+                        stopConnections()
+                        client.stop()
+                    },
+                    { try client.response() })
                 healthy = response.hasPrefix("HTTP/1.1 200 OK\r\n") && response.hasSuffix(#"{"ok":true}"#)
             }
             if !healthy { try await Task.sleep(for: .milliseconds(20)) }
