@@ -270,7 +270,8 @@ The accepted multi-account design in
 [claude-multi-account-and-status-items.md](claude-multi-account-and-status-items.md).
 
 - Setup: Preferences → Providers → Claude → "Read accounts from claude-swap", then set the path to the
-  [`cswap`](https://github.com/realiti4/claude-swap) executable (for example `~/.local/bin/cswap`).
+  [`cswap`](https://github.com/realiti4/claude-swap) executable (for example `~/.local/bin/cswap`) in the field
+  directly beneath the enabled toggle. The path field and its help are hidden while the integration is off.
 - Version detection retries after a failed or cancelled startup probe; replaced refreshes cannot overwrite a newer
   result, and disabling the adapter or changing its executable clears the previous detected version.
 - Behavior: on each Claude refresh, CodexBar runs `cswap --list --json` independently of the ambient Claude fetch (no

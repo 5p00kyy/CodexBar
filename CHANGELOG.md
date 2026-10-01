@@ -17,6 +17,7 @@
 - Costs: avoid rebuilding Claude cost reports when refreshed model pricing is unchanged.
 - OpenCode: restore migrated Console workspace quota and prepaid balance, preserve legacy sessions, and label 30-day spend without inventing a monthly spending limit (#4131, #4139). Thanks @luochen211!
 - Claude: treat unmeasured session placeholders as unavailable while retaining real weekly quotas in menus and the CLI (#4107). Thanks @emanuelst!
+- Claude: show the claude-swap executable field and its help beneath the enabled account toggle (#4122). Thanks @laitifranz!
 - Menu bar: show the remaining quota when only the third usage window is available, including Gemini Flash Lite-only accounts, through the shared metric fallback (#4128). Thanks @devYRPauli!
 - Reduce CPU and filesystem work while identifying local agent processes during refreshes.
 - Reduce CPU use when refreshing model pricing while preserving historical fallback rates.
