@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Security
+
+- Resolve bundled helpers and plugin resources from the running executable, and ignore working-directory-dependent CLI search paths (#4136). Thanks @maugt!
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
