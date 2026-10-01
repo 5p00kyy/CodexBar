@@ -91,6 +91,66 @@ struct CloudSyncApplyTests {
         #expect(settings.hidePersonalInfo != original)
     }
 
+    @Test(arguments: [SyncRecordType.device, .accountSnapshot])
+    func `already cancelled missing-record recovery preserves bookkeeping`(_ type: SyncRecordType) async throws {
+        try await self.verifyRecovery(type, interruption: .cancel, alreadyCancelled: true)
+    }
+
+    @Test(arguments: [SyncRecordType.device, .accountSnapshot])
+    func `interrupted missing-record recovery preserves newer bookkeeping`(_ type: SyncRecordType) async throws {
+        for interruption in Interruption.allCases {
+            try await self.verifyRecovery(type, interruption: interruption)
+        }
+    }
+
+    private func verifyRecovery(
+        _ type: SyncRecordType, interruption: Interruption, alreadyCancelled: Bool = false) async throws
+    {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let settings = testSettingsStore(suiteName: "CloudSyncApplyTests", userDefaults: InMemoryUserDefaults())
+        let persistence = CloudSyncPersistence(fileURL: directory.appendingPathComponent("sync.json"))
+        let state = CloudSyncState()
+        let gate = ApplyGate(suspension: 1)
+        let id = CKRecord.ID(recordName: "removed-current", zoneID: CloudSyncEngine.zoneID)
+        let stale = CKRecord(recordType: type.rawValue, recordID: id)
+        stale["editCount"] = 1 as CKRecordValue
+        var envelope = persistence.load()
+        CloudSyncPersistence.cacheSystemFields(of: stale, in: &envelope)
+        try persistence.save(envelope)
+        let engine = CloudSyncEngine(
+            settings: settings,
+            state: state,
+            persistence: persistence,
+            beforeApply: { if !alreadyCancelled { await gate.suspend() } })
+        let error = CKError(_nsError: NSError(domain: CKErrorDomain, code: CKError.unknownItem.rawValue))
+        let task = Task {
+            if alreadyCancelled { withUnsafeCurrentTask { $0?.cancel() } }
+            await engine.handleSaveFailure(stale, error: error)
+        }
+        if !alreadyCancelled {
+            await gate.waitUntilSuspended()
+            switch interruption {
+            case .cancel: task.cancel()
+            case .stop: await engine.stop()
+            case .supersede:
+                let newer = CKRecord(recordType: type.rawValue, recordID: id)
+                newer["editCount"] = 2 as CKRecordValue
+                await engine.applyFetchedRecords([newer])
+                // A fetched-record event persists its envelope after processing deletions, even when empty.
+                engine.applyDeletedRecords([])
+            case .schemaPause: state.status.needsAppUpdate = true
+            }
+            await gate.resume()
+        }
+        await task.value
+        let saved = persistence.load()
+        #expect(saved.encodedSystemFields[id.recordName] != nil)
+        #expect(saved.recordMetadata[id.recordName]?.editCount == (interruption == .supersede ? 2 : 1))
+        #expect(engine.recordForPendingSave(id) == nil)
+        #expect(state.status.lastError == nil)
+    }
+
     private func record(
         _ type: SyncRecordType, settings: SettingsStore, changed: Bool, editCount: Int) throws -> CKRecord
     {
