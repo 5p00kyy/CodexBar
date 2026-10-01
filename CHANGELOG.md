@@ -2,6 +2,11 @@
 
 ## 0.70.1 — Unreleased
 
+### Fixed
+
+- iCloud Sync: recover a live Mac's saves after its records are removed from another Mac, without resetting shared sync state (#4144).
+- iCloud Sync: register for silent change notifications when the signed build supports push; release provisioning must enable that capability for automatic delivery (#4132).
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
