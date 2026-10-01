@@ -36,14 +36,7 @@ enum OpenCodeConsoleUsageFetcher {
             timeout: timeout,
             transport: transport)
         if let quota = OpenCodeGoUsageFetcher.parseConsoleGoStatus(text: text, now: now) {
-            return OpenCodeUsageSnapshot(
-                hasWeeklyUsage: quota.hasWeeklyUsage,
-                rollingUsagePercent: quota.rollingUsagePercent,
-                weeklyUsagePercent: quota.weeklyUsagePercent,
-                rollingResetInSec: quota.rollingResetInSec,
-                weeklyResetInSec: quota.weeklyResetInSec,
-                renewsAt: quota.renewsAt,
-                updatedAt: now)
+            return OpenCodeUsageSnapshot(quota: quota)
         }
         guard let data = text.data(using: .utf8),
               let object = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]),
@@ -84,7 +77,7 @@ enum OpenCodeConsoleUsageFetcher {
         // Unsupported or missing balance data does not erase spend for a confirmed PAYG account.
         let balanceUSD = try? OpenCodeGoZenBalanceParser.parseConsoleBillingStatus(text: billingText)
         return .payAsYouGo(
-            .init(usageUSD: usageUSD, limitUSD: nil, balanceUSD: balanceUSD, period: .last30Days),
+            .init(monthlyUsageUSD: usageUSD, monthlyLimitUSD: nil, balanceUSD: balanceUSD, period: .last30Days),
             updatedAt: now)
     }
 
@@ -151,57 +144,5 @@ enum OpenCodeConsoleUsageFetcher {
             throw OpenCodeUsageError.parseFailed("Console response was not UTF-8.")
         }
         return text
-    }
-
-    static func withLegacyFallback<Value: Sendable>(
-        cookieHeader: String,
-        console: @Sendable () async throws -> Value,
-        legacy: @Sendable () async throws -> Value) async throws -> Value
-    {
-        try Task.checkCancellation()
-        let cookies = CookieHeaderNormalizer.pairs(from: cookieHeader)
-        let hasConsoleSession = cookies
-            .contains { OpenCodeWebCookieSupport.consoleSessionCookieNames.contains($0.name) }
-        // The Console authenticates with its own cookie; keep legacy-only accounts on their existing path.
-        guard hasConsoleSession else { return try await legacy() }
-        do {
-            return try await console()
-        } catch {
-            let consoleError = error
-            try self.checkCancellation(error)
-            guard self.canTryLegacy(after: error),
-                  cookies.contains(where: { OpenCodeWebCookieSupport.sessionCookieNames.contains($0.name) })
-            else { throw error }
-            do {
-                let value = try await legacy()
-                try Task.checkCancellation()
-                return value
-            } catch {
-                try self.checkCancellation(error)
-                // Keep a Console permission or parsing error if the legacy endpoint says signed out.
-                if case .invalidCredentials? = consoleError as? OpenCodeUsageError { throw error }
-                if error is OpenCodeUsageError { throw consoleError }
-                throw error
-            }
-        }
-    }
-
-    private static func canTryLegacy(after error: Error) -> Bool {
-        if error is OpenCodeUsageError { return true }
-        guard let error = error as? URLError else { return false }
-        switch error.code {
-        case .timedOut, .networkConnectionLost, .cannotConnectToHost, .cannotFindHost,
-             .dnsLookupFailed, .notConnectedToInternet, .resourceUnavailable:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private static func checkCancellation(_ error: Error) throws {
-        try Task.checkCancellation()
-        if error is CancellationError || (error as? URLError)?.code == .cancelled {
-            throw CancellationError()
-        }
     }
 }

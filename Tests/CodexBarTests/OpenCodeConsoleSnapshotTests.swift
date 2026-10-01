@@ -6,13 +6,35 @@ struct OpenCodeConsoleSnapshotTests {
     private static let now = Date(timeIntervalSince1970: 1_700_000_000)
 
     @Test
+    func `legacy public initializers and integer reset accessors remain source compatible`() {
+        let makeSpend: (Double, Double?, Double?) -> OpenCodeUsageSnapshot.PayAsYouGoUsage =
+            OpenCodeUsageSnapshot.PayAsYouGoUsage.init
+        let makeQuota: (Double, Double, Int, Int, Date?, OpenCodeUsageSnapshot.PayAsYouGoUsage?, Date)
+            -> OpenCodeUsageSnapshot = OpenCodeUsageSnapshot.init
+        let spend = makeSpend(3, 20, 4)
+        let quota = makeQuota(17, 75, 600, 7200, nil, nil, Self.now)
+        let rollingReset: Int = quota.rollingResetInSec
+        let weeklyReset: Int = quota.weeklyResetInSec
+
+        #expect(spend.monthlyUsageUSD == 3)
+        #expect(spend.monthlyLimitUSD == 20)
+        #expect(spend.period == .monthly)
+        #expect(rollingReset == 600)
+        #expect(weeklyReset == 7200)
+    }
+
+    @Test
     func `unknown Console resets remain unknown`() {
-        let snapshot = OpenCodeUsageSnapshot(
+        let snapshot = OpenCodeUsageSnapshot(quota: .init(
+            hasWeeklyUsage: true,
+            hasMonthlyUsage: false,
             rollingUsagePercent: 17,
             weeklyUsagePercent: 75,
+            monthlyUsagePercent: 0,
             rollingResetInSec: nil,
             weeklyResetInSec: nil,
-            updatedAt: Self.now)
+            monthlyResetInSec: nil,
+            updatedAt: Self.now))
 
         let usage = snapshot.toUsageSnapshot()
 
@@ -24,13 +46,16 @@ struct OpenCodeConsoleSnapshotTests {
 
     @Test
     func `missing Console weekly quota does not appear as unused quota`() {
-        let snapshot = OpenCodeUsageSnapshot(
+        let snapshot = OpenCodeUsageSnapshot(quota: .init(
             hasWeeklyUsage: false,
+            hasMonthlyUsage: false,
             rollingUsagePercent: 17,
             weeklyUsagePercent: 0,
+            monthlyUsagePercent: 0,
             rollingResetInSec: 600,
             weeklyResetInSec: nil,
-            updatedAt: Self.now)
+            monthlyResetInSec: nil,
+            updatedAt: Self.now))
 
         let usage = snapshot.toUsageSnapshot()
 
@@ -59,7 +84,7 @@ struct OpenCodeConsoleSnapshotTests {
     @Test
     func `Console spend keeps its rolling thirty day period`() {
         let snapshot = OpenCodeUsageSnapshot.payAsYouGo(
-            .init(usageUSD: 3.25, limitUSD: nil, balanceUSD: 12.5, period: .last30Days),
+            .init(monthlyUsageUSD: 3.25, monthlyLimitUSD: nil, balanceUSD: 12.5, period: .last30Days),
             updatedAt: Self.now)
 
         let usage = snapshot.toUsageSnapshot()
@@ -76,8 +101,8 @@ struct OpenCodeConsoleSnapshotTests {
     @Test
     func `rolling spend cannot consume a monthly quota`() {
         let payAsYouGo = OpenCodeUsageSnapshot.PayAsYouGoUsage(
-            usageUSD: 15,
-            limitUSD: 20,
+            monthlyUsageUSD: 15,
+            monthlyLimitUSD: 20,
             balanceUSD: nil,
             period: .last30Days)
         let usage = OpenCodeUsageSnapshot.payAsYouGo(payAsYouGo, updatedAt: Self.now).toUsageSnapshot()

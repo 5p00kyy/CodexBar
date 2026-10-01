@@ -34,7 +34,7 @@ struct OpenCodeMenuCardCostTests {
     func `pay as you go card shows monthly spend against the limit`() throws {
         let now = Date()
         let model = try self.makeModel(
-            .init(usageUSD: 15, limitUSD: 20, balanceUSD: 12.5),
+            .init(monthlyUsageUSD: 15, monthlyLimitUSD: 20, balanceUSD: 12.5),
             now: now)
 
         #expect(model.providerCost?.spendLine == "Monthly: $15.00 / $20.00")
@@ -45,7 +45,7 @@ struct OpenCodeMenuCardCostTests {
     func `pay as you go card without a limit still shows spend and balance`() throws {
         let now = Date()
         let model = try self.makeModel(
-            .init(usageUSD: 15, limitUSD: nil, balanceUSD: 12.5),
+            .init(monthlyUsageUSD: 15, monthlyLimitUSD: nil, balanceUSD: 12.5),
             now: now)
 
         let cost = try #require(model.providerCost)
@@ -60,7 +60,7 @@ struct OpenCodeMenuCardCostTests {
     func `pay as you go card without a limit or balance still shows spend`() throws {
         let now = Date()
         let model = try self.makeModel(
-            .init(usageUSD: 15, limitUSD: nil, balanceUSD: nil),
+            .init(monthlyUsageUSD: 15, monthlyLimitUSD: nil, balanceUSD: nil),
             now: now)
 
         let cost = try #require(model.providerCost)
@@ -71,7 +71,7 @@ struct OpenCodeMenuCardCostTests {
     @Test
     func `Console pay as you go card labels rolling spend without a monthly quota`() throws {
         let model = try self.makeModel(
-            .init(usageUSD: 15, limitUSD: nil, balanceUSD: 12.5, period: .last30Days),
+            .init(monthlyUsageUSD: 15, monthlyLimitUSD: nil, balanceUSD: 12.5, period: .last30Days),
             now: Date())
 
         let cost = try #require(model.providerCost)

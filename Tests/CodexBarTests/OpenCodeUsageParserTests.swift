@@ -4,6 +4,27 @@ import Testing
 
 struct OpenCodeUsageParserTests {
     @Test
+    func `legacy base parser still requires two windows while Go permits rolling only`() throws {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let text = #"{"rollingUsage":{"usagePercent":17,"resetInSec":600}}"#
+        #expect(throws: OpenCodeUsageError.self) {
+            try OpenCodeUsageFetcher.parseSubscription(text: text, now: now)
+        }
+        let go = try OpenCodeGoUsageFetcher.parseSubscription(text: text, now: now)
+        #expect(go.rollingUsagePercent == 17)
+        #expect(!go.hasWeeklyUsage)
+    }
+
+    @Test
+    func `legacy base candidate arrays retain both unnamed windows`() throws {
+        let text = #"[{"percent":17,"resetInSec":600},{"percent":75,"resetInSec":7200}]"#
+        let snapshot = try OpenCodeUsageFetcher.parseSubscription(
+            text: text, now: Date(timeIntervalSince1970: 1_700_000_000))
+        #expect(snapshot.rollingUsagePercent == 17)
+        #expect(snapshot.weeklyUsagePercent == 75)
+    }
+
+    @Test
     func `parses workspace I ds`() {
         let text = ";0x00000089;((self.$R=self.$R||{})[\"codexbar\"]=[]," +
             "($R=>$R[0]=[$R[1]={id:\"wrk_01K6AR1ZET89H8NB691FQ2C2VB\",name:\"Default\",slug:null}])" +
@@ -281,8 +302,8 @@ struct OpenCodeUsageParserTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let snapshot = OpenCodeUsageSnapshot.payAsYouGo(
             OpenCodeUsageSnapshot.PayAsYouGoUsage(
-                usageUSD: 15,
-                limitUSD: 20,
+                monthlyUsageUSD: 15,
+                monthlyLimitUSD: 20,
                 balanceUSD: 12.5),
             updatedAt: now)
 
@@ -303,8 +324,8 @@ struct OpenCodeUsageParserTests {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let snapshot = OpenCodeUsageSnapshot.payAsYouGo(
             OpenCodeUsageSnapshot.PayAsYouGoUsage(
-                usageUSD: 3,
-                limitUSD: nil,
+                monthlyUsageUSD: 3,
+                monthlyLimitUSD: nil,
                 balanceUSD: 1),
             updatedAt: now)
 
@@ -319,8 +340,8 @@ struct OpenCodeUsageParserTests {
     @Test
     func `pay as you go spend above the monthly limit clamps to 100 percent`() {
         let usage = OpenCodeUsageSnapshot.PayAsYouGoUsage(
-            usageUSD: 25,
-            limitUSD: 20,
+            monthlyUsageUSD: 25,
+            monthlyLimitUSD: 20,
             balanceUSD: 0)
 
         #expect(usage.usedPercent == 100)

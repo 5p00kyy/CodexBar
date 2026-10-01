@@ -9,14 +9,22 @@ public struct OpenCodeUsageSnapshot: Sendable {
             case last30Days
         }
 
-        public let usageUSD: Double
-        public let limitUSD: Double?
+        public let monthlyUsageUSD: Double
+        public let monthlyLimitUSD: Double?
         public let balanceUSD: Double?
         public let period: Period
 
-        public init(usageUSD: Double, limitUSD: Double?, balanceUSD: Double?, period: Period = .monthly) {
-            self.usageUSD = usageUSD
-            self.limitUSD = limitUSD
+        public init(monthlyUsageUSD: Double, monthlyLimitUSD: Double?, balanceUSD: Double?) {
+            self.init(
+                monthlyUsageUSD: monthlyUsageUSD,
+                monthlyLimitUSD: monthlyLimitUSD,
+                balanceUSD: balanceUSD,
+                period: .monthly)
+        }
+
+        public init(monthlyUsageUSD: Double, monthlyLimitUSD: Double?, balanceUSD: Double?, period: Period) {
+            self.monthlyUsageUSD = monthlyUsageUSD
+            self.monthlyLimitUSD = monthlyLimitUSD
             self.balanceUSD = balanceUSD
             self.period = period
         }
@@ -24,38 +32,57 @@ public struct OpenCodeUsageSnapshot: Sendable {
         /// Percent of the configured monthly limit consumed. Rolling spend cannot be compared
         /// with a calendar-month limit, so it has no percentage even if a limit is supplied.
         public var usedPercent: Double? {
-            guard self.period == .monthly, let limit = self.limitUSD, limit > 0 else { return nil }
-            return min(100, max(0, (self.usageUSD / limit) * 100))
+            guard self.period == .monthly, let limit = self.monthlyLimitUSD, limit > 0 else { return nil }
+            return min(100, max(0, (self.monthlyUsageUSD / limit) * 100))
         }
     }
 
     public let hasWeeklyUsage: Bool
     public let rollingUsagePercent: Double
     public let weeklyUsagePercent: Double
-    public let rollingResetInSec: Int?
-    public let weeklyResetInSec: Int?
+    /// Keep the existing integer API while preserving unknown Console resets when rendering windows.
+    public var rollingResetInSec: Int {
+        self.rollingReset ?? 0
+    }
+
+    public var weeklyResetInSec: Int {
+        self.weeklyReset ?? 0
+    }
+
+    private let rollingReset: Int?
+    private let weeklyReset: Int?
     public let renewsAt: Date?
     public let payAsYouGo: PayAsYouGoUsage?
     public let updatedAt: Date
 
     public init(
-        hasWeeklyUsage: Bool = true,
         rollingUsagePercent: Double,
         weeklyUsagePercent: Double,
-        rollingResetInSec: Int?,
-        weeklyResetInSec: Int?,
+        rollingResetInSec: Int,
+        weeklyResetInSec: Int,
         renewsAt: Date? = nil,
         payAsYouGo: PayAsYouGoUsage? = nil,
         updatedAt: Date)
     {
-        self.hasWeeklyUsage = hasWeeklyUsage
+        self.hasWeeklyUsage = true
         self.rollingUsagePercent = rollingUsagePercent
         self.weeklyUsagePercent = weeklyUsagePercent
-        self.rollingResetInSec = rollingResetInSec
-        self.weeklyResetInSec = weeklyResetInSec
+        self.rollingReset = rollingResetInSec
+        self.weeklyReset = weeklyResetInSec
         self.renewsAt = renewsAt
         self.payAsYouGo = payAsYouGo
         self.updatedAt = updatedAt
+    }
+
+    init(quota: OpenCodeGoUsageSnapshot) {
+        self.hasWeeklyUsage = quota.hasWeeklyUsage
+        self.rollingUsagePercent = quota.rollingUsagePercent
+        self.weeklyUsagePercent = quota.weeklyUsagePercent
+        self.rollingReset = quota.rollingResetInSec
+        self.weeklyReset = quota.weeklyResetInSec
+        self.renewsAt = quota.renewsAt
+        self.payAsYouGo = nil
+        self.updatedAt = quota.updatedAt
     }
 
     public static func payAsYouGo(
@@ -76,7 +103,7 @@ public struct OpenCodeUsageSnapshot: Sendable {
             return self.payAsYouGoUsageSnapshot(payAsYouGo)
         }
 
-        let rollingReset = self.rollingResetInSec.map { self.updatedAt.addingTimeInterval(TimeInterval($0)) }
+        let rollingReset = self.rollingReset.map { self.updatedAt.addingTimeInterval(TimeInterval($0)) }
         let primary = RateWindow(
             usedPercent: self.rollingUsagePercent,
             windowMinutes: 5 * 60,
@@ -84,7 +111,7 @@ public struct OpenCodeUsageSnapshot: Sendable {
             resetDescription: nil)
         let secondary: RateWindow?
         if self.hasWeeklyUsage {
-            let weeklyReset = self.weeklyResetInSec.map { self.updatedAt.addingTimeInterval(TimeInterval($0)) }
+            let weeklyReset = self.weeklyReset.map { self.updatedAt.addingTimeInterval(TimeInterval($0)) }
             secondary = RateWindow(
                 usedPercent: self.weeklyUsagePercent,
                 windowMinutes: 7 * 24 * 60,
@@ -128,8 +155,8 @@ public struct OpenCodeUsageSnapshot: Sendable {
                 resetDescription: nil)
         }
         let cost = ProviderCostSnapshot(
-            used: usage.usageUSD,
-            limit: usage.period == .monthly ? usage.limitUSD ?? 0 : 0,
+            used: usage.monthlyUsageUSD,
+            limit: usage.period == .monthly ? usage.monthlyLimitUSD ?? 0 : 0,
             currencyCode: "USD",
             period: usage.period == .monthly ? "Monthly" : "Last 30 days",
             balance: usage.balanceUSD,

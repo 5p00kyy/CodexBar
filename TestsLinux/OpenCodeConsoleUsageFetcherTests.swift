@@ -58,9 +58,9 @@ struct OpenCodeConsoleUsageFetcherTests {
         let snapshot = try await Self.fetch(transport: transport)
 
         let payAsYouGo = try #require(snapshot.payAsYouGo)
-        #expect(payAsYouGo.usageUSD == 3.25)
+        #expect(payAsYouGo.monthlyUsageUSD == 3.25)
         #expect(payAsYouGo.balanceUSD == 12.5)
-        #expect(payAsYouGo.limitUSD == nil)
+        #expect(payAsYouGo.monthlyLimitUSD == nil)
         #expect(payAsYouGo.period == .last30Days)
         #expect(payAsYouGo.usedPercent == nil)
         #expect(snapshot.toUsageSnapshot().providerCost?.period == "Last 30 days")
@@ -84,7 +84,6 @@ struct OpenCodeConsoleUsageFetcherTests {
         let snapshot = try await Self.fetch(transport: transport)
 
         #expect(snapshot.rollingUsagePercent == 25)
-        #expect(snapshot.rollingResetInSec == nil)
         #expect(snapshot.hasWeeklyUsage == false)
         #expect(snapshot.toUsageSnapshot().primary?.resetsAt == nil)
         #expect(snapshot.toUsageSnapshot().secondary == nil)
@@ -121,9 +120,9 @@ struct OpenCodeConsoleUsageFetcherTests {
 
         let snapshot = try await Self.fetch(transport: transport)
 
-        #expect(snapshot.payAsYouGo?.usageUSD == 3.25)
+        #expect(snapshot.payAsYouGo?.monthlyUsageUSD == 3.25)
         #expect(snapshot.payAsYouGo?.balanceUSD == nil)
-        #expect(snapshot.payAsYouGo?.limitUSD == nil)
+        #expect(snapshot.payAsYouGo?.monthlyLimitUSD == nil)
         #expect(snapshot.toUsageSnapshot().providerCost?.used == 3.25)
     }
 
