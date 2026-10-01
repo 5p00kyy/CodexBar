@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.71.1 — Unreleased
+
+### Fixed
+
+- Widgets that #4075 left on the previous menu color now use that provider's menu accent: Abacus, Amp, Augment, Bedrock, Cline Pass, Codebuff, DeepSeek, Devin, Kiro, LongCat, Mistral, NeuralWatt, Sub2API, and Venice.
+
 ## 0.71.0 — 2026-10-02
 
 ### Highlights
