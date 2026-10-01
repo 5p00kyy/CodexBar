@@ -3532,7 +3532,7 @@ struct ProviderArchitectureGatekeeperTests {
         AllowedProviderConstruct(
             path: "Sources/CodexBarCore/PathEnvironment.swift",
             occurrence: 1,
-            anchor: #"["bin", "codex"].map { root.appendingPathComponent("vendor/\(triple)/\($0)/codex").path }"#,
+            anchor: #"directory = "codex""#,
             expectedProviderIDs: ["codex"],
             expectedReferenceCount: 1,
             expectedReferenceFingerprint: ["codex@0"],

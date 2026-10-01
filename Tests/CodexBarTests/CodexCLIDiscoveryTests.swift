@@ -81,7 +81,8 @@ struct CodexCLIDiscoveryTests {
                     hasExtendedAttribute: { _, _ in false },
                     spctlAssessment: { _ in .init(output: "accepted", exitStatus: 0) },
                     appSignatureIsTrusted: { _ in true },
-                    isMachOExecutable: { _ in false })
+                    isMachOExecutable: { _ in false },
+                    npmExecutableResolver: { _, _ in payloadPresent ? native : nil })
             },
             fileManager: fm,
             home: root.path)
@@ -102,7 +103,10 @@ struct CodexCLIDiscoveryTests {
             default: root
             }
             let native = "\(payloadRoot)/vendor/\(triple)/\(directory)/codex"
-            let fm = MockFileManager(executables: layout == "missing" ? [wrapper] : [wrapper, native])
+            let source = directory == "bin" ? "path.join(vendorRoot, targetTriple, \"bin\")" : "path.join(archRoot, \"codex\")"
+            let fm = MockFileManager(
+                executables: layout == "missing" ? [wrapper] : [wrapper, native],
+                contents: [wrapper: Data(source.utf8)])
             var assessed: [String] = []
             let allowed = CodexLaunchPreflight.isLaunchCandidateAllowed(
                 path: wrapper,
@@ -113,10 +117,54 @@ struct CodexCLIDiscoveryTests {
                     return .init(output: "accepted", exitStatus: 0)
                 },
                 appSignatureIsTrusted: { _ in false },
-                isMachOExecutable: { $0 == native && layout != "missing" })
+                isMachOExecutable: { $0 == native && layout != "missing" },
+                npmExecutableResolver: { path, manager in
+                    CodexLaunchPreflight.npmNativeExecutable(for: path, fileManager: manager) { _ in
+                        .init(
+                            architecture: package.hasSuffix("arm64") ? "arm64" : "x64",
+                            packageRoot: layout == "legacy" ? nil : payloadRoot)
+                    }
+                })
             #expect(allowed == (layout != "missing"))
             #expect(assessed == (layout == "missing" ? [] : [native]))
         }
+    }
+
+    @Test(arguments: ["arm64", "x64"], ["allowed", "missing", "rejected"])
+    func `mixed payloads assess only the executable selected by Node`(architecture: String, outcome: String) {
+        let wrapper = "/fixture/node_modules/@openai/codex/bin/codex.js"
+        let packageRoot = "/fixture/node_modules/@openai/codex-darwin-\(architecture)"
+        let triple = architecture == "arm64" ? "aarch64-apple-darwin" : "x86_64-apple-darwin"
+        let selected = "\(packageRoot)/vendor/\(triple)/bin/codex"
+        let stale = "\(packageRoot)/vendor/\(triple)/codex/codex"
+        let otherArchitecture = architecture == "arm64" ? "x64" : "arm64"
+        let otherTriple = architecture == "arm64" ? "x86_64-apple-darwin" : "aarch64-apple-darwin"
+        let other = "/fixture/node_modules/@openai/codex-darwin-\(otherArchitecture)/vendor/\(otherTriple)/bin/codex"
+        var executables: Set<String> = [wrapper, stale, other]
+        if outcome == "missing" { executables.remove(selected) } else { executables.insert(selected) }
+        let fm = MockFileManager(
+            executables: executables,
+            contents: [wrapper: Data("path.join(vendorRoot, targetTriple, \"bin\")".utf8)])
+        var assessed: [String] = []
+        let allowed = CodexLaunchPreflight.isLaunchCandidateAllowed(
+            path: wrapper,
+            fileManager: fm,
+            hasExtendedAttribute: { _, _ in false },
+            spctlAssessment: { path in
+                assessed.append(path)
+                return .init(
+                    output: outcome == "rejected" ? "rejected" : "accepted",
+                    exitStatus: outcome == "rejected" ? 1 : 0)
+            },
+            appSignatureIsTrusted: { _ in false },
+            isMachOExecutable: { executables.contains($0) && $0 != wrapper },
+            npmExecutableResolver: { path, manager in
+                CodexLaunchPreflight.npmNativeExecutable(for: path, fileManager: manager) { _ in
+                    .init(architecture: architecture, packageRoot: packageRoot)
+                }
+            })
+        #expect(allowed == (outcome == "allowed"))
+        #expect(assessed == (outcome == "missing" ? [] : [selected]))
     }
 
     #endif
@@ -124,9 +172,15 @@ struct CodexCLIDiscoveryTests {
 
 private final class MockFileManager: FileManager {
     private let executables: Set<String>
+    private let fileContents: [String: Data]
 
-    init(executables: Set<String>) {
+    init(executables: Set<String>, contents: [String: Data] = [:]) {
         self.executables = executables
+        self.fileContents = contents
+    }
+
+    override func contents(atPath path: String) -> Data? {
+        self.fileContents[path]
     }
 
     override func isExecutableFile(atPath path: String) -> Bool {

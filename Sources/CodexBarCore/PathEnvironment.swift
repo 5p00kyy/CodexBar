@@ -153,12 +153,14 @@ public enum BinaryLocator {
         commandV: (String, String?, TimeInterval, FileManager) -> String? = ShellCommandLocator.commandV,
         aliasResolver: (String, String?, TimeInterval, FileManager, String) -> String? = ShellCommandLocator
             .resolveAlias,
-        launchCandidateFilter: (String, FileManager) -> Bool = CodexLaunchPreflight.isLaunchCandidateAllowed,
+        launchCandidateFilter: ((String, FileManager) -> Bool)? = nil,
         fileManager: FileManager = .default,
         home: String = NSHomeDirectory()) -> String?
     {
         // Provider-specific by design: This named resolver supplies Codex's actual CLI executable name.
-        self.resolveBinary(
+        var launchEnvironment = env
+        launchEnvironment["PATH"] = PathBuilder.effectivePATH(purposes: [.nodeTooling], env: env, loginPATH: loginPATH)
+        return self.resolveBinary(
             name: "codex",
             overrideKey: "CODEX_CLI_PATH",
             env: env,
@@ -166,7 +168,10 @@ public enum BinaryLocator {
             commandV: commandV,
             aliasResolver: aliasResolver,
             wellKnownPaths: self.codexWellKnownPaths(home: home),
-            launchCandidateFilter: launchCandidateFilter,
+            launchCandidateFilter: launchCandidateFilter ?? { path, manager in
+                CodexLaunchPreflight.isLaunchCandidateAllowed(
+                    path: path, fileManager: manager, environment: launchEnvironment)
+            },
             fileManager: fileManager,
             home: home)
     }
@@ -450,7 +455,11 @@ public enum CodexLaunchPreflight {
         let exitStatus: Int32
     }
 
-    public static func isLaunchCandidateAllowed(path: String, fileManager: FileManager = .default) -> Bool {
+    public static func isLaunchCandidateAllowed(
+        path: String,
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool
+    {
         #if os(macOS)
         self.isLaunchCandidateAllowed(
             path: path,
@@ -458,7 +467,12 @@ public enum CodexLaunchPreflight {
             hasExtendedAttribute: self.hasExtendedAttribute,
             spctlAssessment: { self.spctlAssessment(path: $0) },
             appSignatureIsTrusted: self.isExpectedOpenAIAppSignature,
-            isMachOExecutable: self.isMachOExecutable)
+            isMachOExecutable: self.isMachOExecutable,
+            npmExecutableResolver: { path, manager in
+                self.npmNativeExecutable(for: path, fileManager: manager) { wrapper in
+                    self.nodePackageResolution(wrapper: wrapper, environment: environment, fileManager: manager)
+                }
+            })
         #else
         _ = path
         _ = fileManager
@@ -475,7 +489,8 @@ public enum CodexLaunchPreflight {
         hasExtendedAttribute: (String, String) -> Bool,
         spctlAssessment: (String) -> GatekeeperAssessment?,
         appSignatureIsTrusted: (String) -> Bool,
-        isMachOExecutable: (String) -> Bool) -> Bool
+        isMachOExecutable: (String) -> Bool,
+        npmExecutableResolver: (String, FileManager) -> String? = { _, _ in nil }) -> Bool
     {
         let realPath = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
         let sourceAppBundlePath = self.containingAppBundlePath(for: path)
@@ -489,12 +504,13 @@ public enum CodexLaunchPreflight {
             appBundlePath = resolvedAppBundlePath
         }
         let appBundlePaths = [sourceAppBundlePath, appBundlePath].compactMap(\.self)
-        let nativeCandidates = self.nativeCodexExecutableCandidates(for: realPath, fileManager: fileManager)
+        let isNPMLauncher = realPath.hasSuffix("/node_modules/@openai/codex/bin/codex.js")
+        let nativeCandidates = isNPMLauncher ? npmExecutableResolver(realPath, fileManager).map { [$0] } ?? [] : []
         // An npm launcher can remain executable after its native payload has disappeared.
         // Do not let that broken installation shadow a working bundled CLI.
-        if realPath.hasSuffix("/node_modules/@openai/codex/bin/codex.js"), nativeCandidates.isEmpty {
+        if isNPMLauncher, nativeCandidates.isEmpty {
             CodexBarLog.logger(LogCategories.subprocess).warning(
-                "Skipping npm Codex launcher: native payload missing. Reinstall @openai/codex to repair it.")
+                "Skipping npm Codex launcher: selected native payload unavailable. Reinstall @openai/codex to repair it.")
             return false
         }
         let pathsToCheck = [path, realPath] + appBundlePaths + nativeCandidates
@@ -541,26 +557,68 @@ public enum CodexLaunchPreflight {
         return nil
     }
 
-    private static func nativeCodexExecutableCandidates(for path: String, fileManager: FileManager) -> [String] {
-        let url = URL(fileURLWithPath: path)
-        guard url.lastPathComponent == "codex.js" else { return [] }
-        let packageRoot = url.deletingLastPathComponent().deletingLastPathComponent()
-        // Node also resolves optional dependencies hoisted into an ancestor node_modules.
-        var roots = [packageRoot.appendingPathComponent("node_modules/@openai")]
-        var ancestor = packageRoot.deletingLastPathComponent()
-        while ancestor.path != "/" {
-            if ancestor.lastPathComponent == "node_modules" {
-                roots.append(ancestor.appendingPathComponent("@openai"))
-            }
-            ancestor.deleteLastPathComponent()
+    struct NodePackageResolution {
+        let architecture: String
+        let packageRoot: String?
+    }
+
+    /// Resolve metadata with the same Node interpreter as the launcher, without evaluating codex.js.
+    private static func nodePackageResolution(
+        wrapper: String,
+        environment: [String: String],
+        fileManager: FileManager) -> NodePackageResolution?
+    {
+        let paths = (environment["PATH"] ?? "/usr/bin:/bin").split(separator: ":")
+        guard let node = paths.map({ "\($0)/node" }).first(where: { fileManager.isExecutableFile(atPath: $0) })
+        else { return nil }
+        let script = #"""
+        const {createRequire} = require('node:module');
+        const path = require('node:path');
+        const architecture = process.arch;
+        if (!['arm64', 'x64'].includes(architecture)) process.exit(1);
+        let packageRoot = null;
+        try {
+          packageRoot = path.dirname(createRequire(process.argv[1]).resolve(
+            '@openai/codex-darwin-' + architecture + '/package.json'));
+        } catch {}
+        process.stdout.write(JSON.stringify({architecture, packageRoot}));
+        """#
+        guard let data = ShellCommandLocator.runShellCommand(
+            shell: node, arguments: ["-e", script, wrapper], timeout: 2, environment: environment),
+            let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let architecture = value["architecture"] as? String
+        else { return nil }
+        return NodePackageResolution(architecture: architecture, packageRoot: value["packageRoot"] as? String)
+    }
+
+    static func npmNativeExecutable(
+        for wrapper: String,
+        fileManager: FileManager,
+        resolveNode: (String) -> NodePackageResolution?) -> String?
+    {
+        guard let data = fileManager.contents(atPath: wrapper), data.count <= 128 * 1024,
+              let source = String(data: data, encoding: .utf8),
+              let node = resolveNode(wrapper)
+        else { return nil }
+        let triple: String
+        switch node.architecture {
+        case "arm64": triple = "aarch64-apple-darwin"
+        case "x64": triple = "x86_64-apple-darwin"
+        default: return nil
         }
-        // Node can run under Rosetta independently of CodexBar's architecture.
-        return [("codex-darwin-arm64", "aarch64-apple-darwin"), ("codex-darwin-x64", "x86_64-apple-darwin")]
-            .flatMap { package, triple in
-                (roots.map { $0.appendingPathComponent(package) } + [packageRoot]).flatMap { root in
-                    ["bin", "codex"].map { root.appendingPathComponent("vendor/\(triple)/\($0)/codex").path }
-                }
-            }.filter { fileManager.isExecutableFile(atPath: $0) }
+        let directory: String
+        if source.range(of: #"targetTriple,\s*["']bin["']"#, options: .regularExpression) != nil {
+            directory = "bin"
+        } else if source.range(of: #"path\.join\(archRoot,\s*["']codex["']"#, options: .regularExpression) != nil {
+            directory = "codex"
+        } else {
+            // An unknown launcher layout is not evidence that another payload will be executed.
+            return nil
+        }
+        let root = node.packageRoot.map { URL(fileURLWithPath: $0) }
+            ?? URL(fileURLWithPath: wrapper).deletingLastPathComponent().deletingLastPathComponent()
+        let native = root.appendingPathComponent("vendor/\(triple)/\(directory)/codex").path
+        return fileManager.isExecutableFile(atPath: native) ? native : nil
     }
 
     private static func hasExtendedAttribute(path: String, name: String) -> Bool {
@@ -793,7 +851,8 @@ public enum ShellCommandLocator {
     fileprivate static func runShellCommand(
         shell: String,
         arguments: [String],
-        timeout: TimeInterval) -> Data?
+        timeout: TimeInterval,
+        environment: [String: String] = ProcessInfo.processInfo.environment) -> Data?
     {
         // Darwin needs a lock around raw descriptor creation, close-on-exec flagging,
         // and spawn. Linux creates close-on-exec descriptors atomically with pipe2.
@@ -876,7 +935,7 @@ public enum ShellCommandLocator {
         // Inherit the parent environment.  Build a NULL-terminated `KEY=VALUE`
         // array since `extern char **environ` isn't directly visible from Swift.
         var cEnv: [UnsafeMutablePointer<CChar>?] = []
-        for (key, value) in ProcessInfo.processInfo.environment {
+        for (key, value) in environment {
             cEnv.append(strdup("\(key)=\(value)"))
         }
         cEnv.append(nil)

@@ -179,9 +179,11 @@ and stable account numbers distinguish rows while usable workspace labels remain
   launches for 30 minutes. Use a manual refresh after reinstalling or unblocking `codex` to retry immediately.
 - CodexBar also discovers the Codex CLI bundled with current ChatGPT and legacy Codex desktop apps, even when `codex`
   is absent from the shell PATH. Discovery includes the current `codex-cli/bin/codex` launcher and skips known
-  npm launchers whose native payload is missing, with a diagnostic to reinstall `@openai/codex`. Both current `bin/codex`
-  and legacy `codex/codex` payloads are checked in nested, hoisted, and bundled vendor directories, including Rosetta
-  installations. Healthy npm launchers retain PATH precedence; bundled fallbacks still require the existing app trust checks.
+  npm launchers whose selected native payload is unavailable, with a diagnostic to reinstall `@openai/codex`.
+  The launcher's Node interpreter resolves the architecture and optional package location without evaluating `codex.js`;
+  the recognized current `bin/codex` or legacy `codex/codex` layout selects the one payload to assess. Stale payloads
+  in other layouts or architectures cannot substitute for it. Unknown layouts fail closed. Healthy npm launchers retain
+  PATH precedence; bundled fallbacks still require the existing app trust checks.
 - If managed Codex account login still reports a missing executable, turn on **Show debug settings** in
   **Settings > Advanced**, then check **Settings > Debug > CLI Paths**. When no Codex binary appears there, confirm
   `codex --version` works in Terminal, check `which -a codex` for stale duplicate installs, then run

@@ -1,0 +1,34 @@
+Codex CLI discovery proof — macOS arm64, Swift 6.4
+
+Production BinaryLocator + CodexLaunchPreflight, real Node and Gatekeeper.
+A throwaway local XCTest-target file called the production methods. It was
+removed after the run; no installed application or account was changed.
+The npm fixture was installed under a temporary workspace directory from the
+official registry: @openai/codex 0.159.2 plus its Darwin arm64 optional package.
+Only --version was executed. No login or provider API request was made.
+
+1. Healthy npm install (hoisted optional package, vendor/<triple>/bin/codex)
+   Selected: $FIXTURE/node_modules/.bin/codex
+   Executed: codex-cli 0.159.2
+   Exit: 0
+
+2. Selected native payload temporarily moved aside; a healthy copy retained
+   in the obsolete vendor/<triple>/codex/codex layout
+   Selected: /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex
+   Executed: codex-cli 0.159.0
+   Exit: 0
+   The stale legacy copy did not make the broken npm launcher eligible.
+
+3. Selected native payload replaced within the fixture by a locally compiled
+   untrusted Mach-O marker program; healthy obsolete payload still present
+   Real production preflight rejected the selected payload.
+   Selected: /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex
+   Executed: codex-cli 0.159.0
+   Forbidden program's marker: absent
+   Fixture native payload restored after the test.
+
+Combined integrated run: CodexCLILocalProofTests, CodexCLIDiscoveryTests,
+PathBuilderTests, ProviderArchitectureGatekeeperTests: 103 tests passed.
+The permanent mixed-payload tests inject arm64 and x64 Node identities and
+prove only the launcher-selected path is assessed; missing/rejected selected
+payloads fail closed even when stale/other-architecture executables remain.
