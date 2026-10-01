@@ -18,6 +18,7 @@
 
 ### Fixed
 
+- iCloud Sync: prevent cancelled or superseded sync applies and removed-record recovery from overwriting provider settings, preferences, fleet records, or newer sync metadata (#4161).
 - Claude: retain an established CLI source after transient timeouts and loading stalls so Auto refreshes can retry without an unrelated missing-OAuth-credentials warning (#4129).
 - Claude: exclude usage-insights tool names and percentages from quota and account parsing (#4083).
 - Claude: keep configured MCP servers out of the direct `/usage` fallback (#4112). Thanks @sudoHG!
