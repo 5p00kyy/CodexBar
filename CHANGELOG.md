@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Codex: discover the current ChatGPT bundled CLI launcher and skip broken npm launchers with missing native payloads so managed login can use a working fallback.
+- Codex: discover the current ChatGPT bundled CLI launcher and skip broken npm launchers with missing native payloads so managed login can use a working fallback (#4143). Thanks @Yuxin-Qiao!
 
 ## 0.70.0 — 2026-09-29
 

@@ -50,8 +50,8 @@ struct CodexCLIDiscoveryTests {
         #expect(!allowed)
     }
 
-    @Test
-    func `broken npm wrapper does not shadow current ChatGPT launcher`() throws {
+    @Test(arguments: [false, true])
+    func `npm payload availability preserves PATH precedence or falls through to ChatGPT`(payloadPresent: Bool) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let wrapper = root.appendingPathComponent("node_modules/@openai/codex/bin/codex.js")
         let bin = root.appendingPathComponent("bin")
@@ -63,7 +63,12 @@ struct CodexCLIDiscoveryTests {
         try FileManager.default.createSymbolicLink(at: bin.appendingPathComponent("codex"), withDestinationURL: wrapper)
         defer { try? FileManager.default.removeItem(at: root) }
         let launcher = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex"
-        let fm = MockFileManager(executables: [bin.appendingPathComponent("codex").path, launcher])
+        let native = root.appendingPathComponent(
+            "node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex").path
+        let shim = bin.appendingPathComponent("codex").path
+        var executables: Set<String> = [shim, launcher]
+        if payloadPresent { executables.insert(native) }
+        let fm = MockFileManager(executables: executables)
         let resolved = BinaryLocator.resolveCodexBinary(
             env: ["PATH": bin.path],
             loginPATH: nil,
@@ -80,35 +85,38 @@ struct CodexCLIDiscoveryTests {
             },
             fileManager: fm,
             home: root.path)
-        #expect(resolved == launcher)
+        #expect(resolved == (payloadPresent ? shim : launcher))
     }
 
-    @Test(arguments: ["nested", "hoisted", "legacy", "missing"])
-    func `npm native payload availability controls wrapper eligibility`(layout: String) {
-        #if arch(arm64)
-        let triple = "aarch64-apple-darwin"
-        let package = "codex-darwin-arm64"
-        #else
-        let triple = "x86_64-apple-darwin"
-        let package = "codex-darwin-x64"
-        #endif
-        let root = "/fixture/node_modules/@openai/codex"
-        let wrapper = "\(root)/bin/codex.js"
-        let payloadRoot = switch layout {
-        case "nested": "\(root)/node_modules/@openai/\(package)"
-        case "hoisted": "/fixture/node_modules/@openai/\(package)"
-        default: root
+    @Test(arguments: ["nested", "hoisted", "legacy", "missing"], ["bin", "codex"])
+    func `npm native payload availability controls wrapper eligibility`(layout: String, directory: String) {
+        for (package, triple) in [
+            ("codex-darwin-arm64", "aarch64-apple-darwin"),
+            ("codex-darwin-x64", "x86_64-apple-darwin"),
+        ] {
+            let root = "/fixture/node_modules/@openai/codex"
+            let wrapper = "\(root)/bin/codex.js"
+            let payloadRoot = switch layout {
+            case "nested": "\(root)/node_modules/@openai/\(package)"
+            case "hoisted": "/fixture/node_modules/@openai/\(package)"
+            default: root
+            }
+            let native = "\(payloadRoot)/vendor/\(triple)/\(directory)/codex"
+            let fm = MockFileManager(executables: layout == "missing" ? [wrapper] : [wrapper, native])
+            var assessed: [String] = []
+            let allowed = CodexLaunchPreflight.isLaunchCandidateAllowed(
+                path: wrapper,
+                fileManager: fm,
+                hasExtendedAttribute: { _, _ in false },
+                spctlAssessment: { path in
+                    assessed.append(path)
+                    return .init(output: "accepted", exitStatus: 0)
+                },
+                appSignatureIsTrusted: { _ in false },
+                isMachOExecutable: { $0 == native && layout != "missing" })
+            #expect(allowed == (layout != "missing"))
+            #expect(assessed == (layout == "missing" ? [] : [native]))
         }
-        let native = "\(payloadRoot)/vendor/\(triple)/codex/codex"
-        let fm = MockFileManager(executables: layout == "missing" ? [wrapper] : [wrapper, native])
-        let allowed = CodexLaunchPreflight.isLaunchCandidateAllowed(
-            path: wrapper,
-            fileManager: fm,
-            hasExtendedAttribute: { _, _ in false },
-            spctlAssessment: { _ in .init(output: "accepted", exitStatus: 0) },
-            appSignatureIsTrusted: { _ in false },
-            isMachOExecutable: { $0 == native && layout != "missing" })
-        #expect(allowed == (layout != "missing"))
     }
 
     #endif

@@ -492,7 +492,11 @@ public enum CodexLaunchPreflight {
         let nativeCandidates = self.nativeCodexExecutableCandidates(for: realPath, fileManager: fileManager)
         // An npm launcher can remain executable after its native payload has disappeared.
         // Do not let that broken installation shadow a working bundled CLI.
-        if self.isNPMCodexLauncher(realPath), nativeCandidates.isEmpty { return false }
+        if realPath.hasSuffix("/node_modules/@openai/codex/bin/codex.js"), nativeCandidates.isEmpty {
+            CodexBarLog.logger(LogCategories.subprocess).warning(
+                "Skipping npm Codex launcher: native payload missing. Reinstall @openai/codex to repair it.")
+            return false
+        }
         let pathsToCheck = [path, realPath] + appBundlePaths + nativeCandidates
 
         for candidate in Set(pathsToCheck) where hasExtendedAttribute(candidate, "com.apple.malware") {
@@ -537,53 +541,26 @@ public enum CodexLaunchPreflight {
         return nil
     }
 
-    private static func isNPMCodexLauncher(_ path: String) -> Bool {
-        path.hasSuffix("/node_modules/@openai/codex/bin/codex.js")
-    }
-
     private static func nativeCodexExecutableCandidates(for path: String, fileManager: FileManager) -> [String] {
         let url = URL(fileURLWithPath: path)
         guard url.lastPathComponent == "codex.js" else { return [] }
-
         let packageRoot = url.deletingLastPathComponent().deletingLastPathComponent()
-        return self.npmNativeCodexCandidates(packageRoot: packageRoot)
-            .map(\.path)
-            .filter { fileManager.isExecutableFile(atPath: $0) }
-    }
-
-    private static func npmNativeCodexCandidates(packageRoot: URL) -> [URL] {
-        guard let target = self.darwinCodexTarget else { return [] }
-        let optionalPackage = packageRoot
-            .appendingPathComponent("node_modules")
-            .appendingPathComponent("@openai")
-            .appendingPathComponent(target.packageName)
-
         // Node also resolves optional dependencies hoisted into an ancestor node_modules.
-        var roots = [optionalPackage]
+        var roots = [packageRoot.appendingPathComponent("node_modules/@openai")]
         var ancestor = packageRoot.deletingLastPathComponent()
         while ancestor.path != "/" {
             if ancestor.lastPathComponent == "node_modules" {
-                roots.append(ancestor.appendingPathComponent("@openai/\(target.packageName)"))
+                roots.append(ancestor.appendingPathComponent("@openai"))
             }
             ancestor.deleteLastPathComponent()
         }
-        roots.append(packageRoot)
-        return roots.map {
-            $0.appendingPathComponent("vendor")
-                .appendingPathComponent(target.triple)
-                .appendingPathComponent("codex")
-                .appendingPathComponent("codex")
-        }
-    }
-
-    private static var darwinCodexTarget: (packageName: String, triple: String)? {
-        #if arch(arm64)
-        ("codex-darwin-arm64", "aarch64-apple-darwin")
-        #elseif arch(x86_64)
-        ("codex-darwin-x64", "x86_64-apple-darwin")
-        #else
-        nil
-        #endif
+        // Node can run under Rosetta independently of CodexBar's architecture.
+        return [("codex-darwin-arm64", "aarch64-apple-darwin"), ("codex-darwin-x64", "x86_64-apple-darwin")]
+            .flatMap { package, triple in
+                (roots.map { $0.appendingPathComponent(package) } + [packageRoot]).flatMap { root in
+                    ["bin", "codex"].map { root.appendingPathComponent("vendor/\(triple)/\($0)/codex").path }
+                }
+            }.filter { fileManager.isExecutableFile(atPath: $0) }
     }
 
     private static func hasExtendedAttribute(path: String, name: String) -> Bool {
