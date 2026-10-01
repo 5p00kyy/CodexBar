@@ -1035,11 +1035,6 @@ struct ProviderArchitectureGatekeeperTests {
             expectedProviderIDs: ["antigravity"],
             reason: "This named provider resolver supplies its fixed provider identity to the shared presentation helper."),
         SuppressedProviderReference(
-            path: "Sources/CodexBar/MenuBarMetricWindowResolver.swift",
-            anchor: "let presentation = ProviderDescriptorRegistry.descriptor(for: .claude).presentation",
-            expectedProviderIDs: ["claude"],
-            reason: "This named provider resolver supplies its fixed provider identity to the shared presentation helper."),
-        SuppressedProviderReference(
             path: "Sources/CodexBar/MiniMaxAPITokenStore.swift",
             anchor: "logCategory: LogCategories.provider(.minimax, scope: \"api-token-store\"))",
             expectedProviderIDs: ["minimax"],
