@@ -23,6 +23,9 @@
 - Claude: keep configured MCP servers out of the direct `/usage` fallback (#4112). Thanks @sudoHG!
 
 - Menu bar: show the remaining quota when only the third usage window is available, including Gemini Flash Lite-only accounts, through the shared metric fallback (#4128). Thanks @devYRPauli!
+- Cursor: keep Linux serve refreshes authenticated when earlier HTTP responses leave stale cookies in the process session (#4137).
+- Menu bar: apply explicit provider reordering to separate icons, including changes made in merged mode, while retaining stable identities and saved menu bar slots (#4125).
+- Pi: include Amazon Bedrock history with regional catalog prices, price one-hour cache writes correctly, and refresh older cached estimates (#4121).
 - iCloud Sync: recover a live Mac's saves after its records are removed from another Mac, without resetting shared sync state (#4144).
 - iCloud Sync: register for silent change notifications when the signed build supports push; release provisioning must enable that capability for automatic delivery (#4132).
 - Claude: answer current and legacy CLI trust dialogs only in the isolated probe directory, reject redirected paths, and wait for real quota values when usage insights are visible (#4115, #4083). Thanks @sudoHG!
