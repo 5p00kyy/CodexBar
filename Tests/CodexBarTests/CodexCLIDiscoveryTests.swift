@@ -4,6 +4,43 @@ import Testing
 
 struct CodexCLIDiscoveryTests {
     #if os(macOS)
+    @Test(arguments: ["relative", "mixed-relative", "leading-empty", "trailing-empty", "preload", "absolute"])
+    func `Node discovery only runs an absolute interpreter without preload options`(configuration: String) throws {
+        let fm = FileManager.default
+        let relative = ".codex-node-test-\(UUID().uuidString)"
+        let root = URL(fileURLWithPath: fm.currentDirectoryPath).appendingPathComponent(relative)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+        let node = root.appendingPathComponent("node")
+        let marker = root.appendingPathComponent("executed")
+        let script = """
+        #!/bin/sh
+        /usr/bin/touch "$CODEXBAR_NODE_TEST_MARKER"
+        printf '%s' '{"architecture":"arm64","packageRoot":null}'
+        """
+        try Data(script.utf8).write(to: node)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: node.path)
+        let path = switch configuration {
+        case "relative": relative
+        case "mixed-relative": "\(relative):\(root.path)"
+        case "leading-empty": ":\(root.path)"
+        case "trailing-empty": "\(root.path):"
+        default: root.path
+        }
+        let environment = [
+            "PATH": path,
+            "CODEXBAR_NODE_TEST_MARKER": marker.path,
+            "NODE_OPTIONS": configuration == "preload" ? "--require=/fixture/preload.cjs" : "",
+        ]
+        let result = CodexLaunchPreflight.nodePackageResolution(
+            wrapper: "/fixture/node_modules/@openai/codex/bin/codex.js",
+            environment: environment,
+            fileManager: fm)
+        #expect((result != nil) == (configuration == "absolute"))
+        let executed = fm.fileExists(atPath: marker.path)
+        #expect(executed == (configuration == "absolute"))
+    }
+
     @Test(arguments: ["/Applications", "/Users/test/Applications"])
     func `resolves current ChatGPT launcher with bundle validation`(applications: String) {
         let bundle = "\(applications)/ChatGPT.app"

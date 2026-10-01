@@ -433,7 +433,7 @@ public enum BinaryLocator {
             launchCandidateFilter: launchCandidateFilter)
     }
 
-    private static func find(
+    fileprivate static func find(
         _ binary: String,
         in paths: [String],
         fileManager: FileManager,
@@ -563,13 +563,16 @@ public enum CodexLaunchPreflight {
     }
 
     /// Resolve metadata with the same Node interpreter as the launcher, without evaluating codex.js.
-    private static func nodePackageResolution(
+    static func nodePackageResolution(
         wrapper: String,
         environment: [String: String],
         fileManager: FileManager) -> NodePackageResolution?
     {
-        let paths = (environment["PATH"] ?? "/usr/bin:/bin").split(separator: ":")
-        guard let node = paths.map({ "\($0)/node" }).first(where: { fileManager.isExecutableFile(atPath: $0) })
+        // Do not inspect a different interpreter than the wrapper will run, or execute preload hooks during discovery.
+        let paths = (environment["PATH"] ?? "/usr/bin:/bin")
+            .split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard paths.allSatisfy({ $0.hasPrefix("/") }), environment["NODE_OPTIONS", default: ""].isEmpty,
+              let node = BinaryLocator.find("node", in: paths, fileManager: fileManager)
         else { return nil }
         let script = #"""
         const {createRequire} = require('node:module');

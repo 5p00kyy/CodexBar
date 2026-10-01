@@ -185,6 +185,8 @@ and stable account numbers distinguish rows while usable workspace labels remain
   in other layouts or architectures cannot substitute for it. Unknown layouts fail closed. RPC and PTY discovery
   preserve locator rejection instead of repeating an unfiltered `which` lookup. Healthy npm launchers retain
   PATH precedence; bundled fallbacks still require the existing app trust checks.
+  Runtime inspection skips environments with relative or empty PATH entries or nonempty `NODE_OPTIONS`, so discovery
+  cannot run a working-directory interpreter or preload hook before assessing the payload; bundled fallbacks remain available.
 - If managed Codex account login still reports a missing executable, turn on **Show debug settings** in
   **Settings > Advanced**, then check **Settings > Debug > CLI Paths**. When no Codex binary appears there, confirm
   `codex --version` works in Terminal, check `which -a codex` for stale duplicate installs, then run
