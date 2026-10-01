@@ -435,7 +435,7 @@ public struct LocalAgentSessionScanner: Sendable {
             let environments = await processEnvironmentProvider(piPIDs)
             return records.map { record in
                 guard AgentPSOutputParser.piDialect(for: record) != nil else { return record }
-                return Self.withPiSelectorEnvironment(environments[record.pid], record: record)
+                return record.withPiSelectorEnvironment(environments[record.pid])
             }
         }
         #if canImport(Darwin)
@@ -447,9 +447,7 @@ public struct LocalAgentSessionScanner: Sendable {
         #if os(Linux)
         return records.map { record in
             guard AgentPSOutputParser.piDialect(for: record) != nil else { return record }
-            return Self.withPiSelectorEnvironment(
-                PiProcessEnvironment.readLinuxEnvironment(pid: record.pid),
-                record: record)
+            return record.withPiSelectorEnvironment(PiProcessEnvironment.readLinuxEnvironment(pid: record.pid))
         }
         #else
         return records
@@ -481,19 +479,6 @@ public struct LocalAgentSessionScanner: Sendable {
             piSelectorEnvironment: processArguments?.piSelectorEnvironment)
     }
     #endif
-
-    private static func withPiSelectorEnvironment(
-        _ environment: [String: String]?,
-        record: AgentProcessRecord) -> AgentProcessRecord
-    {
-        AgentProcessRecord(
-            pid: record.pid,
-            ppid: record.ppid,
-            startedAt: record.startedAt,
-            command: record.command,
-            arguments: record.arguments,
-            piSelectorEnvironment: environment)
-    }
 
     #if !canImport(Darwin)
     private func processOutput(environment: [String: String]) async -> String {
