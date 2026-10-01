@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Fixed
+
+- Codex: finish cost scans with missing-parent forks while retaining their unmetered usage and restoring reporting for unaffected dates (#4140).
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
