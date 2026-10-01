@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Added
+
+- Notifications: opt-in reset alerts name the provider and session or weekly window, keep restored notices on the correct account, respect Hide personal info, and remember announced reset boundaries across refreshes and restarts (#4138). Thanks @zleo-ai!
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
