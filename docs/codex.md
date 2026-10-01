@@ -368,7 +368,9 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   usage remains buffered and unmetered; a changed parent dependency retries accounting when the parent returns.
   Reporting windows overlapping the fork's observed event span remain incomplete, while independent dates can publish
   normally. A session's start date alone cannot establish that independence. Existing caches retain stored rows,
-  replay buffers, and scan checkpoints during this update.
+  replay buffers, and scan checkpoints during this update, including the 0.70.0 parser fingerprint
+  `04a6361469a4ff77`. The change settles scheduling and checks coverage from existing metadata; it does not change
+  parsed token rows or replay checkpoints, so compatible predecessor caches do not need a rebuild.
 
 ### Usage & Spend session rows
 
