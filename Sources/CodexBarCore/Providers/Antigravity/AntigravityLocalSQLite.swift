@@ -262,7 +262,8 @@ extension AntigravityLocalReader {
             // Release the gen_metadata cursor before the optional steps pass reuses the same snapshot.
             sqlite3_finalize(activeStatement)
             statement = nil
-            let hasSteps = try self.hasSupportedStepsTable(database, budget: budget)
+            let hasSteps = try self.inspectSQLiteTableSupport(
+                database, table: "steps", payloadColumn: "metadata", budget: budget) == .supported
             if let failure = progress.failure {
                 throw failure
             }
