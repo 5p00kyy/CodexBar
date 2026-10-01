@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Menu bar: show the remaining quota when only the third usage window is available, including Gemini Flash Lite-only accounts, through the shared metric fallback (#4128). Thanks @devYRPauli!
 - Codex: finish cost scans with missing-parent forks while retaining their unmetered usage and restoring reporting for unaffected dates (#4140).
 
 ## 0.70.0 — 2026-09-29
