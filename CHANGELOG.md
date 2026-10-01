@@ -27,6 +27,20 @@
 
 - Agent Sessions: keep sessions that are still running after an in-place CLI update deleted their binary, such as Claude Code sessions started before an auto-update, instead of dropping them from the menu and `codexbar sessions` (#4120). Thanks @slavakurilyak!
 
+
+- Claude costs: reduce CPU use when rebuilding reports after local transcripts grow.
+- Reduce CPU use when saving unchanged local Claude and Vertex cost history.
+- Costs: avoid rebuilding Claude cost reports when refreshed model pricing is unchanged.
+- Cost: reduce allocation overhead when loading cached local Codex usage history.
+- Costs: reduce CPU use when scanning older Claude transcripts for recent usage.
+- Reduce CPU and filesystem work while identifying local agent processes during refreshes.
+- Reduce CPU use when refreshing model pricing while preserving historical fallback rates.
+- Costs: reduce CPU use while bucketing local agent logs into daily usage.
+- Costs: reduce CPU use while reconciling cached local Codex logs.
+- Codex: reduce CPU use when loading conversation titles for large local cost histories.
+- Reduce CPU use while scanning local Codex logs for cost data.
+- Costs: reduce CPU use when separating Claude and Vertex AI usage in local transcripts.
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
