@@ -1401,6 +1401,7 @@ extension ClaudeStatusProbe {
     static func probeWorkingDirectoryURL() -> URL {
         let fm = FileManager.default
         let dir = self.dedicatedProbeWorkingDirectoryURL()
+        guard self.isDedicatedProbeWorkingDirectory(dir) else { return fm.temporaryDirectory }
         do {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             return dir
@@ -1425,11 +1426,18 @@ extension ClaudeStatusProbe {
     }
 
     static func isDedicatedProbeWorkingDirectory(_ directory: URL) -> Bool {
-        directory.standardizedFileURL.path == self.dedicatedProbeWorkingDirectoryURL().standardizedFileURL.path
+        let expected = self.dedicatedProbeWorkingDirectoryURL().standardizedFileURL
+        let parent = expected.deletingLastPathComponent()
+        let unredirected = parent.deletingLastPathComponent().resolvingSymlinksInPath()
+            .appendingPathComponent(parent.lastPathComponent, isDirectory: true)
+            .appendingPathComponent(expected.lastPathComponent, isDirectory: true)
+        return directory.standardizedFileURL.path == expected.path
+            && expected.resolvingSymlinksInPath().path == unredirected.path
     }
 
     static func preparedProbeWorkingDirectoryURL() -> URL {
         let directory = self.probeWorkingDirectoryURL()
+        guard self.isDedicatedProbeWorkingDirectory(directory) else { return directory }
         do {
             try self.prepareProbeWorkingDirectory(at: directory)
         } catch {
@@ -1474,14 +1482,7 @@ extension ClaudeStatusProbe {
         timeout: TimeInterval,
         environment: [String: String]) async throws -> String
     {
-        let stopOnSubstrings = subcommand == "/usage"
-            ? [
-                "Failed to load usage data",
-                "failed to load usage data",
-                "Failedto loadusagedata",
-                "failedtoloadusagedata",
-            ]
-            : []
+        let stopOnSubstrings = subcommand == "/usage" ? ["Failed to load usage data"] : []
         let idleTimeout: TimeInterval? = subcommand == "/usage" ? nil : 3.0
         let sendEnterEvery: TimeInterval? = subcommand == "/usage" ? 0.8 : nil
         let stopWhenNormalized: (@Sendable (String) -> Bool)? = subcommand == "/usage"
@@ -1517,8 +1518,11 @@ extension ClaudeStatusProbe {
     }
 
     private static func usageCaptureHasSessionValue(_ normalizedText: String) -> Bool {
-        guard let labelRange = normalizedText.range(of: "currentsession") else { return false }
-        let tail = normalizedText[labelRange.upperBound...]
+        let insightsStart = normalizedText.range(of: "what'scontributingtoyourlimitsusage?")?.lowerBound
+            ?? normalizedText.endIndex
+        let quotaText = normalizedText[..<insightsStart]
+        guard let labelRange = quotaText.range(of: "currentsession") else { return false }
+        let tail = quotaText[labelRange.upperBound...]
         return tail.range(of: #"[0-9]{1,3}(?:\.[0-9]+)?%"#, options: .regularExpression) != nil
     }
 

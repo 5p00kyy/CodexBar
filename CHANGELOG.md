@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Claude: answer Claude Code's workspace trust dialog in the CLI probe's dedicated directory by selecting "Yes, I trust this folder". Pressing Enter on the preselected "No, exit" made every PTY probe exit before `/usage` ran and fall back to non-interactive `/usage`. Outside that directory, including the temporary-directory fallback, the probe cancels the dialog instead, and a PTY session that exits mid-capture now logs its exit status (#4115, related to #4083). Thanks @sudoHG!
+- Claude: answer current and legacy CLI trust dialogs only in the isolated probe directory, reject redirected paths, and wait for real quota values when usage insights are visible (#4115, #4083). Thanks @sudoHG!
 
 ## 0.70.0 — 2026-09-29
 

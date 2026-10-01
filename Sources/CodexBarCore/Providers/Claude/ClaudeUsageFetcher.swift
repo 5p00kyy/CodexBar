@@ -1310,7 +1310,7 @@ extension ClaudeUsageFetcher {
             throw ClaudeUsageError.claudeNotInstalled
         }
 
-        let workingDirectory = ClaudeStatusProbe.preparedProbeWorkingDirectoryURL()
+        let workingDirectory = try ClaudeCLISession.isolatedProbeWorkingDirectoryURL()
         var environment = ClaudeCLISession.launchEnvironment(baseEnv: self.configuration.environment)
         environment["PWD"] = workingDirectory.path
         defer {

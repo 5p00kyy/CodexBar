@@ -83,39 +83,19 @@ actor ClaudeCLISession {
         self.workingDirectory = workingDirectory
     }
 
-    /// The workspace trust dialog ("Quick safety check: ...") is answered in `waitForStartup()`, and only in CodexBar's
-    /// dedicated probe directory: Claude Code 2.1.282 preselects "No, exit", so a bare Enter would quit.
-    private let promptSends: [String: String] = [
-        "Do you trust the files in this folder?": "y\r",
-        "Ready to code here?": "\r",
-        "Press Enter to continue": "\r",
-    ]
-
-    private static let startupDelay: TimeInterval = 2.0
-    private static let workspaceTrustOption = "Yes, I trust this folder"
-    private static let maxWorkspaceTrustKeys = 4
+    /// Workspace permission prompts use the directory-constrained handler below, never a generic Enter response.
+    private let continuePrompts = ["Press Enter to continue"]
 
     private static func normalizedNeedle(_ text: String) -> String {
         String(text.lowercased().filter { !$0.isWhitespace })
     }
 
-    private static func commandPaletteSends(for subcommand: String) -> [String: String] {
-        let normalized = subcommand.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        switch normalized {
-        case "/usage":
-            // Claude's command palette can render several "Show ..." actions together; only auto-confirm the
-            // usage-related actions here so we do not accidentally execute /status.
-            return [
-                "Show plan": "\r",
-                "Show plan usage limits": "\r",
-            ]
-        case "/status":
-            return [
-                "Show Claude Code": "\r",
-                "Show Claude Code status": "\r",
-            ]
-        default:
-            return [:]
+    private static func commandPalettePrompt(for subcommand: String) -> String? {
+        // Claude can render several "Show ..." actions together; confirm only the requested panel's action.
+        switch subcommand.lowercased() {
+        case "/usage": "Show plan"
+        case "/status": "Show Claude Code"
+        default: nil
         }
     }
 
@@ -166,30 +146,15 @@ actor ClaudeCLISession {
             try self.send("\u{1b}")
             try await Task.sleep(nanoseconds: 150_000_000)
         }
-        try await self.waitForStartup()
-        _ = self.readChunk()
-
+        var readyAt = (self.startedAt ?? Date()).addingTimeInterval(2)
+        var commandSent = false
         let trimmed = request.subcommand.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            try self.send(trimmed)
-            try self.send("\r")
-        }
-
-        let stopNeedles = request.stopOnSubstrings.map { Self.normalizedNeedle($0) }
-        var sendMap = self.promptSends
-        for (needle, keys) in Self.commandPaletteSends(for: trimmed) {
-            sendMap[needle] = keys
-        }
-        let sendNeedles = sendMap.map { (needle: Self.normalizedNeedle($0.key), keys: $0.value) }
-        let cursorQuery = Data([0x1B, 0x5B, 0x36, 0x6E])
-        let needleLengths =
-            request.stopOnSubstrings.map(\.utf8.count) +
-            sendMap.keys.map(\.utf8.count) +
-            [cursorQuery.count]
-        let maxNeedle = needleLengths.max() ?? cursorQuery.count
-        var scanBuffer = StreamScanBuffer(maxNeedle: maxNeedle)
+        let stopNeedles = request.stopOnSubstrings.map(Self.normalizedNeedle)
+        let sendNeedles = (self.continuePrompts + [Self.commandPalettePrompt(for: trimmed)].compactMap(\.self))
+            .map(Self.normalizedNeedle)
         var triggeredSends = Set<String>()
-
+        let cursorQuery = Data([0x1B, 0x5B, 0x36, 0x6E])
+        var scanBuffer = StreamScanBuffer(maxNeedle: cursorQuery.count)
         var buffer = BoundedOutputBuffer()
         func appendOutput(_ data: Data) throws {
             guard buffer.append(data) else {
@@ -197,162 +162,91 @@ actor ClaudeCLISession {
                 throw SessionError.outputTooLarge
             }
         }
-        var scanTailText = ""
-        var normalizedScan = ""
-        var utf8Carry = Data()
-        let deadline = Date().addingTimeInterval(request.timeout)
+        var deadline = max(Date(), readyAt).addingTimeInterval(request.timeout)
         var lastOutputAt = Date()
         var lastEnterAt = Date()
+        var uncheckedFrame = false
+        var trustPending = false
+        var trustKeysLeft = 4
         var stoppedEarly = false
-        // Only send periodic Enter when the caller explicitly asks for it (used for /usage rendering).
-        // For /status, periodic input can keep producing output and prevent idle-timeout short-circuiting.
         while Date() < deadline {
             let newData = self.readChunk()
             if !newData.isEmpty {
                 try appendOutput(newData)
                 lastOutputAt = Date()
-                Self.appendScanText(newData: newData, scanTailText: &scanTailText, utf8Carry: &utf8Carry)
-                if scanTailText.count > 8192 {
-                    scanTailText = String(scanTailText.suffix(8192))
-                }
-                normalizedScan = Self.normalizedNeedle(TextParsing.stripANSICodes(scanTailText))
-
-                let scanData = scanBuffer.append(newData)
-                if scanData.range(of: cursorQuery) != nil {
+                uncheckedFrame = true
+                if scanBuffer.append(newData).range(of: cursorQuery) != nil {
                     try? self.send("\u{1b}[1;1R")
                 }
-
-                for item in sendNeedles where !triggeredSends.contains(item.needle) {
-                    if normalizedScan.contains(item.needle) {
-                        try? self.send(item.keys)
-                        triggeredSends.insert(item.needle)
+            }
+            // Startup and command captures share one prompt path. Decode the retained bytes together so split UTF-8
+            // and cursor redraws cannot turn the default No selection into an accidental confirmation.
+            if uncheckedFrame, Date().timeIntervalSince(lastOutputAt) >= 0.2 || self.process?.isRunning == false,
+               let text = String(data: buffer.data, encoding: .utf8)
+            {
+                uncheckedFrame = false
+                let screen = ClaudeCLIScreen.render(text)
+                let normalized = Self.normalizedNeedle(screen)
+                let trustKeys = Self.workspaceTrustKeys(onScreen: screen, acceptsTrust: self.launchedInProbeDirectory)
+                trustPending = trustKeys != nil || normalized.contains("quicksafetycheck:") ||
+                    normalized.contains("doyoutrustthefilesinthisfolder?") ||
+                    normalized.contains("readytocodehere?")
+                if trustPending {
+                    if self.process?.isRunning == true, trustKeysLeft > 0, let trustKeys {
+                        try self.send(trustKeys)
+                        trustKeysLeft = trustKeys == "\u{1b}" ? 0 : trustKeysLeft - 1
+                        readyAt = Date().addingTimeInterval(2)
+                    }
+                } else {
+                    if commandSent, stopNeedles.contains(where: normalized.contains)
+                        || (request.stopWhenNormalized?(normalized) == true)
+                    {
+                        stoppedEarly = true
+                        break
+                    }
+                    for needle in sendNeedles where !triggeredSends.contains(needle) {
+                        if self.process?.isRunning == true, normalized.contains(needle) {
+                            try? self.send("\r")
+                            triggeredSends.insert(needle)
+                            if !commandSent { readyAt = Date().addingTimeInterval(2) }
+                        }
                     }
                 }
-
-                if stopNeedles
-                    .contains(where: normalizedScan.contains) || (request.stopWhenNormalized?(normalizedScan) == true)
+            }
+            if !commandSent, !trustPending, !uncheckedFrame, Date() >= readyAt {
+                buffer.removeAll(keepingCapacity: true)
+                if !trimmed.isEmpty { try self.send(trimmed + "\r") }
+                commandSent = true
+                lastOutputAt = Date()
+                lastEnterAt = Date()
+                deadline = Date().addingTimeInterval(request.timeout)
+            }
+            if commandSent, !trustPending, !uncheckedFrame {
+                if request.idleTimeout.map({ !buffer.isEmpty && Date().timeIntervalSince(lastOutputAt) >= $0 }) == true
                 {
                     stoppedEarly = true
                     break
                 }
+                self.sendPeriodicEnterIfNeeded(every: request.sendEnterEvery, lastEnterAt: &lastEnterAt)
             }
-
-            if self.shouldStopForIdleTimeout(
-                idleTimeout: request.idleTimeout,
-                bufferIsEmpty: buffer.isEmpty,
-                lastOutputAt: lastOutputAt)
-            {
-                stoppedEarly = true
-                break
-            }
-
-            self.sendPeriodicEnterIfNeeded(every: request.sendEnterEvery, lastEnterAt: &lastEnterAt)
-
             if let proc = self.process, !proc.isRunning {
                 Self.log.warning(
                     "Claude CLI session exited during capture",
                     metadata: ["status": "\(proc.terminationStatus)"])
                 throw SessionError.processExited
             }
-
             try await Task.sleep(nanoseconds: 60_000_000)
         }
-
         if stoppedEarly {
-            let settle = max(0, min(request.settleAfterStop, deadline.timeIntervalSinceNow))
-            if settle > 0 {
-                let settleDeadline = Date().addingTimeInterval(settle)
-                while Date() < settleDeadline {
-                    let newData = self.readChunk()
-                    if !newData.isEmpty {
-                        try appendOutput(newData)
-                    }
-                    try await Task.sleep(nanoseconds: 50_000_000)
-                }
+            let settleDeadline = min(deadline, Date().addingTimeInterval(max(0, request.settleAfterStop)))
+            while Date() < settleDeadline {
+                try appendOutput(self.readChunk())
+                try await Task.sleep(nanoseconds: 50_000_000)
             }
         }
-
-        guard !buffer.data.isEmpty, let text = String(data: buffer.data, encoding: .utf8) else {
-            throw SessionError.timedOut
-        }
+        guard commandSent, !trustPending, !buffer.isEmpty,
+              let text = String(data: buffer.data, encoding: .utf8) else { throw SessionError.timedOut }
         return text
-    }
-
-    private static func appendScanText(newData: Data, scanTailText: inout String, utf8Carry: inout Data) {
-        // PTY reads can split multibyte UTF-8 sequences. Keep a small carry buffer so prompt/stop scanning doesn't
-        // drop chunks when the decode fails due to an incomplete trailing sequence.
-        var combined = Data()
-        combined.reserveCapacity(utf8Carry.count + newData.count)
-        combined.append(utf8Carry)
-        combined.append(newData)
-
-        if let chunk = String(data: combined, encoding: .utf8) {
-            scanTailText.append(chunk)
-            utf8Carry.removeAll(keepingCapacity: true)
-            return
-        }
-
-        for trimCount in 1...3 where combined.count > trimCount {
-            let prefix = combined.dropLast(trimCount)
-            if let chunk = String(data: prefix, encoding: .utf8) {
-                scanTailText.append(chunk)
-                utf8Carry = Data(combined.suffix(trimCount))
-                return
-            }
-        }
-
-        // If the data is still not UTF-8 decodable, keep only a small suffix to avoid unbounded growth.
-        utf8Carry = Data(combined.suffix(12))
-    }
-
-    /// Claude's TUI can drop early keystrokes while it's still initializing. Wait a bit longer than the original 0.4s
-    /// to ensure slash commands reliably open their panels. A fresh launch in an untrusted folder shows the workspace
-    /// trust dialog in this window. CodexBar only trusts its dedicated probe directory: there it selects the trust
-    /// option explicitly and gives the main screen a fresh startup window; anywhere else it cancels the dialog.
-    private func waitForStartup() async throws {
-        guard let startedAt else { return }
-        var readyAt = startedAt.addingTimeInterval(Self.startupDelay)
-        var screenText = ""
-        var utf8Carry = Data()
-        var lastOutputAt = Date.distantPast
-        var hasUncheckedFrame = false
-        var trustKeysLeft = Self.maxWorkspaceTrustKeys
-        while Date() < readyAt {
-            let newData = self.readChunk()
-            if !newData.isEmpty {
-                Self.appendScanText(newData: newData, scanTailText: &screenText, utf8Carry: &utf8Carry)
-                if screenText.count > 8192 {
-                    screenText = String(screenText.suffix(8192))
-                }
-                lastOutputAt = Date()
-                hasUncheckedFrame = true
-            }
-
-            // Check each settled frame once, so no key is sent again before Claude redraws the selection.
-            if hasUncheckedFrame, trustKeysLeft > 0, Date().timeIntervalSince(lastOutputAt) >= 0.2 {
-                hasUncheckedFrame = false
-                let screen = ClaudeCLIScreen.render(screenText)
-                if let keys = Self.workspaceTrustKeys(onScreen: screen, acceptsTrust: self.launchedInProbeDirectory) {
-                    try self.send(keys)
-                    trustKeysLeft -= 1
-                    switch keys {
-                    case "\r":
-                        trustKeysLeft = 0
-                        readyAt = Date().addingTimeInterval(Self.startupDelay)
-                        Self.log.info("Claude CLI workspace trust accepted for the probe directory")
-                    case "\u{1b}":
-                        trustKeysLeft = 0
-                        readyAt = max(readyAt, Date().addingTimeInterval(1.0))
-                        Self.log.warning("Claude CLI workspace trust declined outside the probe directory")
-                    default:
-                        readyAt = max(readyAt, Date().addingTimeInterval(1.0))
-                    }
-                }
-            }
-
-            if let proc = self.process, !proc.isRunning { return }
-            try await Task.sleep(nanoseconds: 60_000_000)
-        }
     }
 
     /// Returns the key for the workspace trust dialog on screen, or nil when it is not shown. Without `acceptsTrust`,
@@ -360,9 +254,13 @@ actor ClaudeCLISession {
     /// trust this folder" and Enter follows once the marker is on it; nil while no marker is found, so Enter can never
     /// confirm a different option.
     static func workspaceTrustKeys(onScreen screen: String, acceptsTrust: Bool) -> String? {
+        let normalized = Self.normalizedNeedle(screen)
         let lines = screen.components(separatedBy: "\n")
-        let option = Self.normalizedNeedle(Self.workspaceTrustOption)
+        let option = "yes,itrustthisfolder"
         guard let optionRow = lines.firstIndex(where: { Self.normalizedNeedle($0).contains(option) }) else {
+            if normalized.contains("quicksafetycheck:") { return acceptsTrust ? nil : "\u{1b}" }
+            if normalized.contains("doyoutrustthefilesinthisfolder?") { return acceptsTrust ? "y\r" : "\u{1b}" }
+            if normalized.contains("readytocodehere?") { return acceptsTrust ? "\r" : "\u{1b}" }
             return nil
         }
         guard acceptsTrust else { return "\u{1b}" }
@@ -399,6 +297,7 @@ actor ClaudeCLISession {
             return true
         }
         self.cleanup()
+        let workingDirectory = try self.workingDirectory ?? Self.isolatedProbeWorkingDirectoryURL()
 
         var primaryFD: Int32 = -1
         var secondaryFD: Int32 = -1
@@ -418,7 +317,6 @@ actor ClaudeCLISession {
 
         let proc = Process()
         let resolvedURL = URL(fileURLWithPath: request.binary)
-        let workingDirectory = self.workingDirectory ?? ClaudeStatusProbe.preparedProbeWorkingDirectoryURL()
         // A crashed probe can leave a JSONL behind. Claude treats `--session-id` as creation-only when that local
         // transcript exists, so clear the probe-owned artifact before reusing the account-side identifier.
         ClaudeProbeSessionArtifactCleaner.cleanupProbeSessionArtifacts(
@@ -493,6 +391,14 @@ actor ClaudeCLISession {
         // Only the dedicated probe directory may be trusted, never `probeWorkingDirectoryURL()`'s temporary fallback.
         self.launchedInProbeDirectory = ClaudeStatusProbe.isDedicatedProbeWorkingDirectory(workingDirectory)
         return false
+    }
+
+    static func isolatedProbeWorkingDirectoryURL() throws -> URL {
+        let directory = ClaudeStatusProbe.preparedProbeWorkingDirectoryURL()
+        guard ClaudeStatusProbe.isDedicatedProbeWorkingDirectory(directory) else {
+            throw SessionError.ioFailed("Cannot prepare Claude's isolated probe directory.")
+        }
+        return directory
     }
 
     /// Opt usage probes out of Remote Control without changing saved settings or managed policy.
@@ -632,15 +538,6 @@ actor ClaudeCLISession {
         return appended
     }
 
-    private func shouldStopForIdleTimeout(
-        idleTimeout: TimeInterval?,
-        bufferIsEmpty: Bool,
-        lastOutputAt: Date) -> Bool
-    {
-        guard let idleTimeout, !bufferIsEmpty else { return false }
-        return Date().timeIntervalSince(lastOutputAt) >= idleTimeout
-    }
-
     private func sendPeriodicEnterIfNeeded(every: TimeInterval?, lastEnterAt: inout Date) {
         guard let every, Date().timeIntervalSince(lastEnterAt) >= every else { return }
         try? self.send("\r")
@@ -648,9 +545,7 @@ actor ClaudeCLISession {
     }
 
     private func send(_ text: String) throws {
-        guard let data = text.data(using: .utf8) else { return }
-        guard self.primaryFD >= 0 else { throw SessionError.processExited }
-        try self.writeAllToPrimary(data)
+        try self.writeAllToPrimary(Data(text.utf8))
     }
 
     private func writeAllToPrimary(_ data: Data) throws {
