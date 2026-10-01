@@ -2,6 +2,10 @@
 
 ## 0.70.1 — Unreleased
 
+### Changed
+
+- Docs: link the community codexbar-kde Plasma widget for Linux usage meters and agent-session views (#4117). Thanks @materemias!
+
 ## 0.70.0 — 2026-09-29
 
 ### Highlights
