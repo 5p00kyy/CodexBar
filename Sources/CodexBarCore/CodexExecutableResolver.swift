@@ -35,8 +35,9 @@ func resolveCodexExecutableForRPC(
     // Capture before the general resolver to preserve login-shell PATH precedence
     // over bundled fallbacks and to make `/usr/bin/env node` launchers usable.
     let loginPATH = captureLoginPATH()
-    // A failed preflight is authoritative: plain which can rediscover the rejected launcher.
+    // Only an explicit path can override failed discovery; never rediscover a rejected implicit launcher.
     guard let resolved = locateBinary(environment, loginPATH)
+        ?? BinaryLocator.find(executable, in: [], fileManager: .default)
     else { return nil }
     return CodexExecutableResolution(executable: resolved, loginPATH: loginPATH)
 }

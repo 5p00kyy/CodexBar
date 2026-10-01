@@ -54,6 +54,7 @@ public enum BinaryLocator {
     /// Test-only override so parallel Gemini suites can point at fake binaries
     /// without mutating process-wide `GEMINI_CLI_PATH`.
     @TaskLocal public static var geminiBinaryPathOverrideForTesting: String?
+    @TaskLocal static var codexBinaryResolverOverrideForTesting: (@Sendable ([String: String]) -> String?)?
 
     public static func resolveClaudeBinary(
         env: [String: String] = ProcessInfo.processInfo.environment,
@@ -157,6 +158,7 @@ public enum BinaryLocator {
         fileManager: FileManager = .default,
         home: String = NSHomeDirectory()) -> String?
     {
+        if let resolver = self.codexBinaryResolverOverrideForTesting { return resolver(env) }
         // Provider-specific by design: This named resolver supplies Codex's actual CLI executable name.
         var launchEnvironment = env
         launchEnvironment["PATH"] = PathBuilder.effectivePATH(purposes: [.nodeTooling], env: env, loginPATH: loginPATH)
@@ -564,7 +566,7 @@ public enum CodexLaunchPreflight {
         return nil
     }
 
-    struct NodePackageResolution {
+    struct NodePackageResolution: Decodable {
         let architecture: String
         let packageRoot: String?
     }
@@ -575,10 +577,10 @@ public enum CodexLaunchPreflight {
         environment: [String: String],
         fileManager: FileManager) -> NodePackageResolution?
     {
-        // Do not inspect a different interpreter than the wrapper will run, or execute preload hooks during discovery.
+        // The shared finder matches the child's absolute-only PATH; reject preload hooks before starting Node.
         let paths = (environment["PATH"] ?? "/usr/bin:/bin")
-            .split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-        guard paths.allSatisfy({ $0.hasPrefix("/") }), environment["NODE_OPTIONS", default: ""].isEmpty,
+            .split(separator: ":").map(String.init)
+        guard environment["NODE_OPTIONS", default: ""].isEmpty,
               let node = BinaryLocator.find("node", in: paths, fileManager: fileManager)
         else { return nil }
         let script = #"""
@@ -594,11 +596,9 @@ public enum CodexLaunchPreflight {
         process.stdout.write(JSON.stringify({architecture, packageRoot}));
         """#
         guard let data = ShellCommandLocator.runShellCommand(
-            shell: node, arguments: ["-e", script, wrapper], timeout: 2, environment: environment),
-            let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let architecture = value["architecture"] as? String
+            shell: node, arguments: ["-e", script, wrapper], timeout: 2, environment: environment)
         else { return nil }
-        return NodePackageResolution(architecture: architecture, packageRoot: value["packageRoot"] as? String)
+        return try? JSONDecoder().decode(NodePackageResolution.self, from: data)
     }
 
     static func npmNativeExecutable(
@@ -616,18 +616,23 @@ public enum CodexLaunchPreflight {
         case "x64": triple = "x86_64-apple-darwin"
         default: return nil
         }
-        let directory: String
+        let legacyDirectory = "codex"
+        let directories: [String]
         if source.range(of: #"targetTriple,\s*["']bin["']"#, options: .regularExpression) != nil {
-            directory = "bin"
+            directories = source.contains("const legacyPath = legacyBinaryPath(vendorRoot);")
+                ? ["bin", legacyDirectory] : ["bin"]
         } else if source.range(of: #"path\.join\(archRoot,\s*["']codex["']"#, options: .regularExpression) != nil {
-            directory = "codex"
+            directories = [legacyDirectory]
         } else {
             // An unknown launcher layout is not evidence that another payload will be executed.
             return nil
         }
         let root = node.packageRoot.map { URL(fileURLWithPath: $0) }
             ?? URL(fileURLWithPath: wrapper).deletingLastPathComponent().deletingLastPathComponent()
-        let native = root.appendingPathComponent("vendor/\(triple)/\(directory)/codex").path
+        // npm selects by existence, so an unusable current payload must not fall through to a legacy copy.
+        guard let native = directories.lazy.map({ root.appendingPathComponent("vendor/\(triple)/\($0)/codex").path })
+            .first(where: { fileManager.fileExists(atPath: $0) })
+        else { return nil }
         return fileManager.isExecutableFile(atPath: native) ? native : nil
     }
 

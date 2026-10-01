@@ -4,15 +4,26 @@ import Testing
 
 struct CodexExecutableResolverTests {
     @Test
+    func `explicit RPC executable survives rejected implicit discovery`() {
+        let reject: @Sendable ([String: String]) -> String? = { _ in nil }
+        BinaryLocator.$codexBinaryResolverOverrideForTesting.withValue(reject) {
+            let environment = ["PATH": "/usr/bin:/bin", "SHELL": "/bin/sh"]
+            let resolution = defaultCodexExecutableResolver(environment, "/usr/bin/true")
+            #expect(resolution?.executable == "/usr/bin/true")
+            #expect(defaultCodexExecutableResolver(environment, "codex") == nil)
+        }
+    }
+
+    @Test
     func `rejected discovery stops RPC before process launch`() async {
         let fetcher = UsageFetcher(
             environment: ["PATH": "/synthetic/bin"],
             initializeTimeoutSeconds: 1,
             requestTimeoutSeconds: 1,
-            codexExecutableResolver: { environment, executable in
+            codexExecutableResolver: { environment, _ in
                 resolveCodexExecutableForRPC(
                     environment: environment,
-                    executable: executable,
+                    executable: "codex",
                     captureLoginPATH: { ["/synthetic/login/bin"] },
                     locateBinary: { environment, loginPATH in
                         #expect(environment["PATH"] == "/synthetic/bin")
