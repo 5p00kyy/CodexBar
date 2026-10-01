@@ -22,6 +22,8 @@ The pipeline lets future scanner code read the last valid cache synchronously wi
 
 Catalog saves use a single atomic write on macOS and Linux, so refreshing an existing cache replaces its contents without removing the destination first. Successful saves invalidate the in-memory catalog memo.
 
+Refreshes preserve cached pricing for removed models using a provider-local stable-identity index. The index and model-ID normalization memo exist only during the merge; lookups likewise build their normalized-ID index only for the current provider and call. These indexes do not change cache lifetimes, provider boundaries, alias precedence, or dated snapshot pricing.
+
 Fresh OpenCodex dashboard loads and the opt-in CLI OpenCodex payload also refresh the catalog, even when
 no native Codex or Claude scan runs. Missing exact provider/model targets may trigger an earlier refresh,
 subject to the shared 15-minute retry cooldown. Cached dashboard publication and synchronous snapshot
