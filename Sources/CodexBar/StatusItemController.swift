@@ -851,7 +851,6 @@ final class StatusItemController: NSObject, NSMenuDelegate, StatusItemControllin
     }
 
     private func reorderProviderStatusItems(previousOrder: [ProviderInstanceID]) {
-        guard !self.shouldMergeIcons else { return }
         let ordered = self.settings.orderedFirstPartyProviders().filter(self.isVisible)
         guard ordered != previousOrder.compactMap(\.firstPartyProvider).filter(self.isVisible) else { return }
         let defaults = self.settings.userDefaults

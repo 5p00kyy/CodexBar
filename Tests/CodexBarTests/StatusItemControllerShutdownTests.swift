@@ -6,8 +6,8 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct StatusItemControllerShutdownTests {
-    @Test
-    func `explicit provider reorder reassigns existing slots under stable identities`() throws {
+    @Test(arguments: [false, true])
+    func `explicit provider reorder reassigns existing slots under stable identities`(reorderWhileMerged: Bool) throws {
         let statusBar = RecordingStatusBar()
         let controller = self.makeController(
             statusBar: statusBar, merged: false, enabledProviders: [.codex, .claude])
@@ -24,8 +24,16 @@ struct StatusItemControllerShutdownTests {
         defaults.set(200, forKey: codexKey)
         defaults.set(400, forKey: claudeKey)
         defaults.set(600, forKey: mergedKey)
+        if reorderWhileMerged {
+            controller.settings.mergeIcons = true
+            controller.handleProviderConfigChange(reason: "merge icons")
+        }
         controller.settings.setProviderOrder([.claude, .codex])
         controller.handleProviderConfigChange(reason: "test reorder")
+        if reorderWhileMerged {
+            controller.settings.mergeIcons = false
+            controller.handleProviderConfigChange(reason: "separate icons")
+        }
         #expect(defaults.double(forKey: claudeKey) == 200)
         #expect(defaults.double(forKey: codexKey) == 400)
         #expect(defaults.double(forKey: mergedKey) == 600)
