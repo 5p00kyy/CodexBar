@@ -19,6 +19,7 @@
 
 ### Fixed
 
+- Codex: discover the current ChatGPT bundled CLI launcher and skip npm launchers with missing native payloads or unsafe Node discovery environments so managed login can use a working fallback (#4143). Thanks @Yuxin-Qiao!
 - iCloud Sync: prevent cancelled or superseded sync applies and removed-record recovery from overwriting provider settings, preferences, fleet records, or newer sync metadata (#4161).
 - Reduce CPU use during Keychain preflight by validating the running app's code identity without rehashing its resources.
 - Costs: reduce CPU use when saving Claude and Vertex history after local transcripts change.
