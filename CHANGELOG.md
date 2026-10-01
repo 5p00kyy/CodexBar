@@ -5,6 +5,7 @@
 ### Changed
 
 - Docs: link the community codexbar-kde Plasma widget for Linux usage meters and agent-session views (#4117). Thanks @materemias!
+
 ### Fixed
 
 - Menu bar: show the remaining quota when only the third usage window is available, including Gemini Flash Lite-only accounts, through the shared metric fallback (#4128). Thanks @devYRPauli!
@@ -13,6 +14,7 @@
 - Costs: reduce CPU use while bucketing local agent logs into daily usage.
 - Costs: reduce CPU use while reconciling cached local Codex logs.
 - Codex: reduce CPU use when loading conversation titles for large local cost histories.
+- Reduce CPU use while scanning local Codex logs for cost data.
 
 ## 0.70.0 — 2026-09-29
 
