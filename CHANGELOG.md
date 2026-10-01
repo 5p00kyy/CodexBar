@@ -5,6 +5,7 @@
 ### Fixed
 
 - OpenCode: restore migrated Console workspace quota and prepaid balance, preserve legacy sessions, and label 30-day spend without inventing a monthly spending limit (#4131, #4139). Thanks @luochen211!
+- Menu bar: show the remaining quota when only the third usage window is available, including Gemini Flash Lite-only accounts, through the shared metric fallback (#4128). Thanks @devYRPauli!
 
 ## 0.70.0 — 2026-09-29
 
