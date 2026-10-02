@@ -101,6 +101,7 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "Среднее (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "Избегать запросов Keychain";
 "Balance" = "Баланс";
+"Cloud credits" = "Облачные кредиты";
 "Battery Saver" = "Экономия энергии";
 "Bordered" = "С рамкой";
 "Build" = "Сборка";

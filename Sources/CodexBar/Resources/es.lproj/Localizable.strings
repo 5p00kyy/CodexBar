@@ -100,6 +100,7 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "Promedio (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "Evitar solicitudes del Llavero";
 "Balance" = "Saldo";
+"Cloud credits" = "Créditos en la nube";
 "Battery Saver" = "Ahorro de batería";
 "Bordered" = "Con borde";
 "Build" = "Compilación";

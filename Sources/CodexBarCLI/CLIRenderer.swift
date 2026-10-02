@@ -77,7 +77,7 @@ enum CLIRenderer {
                 now: now,
                 lines: &lines)
         }
-        self.appendProviderDetails(snapshot.details, useColor: context.useColor, lines: &lines)
+        self.appendProviderDetails(snapshot.details, provider: provider, useColor: context.useColor, lines: &lines)
         self.appendPresentationCostLines(
             provider: provider,
             snapshot: snapshot,
@@ -401,7 +401,7 @@ enum CLIRenderer {
                 now: now,
                 lines: &lines)
         }
-        self.appendProviderDetails(snapshot.details, useColor: context.useColor, lines: &lines)
+        self.appendProviderDetails(snapshot.details, provider: provider, useColor: context.useColor, lines: &lines)
         self.appendPresentationCostLines(
             provider: provider,
             snapshot: snapshot,
@@ -552,6 +552,7 @@ enum CLIRenderer {
 
     private static func appendProviderDetails(
         _ sections: [ProviderDetailSection],
+        provider: UsageProvider,
         useColor: Bool,
         lines: inout [String])
     {
@@ -560,7 +561,16 @@ enum CLIRenderer {
                 let value = [row.value, row.secondaryValue]
                     .compactMap(\.self)
                     .joined(separator: " · ")
-                lines.append(self.labelValueLine(row.label, value: value, useColor: useColor))
+                // Text output has no section headings. Keep Claude's cloud-only balance distinct from prepaid funds.
+                let label = if provider == .claude,
+                               section.title == ClaudeCloudCreditsSnapshot.detailTitle,
+                               row.id == "claude-cloud-credits"
+                {
+                    ClaudeCloudCreditsSnapshot.detailTitle
+                } else {
+                    row.label
+                }
+                lines.append(self.labelValueLine(label, value: value, useColor: useColor))
             }
             if let chart = section.chart {
                 let unit = chart.unit.map { " \($0)" } ?? ""
