@@ -5,6 +5,8 @@
 ### Added
 
 - Notifications: opt-in reset alerts name the provider and session or weekly window, keep restored notices on the correct account, respect Hide personal info, and remember announced reset boundaries across refreshes and restarts (#4138). Thanks @zleo-ai!
+- Claude: show promotional cloud-session credits as a separate menu balance and CLI detail section, including exhausted, expired, and unavailable states.
+
 ### Security
 
 - Resolve bundled helpers and plugin resources from the running executable, and ignore working-directory-dependent CLI search paths (#4136). Thanks @maugt!

@@ -565,7 +565,7 @@ enum CLIRenderer {
                 // needs its own label to distinguish it from prepaid Extra usage funds.
                 let label = if provider == .claude,
                                section.title == ClaudeCloudCreditsSnapshot.detailTitle,
-                               row.id == "claude-cloud-credits"
+                               row.id == ClaudeCloudCreditsSnapshot.detailRowID
                 {
                     ClaudeCloudCreditsSnapshot.detailTitle
                 } else {

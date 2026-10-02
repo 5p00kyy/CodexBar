@@ -4,6 +4,16 @@ import Foundation
 /// The usage API reports these amounts in dollars, not minor currency units.
 public struct ClaudeCloudCreditsSnapshot: Decodable, Equatable, Sendable {
     public static let detailTitle = "Cloud credits"
+    public static let detailRowID = "claude-cloud-credits"
+    private static let expiredValue = "Expired"
+    private static let unavailableValue = "Unavailable"
+
+    /// State recovered from the published detail row, so cached snapshots present like live ones.
+    public enum DetailStatus: Equatable, Sendable {
+        case available(remainingDollars: Double)
+        case expired
+        case unavailable
+    }
 
     public let limitDollars: Double
     public let usedDollars: Double
@@ -65,10 +75,10 @@ public struct ClaudeCloudCreditsSnapshot: Decodable, Equatable, Sendable {
         let value: String
         let progress: ProviderDetailSection.Row.Progress?
         if expired {
-            value = "Expired"
+            value = Self.expiredValue
             progress = nil
         } else if self.isLocked {
-            value = "Unavailable"
+            value = Self.unavailableValue
             progress = nil
         } else {
             let remaining = UsageFormatter.currencyString(self.remainingDollars, currencyCode: "USD")
@@ -80,12 +90,29 @@ public struct ClaudeCloudCreditsSnapshot: Decodable, Equatable, Sendable {
         let expiry = self.expiresAt.map { "\(expired ? "Expired" : "Expires") \($0.ISO8601Format())" }
         return [.makeSection(title: Self.detailTitle, rows: [
             .makeRow(
-                id: "claude-cloud-credits",
+                id: Self.detailRowID,
                 label: "Balance",
                 value: value,
                 secondaryValue: expiry,
                 progress: progress,
                 usageValue: expired || self.isLocked ? nil : self.remainingDollars),
         ])]
+    }
+
+    /// Reads back the row written by `detailSections(now:)`. A balance observed before its expiry is
+    /// reported as expired once `now` passes the timestamp stored in the row.
+    public static func detailStatus(in sections: [ProviderDetailSection], now: Date) -> DetailStatus? {
+        guard let row = sections.lazy
+            .filter({ $0.title == Self.detailTitle })
+            .flatMap(\.rows)
+            .first(where: { $0.id == Self.detailRowID })
+        else { return nil }
+        if row.value == Self.expiredValue { return .expired }
+        let storedExpiry = row.secondaryValue?.split(separator: " ").last.map(String.init)
+        if let expiry = ISO8601DateParser.parse(storedExpiry), expiry <= now {
+            return .expired
+        }
+        guard let remaining = row.usageValue else { return .unavailable }
+        return .available(remainingDollars: remaining)
     }
 }

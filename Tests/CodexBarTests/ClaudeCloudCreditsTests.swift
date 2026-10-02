@@ -181,12 +181,104 @@ struct ClaudeCloudCreditsTests {
         let output = ClaudeOAuthFetchStrategy._snapshotForTesting(from: usage, includeOptionalUsage: showOptional)
         #expect(output.details.isEmpty == !showOptional)
         let model = try Self.menuModel(snapshot: Self.snapshot(), showOptional: showOptional)
-        #expect(model.providerDetails.contains { $0.title == "Cloud credits" } == showOptional)
+        #expect(!model.providerDetails.contains { $0.title == "Cloud credits" })
+        #expect((model.cloudCredits != nil) == showOptional)
         if showOptional {
-            let row = try #require(model.providerDetails.first?.rows.first)
-            #expect(row.value == "$75.00 of $100.00 remaining")
-            #expect(row.progress?.usedPercent == 25)
+            let row = try #require(model.cloudCredits)
+            #expect(row.title == "Cloud credits")
+            #expect(row.spendLine == "$75.00")
+            #expect(row.presentation == .inlineValue)
+            #expect(row.percentUsed == nil)
+            #expect(row.percentLine == nil)
         }
+    }
+
+    @Test
+    func `menu balance row reads the published detail row`() throws {
+        let snapshot = try Self.snapshot()
+        #expect(ClaudeCloudCreditsSnapshot.detailStatus(in: snapshot.details, now: Self.now)
+            == .available(remainingDollars: 75))
+        #expect(ClaudeCloudCreditsSnapshot.detailStatus(in: [], now: Self.now) == nil)
+
+        let restored = try JSONDecoder().decode(UsageSnapshot.self, from: JSONEncoder().encode(snapshot))
+        let cached = try Self.menuModel(snapshot: restored, showOptional: true)
+        #expect(cached.cloudCredits?.spendLine == "$75.00")
+
+        let model = try Self.menuModel(snapshot: snapshot, showOptional: true)
+        #expect(model.hasUsageContent)
+        #expect(model.usesStackedDetailLayout)
+        #expect(model.hasUsageContentAboveCloudCredits)
+        #expect(model.heightFingerprint(section: "usage").contains("cloudCredits="))
+    }
+
+    @Test
+    func `menu balance row labels locked expired and stale balances`() throws {
+        let locked = #"{"limit_dollars":100,"remaining_dollars":75,"locked_reason":"internal_reason"}"#
+        let lockedModel = try Self.menuModel(snapshot: Self.snapshot(block: locked), showOptional: true)
+        #expect(lockedModel.cloudCredits?.spendLine == "Unavailable")
+
+        let expiry = try #require(Self.parse(Self.funded).expiresAt)
+        let expired = try Self.menuModel(snapshot: Self.snapshot(updatedAt: expiry), showOptional: true, now: expiry)
+        #expect(expired.cloudCredits?.spendLine == "Expired")
+
+        // A balance cached before its expiry must not keep showing dollars afterwards.
+        let stale = try Self.menuModel(snapshot: Self.snapshot(), showOptional: true, now: expiry)
+        #expect(stale.cloudCredits?.spendLine == "Expired")
+        let beforeExpiry = try Self.menuModel(
+            snapshot: Self.snapshot(), showOptional: true, now: expiry.addingTimeInterval(-1))
+        #expect(beforeExpiry.cloudCredits?.spendLine == "$75.00")
+    }
+
+    @MainActor
+    @Test
+    func `visible usage items keep the cloud credit choice`() throws {
+        let model = try Self.menuModel(snapshot: Self.snapshot(), showOptional: true)
+        let itemID = ProviderUsageItemID.detailSection(ClaudeCloudCreditsSnapshot.detailTitle)
+        #expect(model.usageItemDescriptors.contains { $0.id == itemID && $0.title == "Cloud credits" })
+        let hidden = model.applyingUsageItemVisibility(hiddenItemIDs: [itemID])
+        #expect(hidden.cloudCredits == nil)
+        #expect(hidden.metrics.count == model.metrics.count)
+    }
+
+    @MainActor
+    @Test
+    func `cloud credits alone remain visible until the user hides them`() throws {
+        let snapshot = try UsageSnapshot(
+            primary: nil,
+            secondary: nil,
+            details: Self.parse(Self.funded).detailSections(now: Self.now),
+            updatedAt: Self.now)
+        let model = try Self.menuModel(snapshot: snapshot, showOptional: true)
+        #expect(model.metrics.isEmpty)
+        #expect(model.hasUsageContent)
+        #expect(!model.hasUsageContentAboveCloudCredits)
+        #expect(model.showsOverviewSupplementalContent(compact: true))
+        #expect(!ProviderMetricsInlineView.ContentState(model: model, infoRows: []).showsPlaceholder)
+
+        let hidden = model.applyingUsageItemVisibility(
+            hiddenItemIDs: [.detailSection(ClaudeCloudCreditsSnapshot.detailTitle)])
+        #expect(ProviderMetricsInlineView.ContentState(model: hidden, infoRows: []).showsPlaceholder)
+        #expect(hidden.cloudCredits == nil)
+    }
+
+    @MainActor
+    @Test
+    func `open menu adopts balance and expiry updates without changing layout`() throws {
+        let original = try Self.menuModel(snapshot: Self.snapshot(), showOptional: true)
+        let depleted = #"{"limit_dollars":100,"remaining_dollars":0}"#
+        var resolved = try Self.menuModel(snapshot: Self.snapshot(block: depleted), showOptional: true)
+        let monitor = MenuCardRefreshMonitor(
+            resolveModel: { _ in resolved },
+            isProviderRefreshActive: { _ in false })
+        #expect(monitor.model(for: .claude, fallback: original).cloudCredits?.spendLine == "$0.00")
+
+        let expiry = try #require(Self.parse(Self.funded).expiresAt)
+        resolved = try Self.menuModel(snapshot: Self.snapshot(), showOptional: true, now: expiry)
+        #expect(monitor.model(for: .claude, fallback: original).cloudCredits?.spendLine == "Expired")
+
+        resolved = try Self.menuModel(snapshot: Self.snapshot(block: "null"), showOptional: true)
+        #expect(!original.hasCompatibleTrackedLayout(with: resolved))
+        #expect(monitor.model(for: .claude, fallback: original).cloudCredits?.spendLine == "$75.00")
     }
 
     private static func parse(_ block: String) throws -> ClaudeCloudCreditsSnapshot {
@@ -201,22 +293,26 @@ struct ClaudeCloudCreditsTests {
         """#.utf8)
     }
 
-    private static func snapshot() throws -> UsageSnapshot {
-        let usage = try ClaudeUsageFetcher._mapOAuthUsageForTesting(Self.usageData(Self.funded))
+    private static func snapshot(block: String = Self.funded, updatedAt: Date = Self.now) throws -> UsageSnapshot {
+        let usage = try ClaudeUsageFetcher._mapOAuthUsageForTesting(Self.usageData(block))
         return ClaudeOAuthFetchStrategy._snapshotForTesting(from: ClaudeUsageSnapshot(
             primary: usage.primary,
             secondary: usage.secondary,
             opus: usage.opus,
             providerCost: usage.providerCost,
             cloudCredits: usage.cloudCredits,
-            updatedAt: Self.now,
+            updatedAt: updatedAt,
             accountEmail: nil,
             accountOrganization: nil,
             loginMethod: "Pro",
             rawText: nil))
     }
 
-    private static func menuModel(snapshot: UsageSnapshot, showOptional: Bool) throws -> UsageMenuCardView.Model {
+    private static func menuModel(
+        snapshot: UsageSnapshot,
+        showOptional: Bool,
+        now: Date = Self.now) throws -> UsageMenuCardView.Model
+    {
         try UsageMenuCardView.Model.make(.init(
             provider: .claude,
             metadata: #require(ProviderDefaults.metadata[.claude]),
@@ -235,6 +331,6 @@ struct ClaudeCloudCreditsTests {
             showOptionalCreditsAndExtraUsage: showOptional,
             hidePersonalInfo: false,
             usesLiveSubtitle: false,
-            now: self.now))
+            now: now))
     }
 }

@@ -268,15 +268,18 @@ the cookie import.
 ## Cloud-session credits
 
 - OAuth and Web usage responses can supply promotional cloud-session credit in `iguana_necktie`.
-  CodexBar shows a separate **Cloud credits** detail section in the menu and CLI when optional credits/extra
-  usage is enabled. CLI JSON exposes the section through `usage.details`, including numeric progress and remaining
-  dollars. No additional request, login, or browser discovery is needed for these credits.
+  CodexBar shows a separate **Cloud credits** balance row in the menu and a detail section in the CLI when
+  optional credits/extra usage is enabled. The menu row matches the prepaid **Credits** row and shows only the
+  remaining balance; the allowance, progress, and expiry stay in CLI output. CLI JSON exposes the section through
+  `usage.details`, including numeric progress and remaining dollars. No additional request, login, or browser
+  discovery is needed for these credits.
 - `limit_dollars`, `used_dollars`, and `remaining_dollars` are already USD amounts. They are never divided by 100,
   added to prepaid Extra usage, counted as local spending, or used for quota pacing. The reported remaining amount
   wins when present; otherwise it is derived from the allowance and reported used dollars.
 - `resets_at` denotes expiration, not a recurring quota reset. The section shows an absolute UTC timestamp
   (`Z`); cached details retain the last observation and its expiry. Exhausted credits retain a zero balance;
-  credits already expired at observation or locked by the provider are labeled expired/unavailable.
+  credits already expired at observation or locked by the provider are labeled expired/unavailable. The menu
+  also labels a cached balance expired once its stored expiry has passed.
 - Missing or malformed credit blocks omit this section without failing ordinary usage. The response determines
   availability, without a Pro/Max plan-name gate. CLI-probe-only results do not include cloud credits, and optional
   Web enrichment preserves the primary source's credits rather than importing Web credits into OAuth/CLI results.
