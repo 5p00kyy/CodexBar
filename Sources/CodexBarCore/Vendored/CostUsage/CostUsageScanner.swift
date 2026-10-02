@@ -3,6 +3,7 @@ import CryptoKit
 #else
 import Crypto
 #endif
+import CoreFoundation
 import Dispatch
 import Foundation
 #if canImport(Darwin)
@@ -4294,17 +4295,17 @@ enum CostUsageScanner {
         }, uniquingKeysWith: { first, _ in first })
 
         func mirrorKey(turnID: String?, usage: CostUsageCodexTotals, total: CostUsageCodexTotals?) -> String {
-            [
+            var components: [String] = [
                 turnID ?? "",
                 String(usage.input),
                 String(usage.cached),
                 String(usage.output),
                 String(usage.reasoning ?? 0),
-                total.map { String($0.input) } ?? "",
-                total.map { String($0.cached) } ?? "",
-                total.map { String($0.output) } ?? "",
             ]
-                .joined(separator: "\u{1F}")
+            components.append(total.map { String($0.input) } ?? "")
+            components.append(total.map { String($0.cached) } ?? "")
+            components.append(total.map { String($0.output) } ?? "")
+            return components.joined(separator: "\u{1F}")
         }
 
         func handleRequestLedger(_ object: [String: Any], endOffset: Int64) {
