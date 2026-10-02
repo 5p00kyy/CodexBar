@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.71.1 — Unreleased
+
+### Fixed
+
+- Claude: keep parsed transcript windows reusable when pricing changes during a refresh, while recalculating the next report with the new prices (#4202, #4204). Thanks @Yuxin-Qiao!
+
 ## 0.71.0 — 2026-10-02
 
 ### Highlights
