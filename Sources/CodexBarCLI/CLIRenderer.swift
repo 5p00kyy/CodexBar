@@ -561,7 +561,8 @@ enum CLIRenderer {
                 let value = [row.value, row.secondaryValue]
                     .compactMap(\.self)
                     .joined(separator: " · ")
-                // Text output has no section headings. Keep Claude's cloud-only balance distinct from prepaid funds.
+                // Provider-specific by design: text output omits section headings, so Claude's cloud-only balance
+                // needs its own label to distinguish it from prepaid Extra usage funds.
                 let label = if provider == .claude,
                                section.title == ClaudeCloudCreditsSnapshot.detailTitle,
                                row.id == "claude-cloud-credits"
