@@ -5,6 +5,7 @@
 ### Fixed
 
 - Status: prevent older status requests from replacing newer incidents, emitting false recovery hooks, or scheduling redundant retries (#4175). Thanks @Shenrui-Ma!
+- Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).
 
 ## 0.71.0 — 2026-10-02
 
