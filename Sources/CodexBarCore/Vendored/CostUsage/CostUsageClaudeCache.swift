@@ -75,7 +75,11 @@ final class CostUsageClaudeReportMemo: @unchecked Sendable {
         }
     }
 
+    #if DEBUG
+    @TaskLocal static var shared = CostUsageClaudeReportMemo()
+    #else
     static let shared = CostUsageClaudeReportMemo()
+    #endif
     static let persistedVersion = 1
     /// Bump when bundled pricing, model aliases, or daily-report aggregation changes without new artifact stamps.
     static let reportSemanticsVersion = 6
@@ -199,12 +203,15 @@ extension CostUsageScanner {
         case transcriptParse(startOffset: Int64)
         case reconcile
         case cacheEncode
+        case fragmentEncode
+        case fragmentFallback
         case artifactRead
         case artifactWrite
         case reprice
         case normalizationCacheMiss
         case vertexMetadataWalk
         case claudeLineDecode
+        case claudeCostCalculation
         case catalogModelLookup(found: Bool)
     }
 
@@ -214,10 +221,13 @@ extension CostUsageScanner {
         var incrementalTranscriptParses = 0
         var reconciliations = 0
         var cacheEncodes = 0
+        var fragmentEncodes = 0
+        var fragmentFallbacks = 0
         var repricedRows = 0
         var normalizationCacheMisses = 0
         var vertexMetadataWalks = 0
         var claudeLineDecodes = 0
+        var claudeCostCalculations = 0
         var catalogModelLookups = 0
         var catalogModelHits = 0
         var catalogModelMisses = 0
@@ -240,12 +250,15 @@ extension CostUsageScanner {
                 }
             case .reconcile: self.metrics.reconciliations += 1
             case .cacheEncode: self.metrics.cacheEncodes += 1
+            case .fragmentEncode: self.metrics.fragmentEncodes += 1
+            case .fragmentFallback: self.metrics.fragmentFallbacks += 1
             case .artifactRead: self.artifactIO.reads += 1
             case .artifactWrite: self.artifactIO.writes += 1
             case .reprice: self.metrics.repricedRows += 1
             case .normalizationCacheMiss: self.metrics.normalizationCacheMisses += 1
             case .vertexMetadataWalk: self.metrics.vertexMetadataWalks += 1
             case .claudeLineDecode: self.metrics.claudeLineDecodes += 1
+            case .claudeCostCalculation: self.metrics.claudeCostCalculations += 1
             case let .catalogModelLookup(found):
                 self.metrics.catalogModelLookups += 1
                 if found {
@@ -372,7 +385,11 @@ enum CostUsageClaudeCacheIO {
             }
         }
 
+        #if DEBUG
+        @TaskLocal static var shared = ArtifactMemo()
+        #else
         static let shared = ArtifactMemo()
+        #endif
         let entries = NSCache<NSURL, Entry>()
 
         private let lock = NSLock()
@@ -391,12 +408,22 @@ enum CostUsageClaudeCacheIO {
             }
         }
 
-        private init() {
+        init() {
             self.entries.countLimit = 4
         }
     }
 
     #if DEBUG
+    static func withIsolatedCachesForTesting(operation: @Sendable () async throws -> Void) async throws {
+        try await ArtifactMemo.$shared.withValue(ArtifactMemo()) {
+            try await CostUsageClaudeReportMemo.$shared.withValue(CostUsageClaudeReportMemo()) {
+                try await CostUsageClaudeFragments.$shared.withValue(CostUsageClaudeFragments()) {
+                    try await operation()
+                }
+            }
+        }
+    }
+
     static func evictArtifactMemoForTesting(at url: URL) {
         ArtifactMemo.shared.entries.removeObject(forKey: url.standardizedFileURL.resolvingSymlinksInPath() as NSURL)
     }
@@ -494,7 +521,12 @@ enum CostUsageClaudeCacheIO {
         let encoder = JSONEncoder()
         // Stable fingerprints preserve stamps when a rescan rebuilds byte-identical content with a new UUID.
         encoder.outputFormatting = [.sortedKeys]
-        guard let data = try? encoder.encode(value) else { return nil }
+        let data: Data? = if let cache = value as? CostUsageClaudeCache {
+            try? CostUsageClaudeFragments.shared.encode(cache, at: key, encoder: encoder)
+        } else {
+            try? encoder.encode(value)
+        }
+        guard let data else { return nil }
         try checkCancellation?()
         let digest = SHA256.hash(data: data)
         if let identity, identity.digest == digest, CostUsageClaudeFileStamp.read(at: url) == identity.stamp {
