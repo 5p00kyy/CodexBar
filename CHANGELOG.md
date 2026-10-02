@@ -2,6 +2,10 @@
 
 ## 0.71.1 — Unreleased
 
+### Fixed
+
+- Status: prevent older status requests from replacing newer incidents, emitting false recovery hooks, or scheduling redundant retries (#4175). Thanks @Shenrui-Ma!
+
 ## 0.71.0 — 2026-10-02
 
 ### Highlights

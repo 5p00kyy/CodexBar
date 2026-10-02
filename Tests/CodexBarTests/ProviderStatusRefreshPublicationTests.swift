@@ -45,6 +45,36 @@ struct ProviderStatusRefreshPublicationTests {
     }
 
     @Test
+    func `a newer request can publish after an overlapping older success`() async {
+        let store = Self.makeStore()
+        let olderGate = StatusPublicationGate()
+        let newerGate = StatusPublicationGate()
+        var requests = 0
+        store._test_providerStatusFetchOverride = { _ in
+            requests += 1
+            if requests == 1 {
+                await olderGate.suspend()
+                return Self.status(.none, description: "Older operational status")
+            }
+            await newerGate.suspend()
+            return Self.status(.major, description: "Current incident")
+        }
+
+        let older = Task { await store.refreshProviderStatus(.codex) }
+        await olderGate.waitUntilStarted()
+        let newer = Task { await store.refreshProviderStatus(.codex) }
+        await newerGate.waitUntilStarted()
+        await olderGate.resume()
+        await older.value
+        #expect(store.statuses[.codex]?.description == "Older operational status")
+        await newerGate.resume()
+        await newer.value
+
+        #expect(store.statuses[.codex]?.description == "Current incident")
+        #expect(store.providerStatusHadIssue[.codex] == true)
+    }
+
+    @Test
     func `an older success remains useful when a newer request fails`() async {
         let store = Self.makeStore()
         let gate = StatusPublicationGate()
