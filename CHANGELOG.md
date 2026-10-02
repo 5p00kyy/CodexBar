@@ -83,7 +83,6 @@
 - Mistral: offer Monthly Plan in the provider's Menu bar metric picker, so the menu bar and widgets can show the Vibe allowance without a `defaults write` (#4072). Thanks @T0mSIlver!
 - Mistral: price billing usage by event type, API zone, and service tier, so a per-second audio or priority price no longer inflates API spend and 30-day token cost (#4076). Thanks @T0mSIlver!
 - CLI: keep probe timeout and cancellation cleanup responsive on busy hosts with large process tables (#4108).
-- CLI: keep probe timeout and cancellation cleanup responsive when other processes have large environments (#4077).
 
 ## 0.69.0 — 2026-09-28
 
