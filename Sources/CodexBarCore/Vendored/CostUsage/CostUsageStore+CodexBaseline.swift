@@ -199,38 +199,6 @@ extension CostUsageStore {
         }
     }
 
-    /// Certify unchanged content while the writer lock still excludes external commits.
-    /// Only own freshness/cursor writes may advance the stamp; COMMIT must preserve it.
-    func certifiedIdenticalContentBaseline(
-        _ locked: CodexDecodedBaseline, cache: CostUsageCache) -> CodexDecodedBaseline?
-    {
-        guard !locked.tokenSnapshotsLoaded, let stamp = self.currentDatabaseStamp() else { return nil }
-        var expectedStamp = locked.stamp
-        expectedStamp.totalChanges = stamp.totalChanges
-        guard expectedStamp == stamp else { return nil }
-        let committed = self.fetchMetadata()
-        var expected = locked.persistence.metadata
-        expected.lastScanUnixMs = max(expected.lastScanUnixMs, cache.lastScanUnixMs)
-        if locked.decoded.codexPriorityTurnsCursor != cache.codexPriorityTurnsCursor {
-            guard let payload = committed.priorityTurnStatePayload,
-                  let state = try? JSONDecoder().decode(StoredPriorityState.self, from: payload),
-                  state.turnsCursor == cache.codexPriorityTurnsCursor,
-                  state.turnKeys == locked.decoded.codexPriorityTurnKeys,
-                  state.turnIDsByDay == locked.decoded.codexPriorityTurnIDsByDay,
-                  state.resolvedTurns == locked.decoded.codexResolvedPriorityTurns
-            else { return nil }
-            expected.priorityTurnStatePayload = committed.priorityTurnStatePayload
-        }
-        guard committed == expected, self.currentDatabaseStamp() == stamp else { return nil }
-        var retained = locked
-        retained.decoded.lastScanUnixMs = committed.lastScanUnixMs
-        retained.decoded.codexPriorityTurnsCursor = cache.codexPriorityTurnsCursor
-        retained.persistence.metadata = committed
-        retained.stamp = stamp
-        retained.hydratedTokenSnapshots = [:]
-        return retained
-    }
-
     #if DEBUG
     func runCodexReadCheckpointForTesting() throws {
         if let checkpoint = CostUsageStoreTestHooks.current.codexBaselineReadCheckpoint,
