@@ -48,6 +48,8 @@
 
 ### Fixed
 
+- Codex costs: count owned request-ledger records after resumed counters reset, deduplicate mirrored legacy events and archived responses, and retain request identities across cache restarts (#3303).
+
 - Codex: discover the current ChatGPT bundled CLI launcher and skip npm launchers with missing native payloads or unsafe Node discovery environments so managed login can use a working fallback (#4143). Thanks @Yuxin-Qiao!
 - iCloud Sync: prevent cancelled or superseded sync applies and removed-record recovery from overwriting provider settings, preferences, fleet records, or newer sync metadata (#4161).
 - Claude: retain an established CLI source after transient timeouts and loading stalls so Auto refreshes can retry without an unrelated missing-OAuth-credentials warning (#4129).
