@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).
 - Claude: keep parsed transcript windows reusable when pricing changes during a refresh, while recalculating the next report with the new prices (#4202, #4204). Thanks @Yuxin-Qiao!
 
 ## 0.71.0 — 2026-10-02
