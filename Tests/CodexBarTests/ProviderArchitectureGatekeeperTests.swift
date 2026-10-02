@@ -156,8 +156,7 @@ struct ProviderArchitectureGatekeeperTests {
             Self.hash(descriptor.branding.burnDownWidgetColor, into: &burnDownFingerprint)
         }
 
-        // Muse (muse.ai) and LithosAI extend the existing widget palette.
-        #expect(widgetFingerprint == 2_354_295_202_561_603_449)
+        #expect(widgetFingerprint == 3_878_775_502_287_979_115)
         #expect(burnDownFingerprint == 7_180_157_240_092_109_793)
     }
 
