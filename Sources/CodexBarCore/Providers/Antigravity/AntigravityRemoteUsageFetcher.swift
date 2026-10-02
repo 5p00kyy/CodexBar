@@ -26,7 +26,7 @@ public enum AntigravityRemoteFetchError: LocalizedError, Sendable, Equatable {
 public struct AntigravityRemoteUsageFetcher: Sendable {
     public var timeout: TimeInterval = 10.0
     public var homeDirectory: String
-    public var environment: [String: String]
+    @ProcessEnvironment public var environment: [String: String]
     public var dataLoader: @Sendable (URLRequest) async throws -> (Data, URLResponse)
     public var oauthClientResolver: @Sendable () -> AntigravityOAuthClient?
     public var credentialsUpdateHandler: @Sendable (AntigravityOAuthCredentials) async throws -> Void
@@ -36,10 +36,13 @@ public struct AntigravityRemoteUsageFetcher: Sendable {
     private static let loadCodeAssistEndpoint = "\(baseURL)/v1internal:loadCodeAssist"
     private static let onboardUserEndpoint = "\(baseURL)/v1internal:onboardUser"
     private static let refreshSafetyWindow: TimeInterval = 60
+    private static let clientMetadata = [
+        "ideType": "ANTIGRAVITY",
+        "platform": "PLATFORM_UNSPECIFIED",
+        "pluginType": "GEMINI",
+    ]
 
-    /// Cloud Code gates quota endpoints on the Antigravity Hub user agent: a bare `antigravity` UA gets
-    /// `retrieveUserQuota`/`retrieveUserQuotaSummary` 403s and a legacy model list. The version only needs to clear
-    /// the server's newer-model floor (2.9.0), so a fixed value avoids a runtime version lookup.
+    /// Cloud Code requires the Hub client family for quota access; pin a shared compatibility identity.
     private static let userAgent: String = {
         #if arch(arm64)
         let architecture = "arm64"
@@ -194,17 +197,10 @@ public struct AntigravityRemoteUsageFetcher: Sendable {
         dataLoader: @escaping @Sendable (URLRequest) async throws -> (Data, URLResponse)) async throws
         -> CodeAssistResponse
     {
-        let body = [
-            "metadata": [
-                "ideType": "ANTIGRAVITY",
-                "platform": "PLATFORM_UNSPECIFIED",
-                "pluginType": "GEMINI",
-            ],
-        ]
-        return try await Self.sendRequest(
-            endpoint: Self.loadCodeAssistEndpoint,
+        try await self.sendRequest(
+            endpoint: self.loadCodeAssistEndpoint,
             accessToken: accessToken,
-            body: body,
+            body: ["metadata": self.clientMetadata],
             timeout: timeout,
             dataLoader: dataLoader)
     }
@@ -354,11 +350,7 @@ public struct AntigravityRemoteUsageFetcher: Sendable {
 
         let onboardBody: [String: Any] = [
             "tierId": tierID,
-            "metadata": [
-                "ideType": "ANTIGRAVITY",
-                "platform": "PLATFORM_UNSPECIFIED",
-                "pluginType": "GEMINI",
-            ],
+            "metadata": Self.clientMetadata,
         ]
 
         do {
@@ -697,7 +689,7 @@ private struct CodeAssistResponse: Decodable {
     let cloudaicompanionProject: ProjectReference?
 
     var projectID: String? {
-        self.cloudaicompanionProject?.value?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        self.cloudaicompanionProject?.value?.trimmedNonEmpty
     }
 }
 
@@ -719,7 +711,7 @@ private struct OnboardResponse: Decodable {
     let response: OnboardInnerResponse?
 
     var projectID: String? {
-        self.response?.cloudaicompanionProject?.value?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        self.response?.cloudaicompanionProject?.value?.trimmedNonEmpty
     }
 }
 
@@ -750,16 +742,4 @@ private struct AntigravityRemoteModel: Decodable {
 private struct AntigravityRemoteQuotaInfo: Decodable {
     let remainingFraction: Double?
     let resetTime: String?
-}
-
-extension String? {
-    fileprivate var trimmedNonEmpty: String? {
-        self?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-    }
-}
-
-extension String {
-    fileprivate var nilIfEmpty: String? {
-        self.isEmpty ? nil : self
-    }
 }

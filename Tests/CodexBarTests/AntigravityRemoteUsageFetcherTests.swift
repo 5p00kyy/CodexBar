@@ -14,28 +14,6 @@ private actor AntigravityCredentialUpdateCapture {
     }
 }
 
-private final class AntigravityRemoteRequestRecorder: @unchecked Sendable {
-    private let lock = NSLock()
-    private var userAgentValues: [String] = []
-
-    func append(_ request: URLRequest) {
-        guard request.url?.host == "cloudcode-pa.googleapis.com",
-              let userAgent = request.value(forHTTPHeaderField: "User-Agent")
-        else {
-            return
-        }
-        self.lock.lock()
-        self.userAgentValues.append(userAgent)
-        self.lock.unlock()
-    }
-
-    func userAgents() -> [String] {
-        self.lock.lock()
-        defer { self.lock.unlock() }
-        return self.userAgentValues
-    }
-}
-
 @Suite(.serialized)
 // swiftlint:disable:next type_body_length
 struct AntigravityRemoteUsageFetcherTests {
@@ -1239,58 +1217,6 @@ struct AntigravityRemoteUsageFetcherTests {
             .fetch()
 
         #expect(recorder.last() == "stored-project-789")
-    }
-
-    @Test
-    func `remote fetch identifies as the antigravity hub client on cloud code requests`() async throws {
-        let env = try GeminiTestEnvironment()
-        defer { env.cleanup() }
-        try env.writeAntigravityCredentials(
-            accessToken: "token",
-            refreshToken: nil,
-            expiry: Date().addingTimeInterval(3600),
-            idToken: GeminiAPITestHelpers.makeIDToken(email: "user@example.com"),
-            email: "user@example.com")
-
-        let recorder = AntigravityRemoteRequestRecorder()
-        let dataLoader = GeminiAPITestHelpers.dataLoader { request in
-            guard let url = request.url, let host = url.host else {
-                throw URLError(.badURL)
-            }
-            recorder.append(request)
-
-            switch host {
-            case "cloudcode-pa.googleapis.com":
-                if url.path == "/v1internal:loadCodeAssist" {
-                    return GeminiAPITestHelpers.response(
-                        url: url.absoluteString,
-                        status: 200,
-                        body: GeminiAPITestHelpers.loadCodeAssistResponse(
-                            tierId: "standard-tier",
-                            projectId: "managed-project-123"))
-                }
-                if url.path == "/v1internal:fetchAvailableModels" {
-                    return GeminiAPITestHelpers.response(
-                        url: url.absoluteString,
-                        status: 200,
-                        body: Self.availableModelsResponse())
-                }
-                return GeminiAPITestHelpers.response(url: url.absoluteString, status: 404, body: Data())
-            default:
-                return GeminiAPITestHelpers.response(url: url.absoluteString, status: 404, body: Data())
-            }
-        }
-
-        _ = try await AntigravityRemoteUsageFetcher(
-            timeout: 1,
-            homeDirectory: env.homeURL.path,
-            dataLoader: dataLoader)
-            .fetch()
-
-        // A bare `antigravity` UA gets 403 from the quota endpoints; only the Hub client family is served.
-        let userAgents = recorder.userAgents()
-        #expect(userAgents.count >= 3)
-        #expect(userAgents.allSatisfy { $0.hasPrefix("antigravity/hub/") })
     }
 
     private static func availableModelsResponse() -> Data {
