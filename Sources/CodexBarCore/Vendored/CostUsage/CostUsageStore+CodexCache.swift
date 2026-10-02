@@ -252,7 +252,18 @@ extension CostUsageStore {
                 _ = self.rollbackSaveTransaction()
                 return Self.rescanRequired(result)
             }
+            let retained = self.certifiedIdenticalContentBaseline(locked, cache: cache)
             guard self.endSaveTransaction() else { return Self.rescanRequired(result) }
+            #if DEBUG
+            if let checkpoint = CostUsageStoreTestHooks.current.identicalContentPostCommitCheckpoint,
+               checkpoint.databaseURL == self.databaseURL
+            {
+                checkpoint.checkpoint()
+            }
+            #endif
+            if let retained, self.currentDatabaseStamp() == retained.stamp {
+                self.retainedCodexScan = retained
+            }
             return result
         }
         let canReuseStoredRows = previous.metadata.timeZoneIdentifier == calendar.timeZone.identifier
@@ -420,7 +431,7 @@ extension CostUsageStore {
         var forkAccountingState: CostUsageScanner.CodexForkAccountingState?
     }
 
-    private struct StoredPriorityState: Codable {
+    struct StoredPriorityState: Codable {
         var turnKeys: [String: String]?
         var turnIDsByDay: [String: [String]]?
         var turnsCursor: CostUsageScanner.CodexPriorityTurnsPersistedCursor?

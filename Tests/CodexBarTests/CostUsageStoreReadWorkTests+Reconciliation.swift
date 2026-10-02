@@ -126,13 +126,15 @@ extension CostUsageStoreReadWorkTests {
         var recordingHooks = CostUsageStoreTestHooks.current
         recordingHooks.readWorkRecorder = recorder
         try CostUsageStoreTestHooks.$current.withValue(recordingHooks) {
-            let unchanged = scan(day.addingTimeInterval(1))
+            _ = scan(day.addingTimeInterval(1))
+            recorder.reset()
+            let unchanged = scan(day.addingTimeInterval(2))
             #expect(unchanged.data == original.data)
             #expect(unchanged.summary == original.summary)
             #expect(recorder.snapshot().fullSnapshotReads == 0)
-            #expect(recorder.snapshot().scannerSnapshotReads == 1)
-            #expect(recorder.snapshot().cacheConversions == 1)
-            #expect(recorder.snapshot().usageRowDecodeAttempts == 1)
+            #expect(recorder.snapshot().scannerSnapshotReads == 0)
+            #expect(recorder.snapshot().cacheConversions == 0)
+            #expect(recorder.snapshot().usageRowDecodeAttempts == 0)
             #expect(recorder.snapshot().aggregateGroupingRowVisits == 0)
         }
     }
