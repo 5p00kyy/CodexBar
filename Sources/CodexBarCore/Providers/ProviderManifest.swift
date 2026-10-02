@@ -93,5 +93,6 @@ public enum ProviderManifest {
         LLMManProviderDescriptor.descriptor,
         XKiroProviderDescriptor.descriptor,
         MuseAIProviderDescriptor.descriptor,
+        LithosAIProviderDescriptor.descriptor,
     ]
 }

@@ -91,6 +91,7 @@ extension ProviderInstanceID {
     public static let llmman = UsageProvider.llmman.instanceID
     public static let xkiro = UsageProvider.xkiro.instanceID
     public static let museai = UsageProvider.museai.instanceID
+    public static let lithosai = UsageProvider.lithosai.instanceID
 }
 
 // swiftformat:enable sortDeclarations

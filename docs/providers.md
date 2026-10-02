@@ -8,7 +8,7 @@ read_when:
 
 # Providers
 
-CodexBar currently registers 88 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
+CodexBar currently registers 89 provider IDs. Some companies expose multiple surfaces, such as Codex vs OpenAI API or
 OpenCode vs OpenCode Go, because the auth source and quota shape differ.
 
 ## Fetch strategies (current)
@@ -154,6 +154,13 @@ complete when the available scan window covers fewer days.
 | Notion AI | Browser cookies → workspace resolution and the AI usage allowance API (`web`). |
 | [IBM Bob](ibm-bob.md) | API key from config/env → profile and per-team Bobcoin budget APIs (`api`). |
 | [Pi](pi.md) | Local Pi/OMP assistant transcripts → token history and API-rate cost estimates (`local`); no subscription quota. |
+<!-- Generated provider additions: Scripts/regenerate-provider-docs.mjs -->
+
+| Provider | Source |
+|---|---|
+| [LithosAI](lithosai.md) | Chrome or manual console cookies for prepaid USD balance and optional UTC spend. |
+
+<!-- End generated provider additions -->
 
 ## Codex
 - App Auto: OAuth API first; falls back to CLI only when OAuth credentials are missing or auth/refresh is invalid.

@@ -229,6 +229,7 @@ struct SettingsStoreAdditionalTests {
             .museai: [.automatic, .primary],
             .coderabbit: [.automatic],
             .replicate: [.automatic],
+            .lithosai: [.automatic],
             .aixy: [.automatic],
             .typesafe: [.automatic],
             .hyper: [.automatic],
