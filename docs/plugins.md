@@ -43,7 +43,9 @@ field kinds, availability, CLI alias mappings, and config capabilities. Before a
 pre-migration descriptor and settings output separately and compare it after the change; keep that equivalence proof
 in the PR. Do not expand the committed golden with copied labels, colors, or other spec literals.
 
-Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. A spec with an `apiKeyField` and no separate
+Run `Scripts/regenerate-provider-manifests.sh` after wiring the provider. Synchronize catalog counts and existing
+provider labels with `node Scripts/sync-provider-catalog.mjs <provider-id>`, then run `node Scripts/generate-llms.mjs`.
+If the social-card count changes, render `docs/social.html` and pass the image to `node Scripts/social-card.mjs --update <rendered.png>`. A spec with an `apiKeyField` and no separate
 app implementation registers `PluginAPIKeyProviderImplementation(spec: ...)` in the existing provider order. Preserve
 the provider's availability and detail-line policies explicitly. Providers with extra fields or token-account behavior
 can share the descriptor builder while retaining their app implementation, as GitKraken and DeepInfra do. Keep native
@@ -63,7 +65,7 @@ provider's typed cookie snapshot to the broker, including the manual origin used
 Cookie domains and session capabilities remain authoritative in the unchanged bundled manifest; the shared
 `ScriptFetchStrategy` passes those declarations through to the broker without widening them.
 
-Manus, Perplexity, Hyper, Raycast, Sakana, and T3 Chat use the shared app implementation. Helmcode retains its tenant
+Manus, Muse (muse.ai), Perplexity, Hyper, Raycast, Sakana, and T3 Chat use the shared app implementation. Helmcode retains its tenant
 picker/snapshot, and Qoder retains its regional dashboard action and source-label adapter while sharing cookie UI.
 Provider-owned values resolvers retain token normalization and captured-header allowlists. Replicate and TypeSafe
 remain outside this spec migration: their native strategies publish cookies conditionally after a successful fetch,
@@ -519,6 +521,7 @@ Bundled scripts own requests, error classification, and snapshot mapping; Swift 
 | [Zed](zed.md) | Swift discovers editor settings and Keychain credentials. Opt-in browser billing uses only the declared `zed.dev` cookie session, never editor credentials. |
 | [Aixy](aixy.md) | TypeScript maps key-scoped usage and budgets; the host validates the configured gateway origin and supplies the API key. |
 | [Raycast](raycast.md) | `ctx.browser.sessions` retries candidates for declared `raycast.com` / `www.raycast.com` domains. The broker prefers exact-host cookies over same-name parent cookies and excludes sibling/lookalike hosts. |
+| [Muse (muse.ai)](museai.md) | `ctx.browser.sessions` for `muse.ai`, with `persistent-storage` holding the deploy-specific server-action ID. A stale ID (`404 Server action not found.`) triggers rediscovery from the signed-in page's chunks. |
 
 ## Native adapters with declarative registration
 
