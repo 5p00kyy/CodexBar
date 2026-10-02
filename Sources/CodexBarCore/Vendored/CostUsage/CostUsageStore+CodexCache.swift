@@ -358,6 +358,17 @@ extension CostUsageStore {
         var incoming = cache
         incoming.timeZoneIdentifier = calendar.timeZone.identifier
         incoming.files = incoming.files.mapValues(Self.normalizingScanComplete)
+        // Hydrated empty histories and unloaded histories are equivalent only when no
+        // snapshot rows exist. Clearing an actual history must still take the write path.
+        for (path, usage) in incoming.files where (baseline.persistence.snapshotCounts[path] ?? 0) == 0 {
+            guard let stored = restored.files[path] else { continue }
+            if usage.codexTokenSnapshots?.isEmpty == true, stored.codexTokenSnapshots == nil {
+                incoming.files[path]?.codexTokenSnapshots = nil
+            }
+            if usage.codexTokenCheckpoints?.isEmpty == true, stored.codexTokenCheckpoints == nil {
+                incoming.files[path]?.codexTokenCheckpoints = nil
+            }
+        }
         restored.codexPriorityTurnsCursor = incoming.codexPriorityTurnsCursor
         return restored == incoming
     }
