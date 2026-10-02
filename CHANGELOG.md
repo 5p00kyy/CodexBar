@@ -2,6 +2,10 @@
 
 ## 0.71.1 — Unreleased
 
+### Fixed
+
+- Codex: avoid repeatedly rewriting empty session histories during local cost refreshes (#4201, #4203). Thanks @Yuxin-Qiao!
+
 ## 0.71.0 — 2026-10-02
 
 ### Highlights

@@ -390,14 +390,6 @@ extension CostUsageStore {
         }
     }
 
-    /// The caller already owns the save transaction's writer lock.
-    @discardableResult
-    func advanceLastScanUnixMsInCurrentTransaction(_ incomingUnixMs: Int64) -> Bool {
-        self.withDatabase(default: false) { database in
-            try Self.writeAdvancedLastScanUnixMs(incomingUnixMs, database: database)
-        }
-    }
-
     private static func writeAdvancedLastScanUnixMs(
         _ incomingUnixMs: Int64,
         database: OpaquePointer) throws -> Bool
@@ -412,14 +404,7 @@ extension CostUsageStore {
         let advancedUnixMs = max(metadata.lastScanUnixMs, incomingUnixMs)
         guard advancedUnixMs != metadata.lastScanUnixMs else { return true }
         metadata.lastScanUnixMs = advancedUnixMs
-        let payload = try JSONEncoder().encode(metadata)
-        let statement = try self.prepare(database, """
-        INSERT INTO scan_metadata(id, payload) VALUES (1, ?)
-        ON CONFLICT(id) DO UPDATE SET payload = excluded.payload
-        """)
-        defer { sqlite3_finalize(statement) }
-        self.bind(payload, to: statement, at: 1)
-        try self.stepDone(statement, database: database)
+        try self.writeSingleton(metadata, database: database, table: "scan_metadata")
         return true
     }
 
@@ -474,14 +459,7 @@ extension CostUsageStore {
     private func setSingleton(_ value: (some Encodable)?, table: String) -> Bool {
         self.withDatabase(default: false) { database in
             if let value {
-                let payload = try JSONEncoder().encode(value)
-                let statement = try Self.prepare(database, """
-                INSERT INTO \(table)(id, payload) VALUES (1, ?)
-                ON CONFLICT(id) DO UPDATE SET payload = excluded.payload
-                """)
-                defer { sqlite3_finalize(statement) }
-                Self.bind(payload, to: statement, at: 1)
-                try Self.stepDone(statement, database: database)
+                try Self.writeSingleton(value, database: database, table: table)
             } else {
                 try Self.execute(database, "DELETE FROM \(table) WHERE id = 1")
             }

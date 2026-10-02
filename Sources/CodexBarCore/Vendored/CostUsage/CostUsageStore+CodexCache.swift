@@ -239,16 +239,10 @@ extension CostUsageStore {
             // authorize a comparison or rewrite against this scanner's stale decoded baseline.
             guard let locked = self.codexBaselineAfterRetention(baseline),
                   Self.persistedContentMatches(baseline: locked, cache: cache, calendar: calendar),
-                  self.codexBaselineIsCurrent(locked)
+                  self.codexBaselineIsCurrent(locked),
+                  self.persistPriorityTurnsCursorIfChanged(previous: locked, cache: cache),
+                  self.advanceLastScanUnixMs(cache.lastScanUnixMs)
             else {
-                _ = self.rollbackSaveTransaction()
-                return Self.rescanRequired(result)
-            }
-            guard self.persistPriorityTurnsCursorIfChanged(previous: locked, cache: cache) else {
-                _ = self.rollbackSaveTransaction()
-                return Self.rescanRequired(result)
-            }
-            guard self.advanceLastScanUnixMsInCurrentTransaction(cache.lastScanUnixMs) else {
                 _ = self.rollbackSaveTransaction()
                 return Self.rescanRequired(result)
             }
@@ -358,6 +352,17 @@ extension CostUsageStore {
         var incoming = cache
         incoming.timeZoneIdentifier = calendar.timeZone.identifier
         incoming.files = incoming.files.mapValues(Self.normalizingScanComplete)
+        // Hydrated empty histories and unloaded histories are equivalent only when no
+        // snapshot rows exist. Clearing an actual history must still take the write path.
+        for (path, usage) in incoming.files where (baseline.persistence.snapshotCounts[path] ?? 0) == 0 {
+            guard let stored = restored.files[path] else { continue }
+            if usage.codexTokenSnapshots?.isEmpty == true, stored.codexTokenSnapshots == nil {
+                incoming.files[path]?.codexTokenSnapshots = nil
+            }
+            if usage.codexTokenCheckpoints?.isEmpty == true, stored.codexTokenCheckpoints == nil {
+                incoming.files[path]?.codexTokenCheckpoints = nil
+            }
+        }
         restored.codexPriorityTurnsCursor = incoming.codexPriorityTurnsCursor
         return restored == incoming
     }
@@ -1565,7 +1570,14 @@ enum CostUsageStoreAccess {
     }
 
     static func load(cacheRoot: URL?, calendar: Calendar) -> CostUsageStoreLoad {
-        self.sharedScanStores.store(cacheRoot: cacheRoot).syncLoadCodexScan(calendar: calendar)
+        #if DEBUG
+        if let store = CostUsageStoreTestHooks.current.scanStoreOverride,
+           store.databaseURL == CostUsageStore(cacheRoot: cacheRoot).databaseURL
+        {
+            return store.syncLoadCodexScan(calendar: calendar)
+        }
+        #endif
+        return self.sharedScanStores.store(cacheRoot: cacheRoot).syncLoadCodexScan(calendar: calendar)
     }
 
     static func read(cacheRoot: URL?, calendar: Calendar = .current) -> CostUsageCache {
