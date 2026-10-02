@@ -56,6 +56,7 @@
 - Costs: reduce CPU use while bucketing local agent logs into daily usage.
 - Costs: reduce CPU use while reconciling cached local Codex logs.
 - Codex: reduce CPU use when loading conversation titles for large local cost histories.
+- Codex: reduce repeated Gatekeeper CPU use for unchanged standalone hardened-runtime CLIs on fully enforcing hosts, checking every architecture’s complete signature before reusing a verdict (#4078, #4080). Thanks @dustball!
 - Reduce CPU use while scanning local Codex logs for cost data.
 - Costs: reduce CPU use when separating Claude and Vertex AI usage in local transcripts.
 - Antigravity: exclude model IDs from local token totals, correct visible and reasoning output counts, and estimate safety-routed Gemini Flash usage (#4124). Thanks @urda!
@@ -89,6 +90,7 @@
 - Mistral: offer Monthly Plan in the provider's Menu bar metric picker, so the menu bar and widgets can show the Vibe allowance without a `defaults write` (#4072). Thanks @T0mSIlver!
 - Mistral: price billing usage by event type, API zone, and service tier, so a per-second audio or priority price no longer inflates API spend and 30-day token cost (#4076). Thanks @T0mSIlver!
 - CLI: keep probe timeout and cancellation cleanup responsive on busy hosts with large process tables (#4108).
+- CLI: keep probe timeout and cancellation cleanup responsive when other processes have large environments (#4077).
 
 ## 0.69.0 — 2026-09-28
 
