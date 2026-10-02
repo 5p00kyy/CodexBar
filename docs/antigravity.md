@@ -89,6 +89,12 @@ Antigravity supports four usage data sources:
 
 ## When the Antigravity app is closed
 
+OAuth Cloud Code requests use the fixed compatibility identity
+`antigravity/hub/2.9.1 <darwin|linux>/<arm64|amd64>`. The shared request builder applies it to
+account setup, quota summaries, and legacy model/quota fallbacks for shared and selected Google accounts,
+including the OAuth fallback after a scoped `agy` run. The external `agy` process owns its own quota requests;
+the scoped ephemeral HTTP session in CodexBar verifies identity through Google's userinfo endpoint.
+
 The app-local `language_server` exists only while Antigravity.app is running. With the app closed,
 CodexBar relies on the `agy` CLI HTTPS source or the Google OAuth fallback. Without a signed-in
 `agy`, the OAuth fallback may only prove model availability. Unverified all-100% model responses
