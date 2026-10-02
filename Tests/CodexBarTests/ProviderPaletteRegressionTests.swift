@@ -57,7 +57,7 @@ struct ProviderPaletteRegressionTests {
     ]
 
     @Test(arguments: Self.palettes)
-    func `audited accents and existing widget colors stay pinned`(_ palette: Palette) {
+    func `audited menu and widget colors match their intended palettes`(_ palette: Palette) {
         let branding = ProviderDescriptorRegistry.descriptor(for: palette.provider).branding
         #expect(branding.color == ProviderColor(hex: palette.final))
         #expect(branding.widgetColor.hexString == ProviderColor(hex: palette.widget).hexString)

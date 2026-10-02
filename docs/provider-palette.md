@@ -13,6 +13,10 @@ Menu-bar icons remain system-tinted templates. Moonshot's `#121212` confetti ink
 Original confetti entries are retained where a replacement is unsupported; supporting colors are not being recertified.
 All touched Swift color values use `ProviderColor(hex:)`.
 
+Widgets follow the menu accent when their colors were shared before #4075. Within this audit, Chutes, Command Code,
+Deepgram, and Doubao retain their previously distinct widget colors. Saved custom accent overrides still take precedence,
+and burn-down widget colors remain independent.
+
 The controlled comparison uses white and `#222222` for light/dark menu-card surfaces. A material
 regression means falling below 3:1 while losing at least 0.5 in contrast ratio compared with the previous accent.
 This is a non-regression check, not an accessibility certification of translucent desktop backgrounds or existing
