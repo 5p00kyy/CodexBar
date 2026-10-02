@@ -10,7 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-6e5aff?style=flat-square)](LICENSE)
 [![Site](https://img.shields.io/badge/site-codexbar.app-16d3b4?style=flat-square)](https://codexbar.app)
 
-<a href="https://codexbar.app"><img src="docs/social.png?v=6c28517cfe05c9db" alt="CodexBar — every AI coding limit in your menu bar. 87 providers." width="100%" /></a>
+<a href="https://codexbar.app"><img src="docs/social.png?v=a99352974f534e68" alt="CodexBar — every AI coding limit in your menu bar. 88 providers." width="100%" /></a>
 
 Tiny macOS 14+ menu bar app that keeps **AI coding-provider limits visible** and shows when each window resets. See the [supported providers](#providers) below. One status item per provider, or Merge Icons mode with a provider switcher. No Dock icon, minimal UI, dynamic bar icons.
 
@@ -180,6 +180,10 @@ See [CLI configuration](docs/cli-configuration.md) for the full flow.
 - [Vercel AI Gateway](docs/vercel.md) — API key for the team's USD balance and lifetime spend.
 - [xKiro](docs/xkiro.md) — API key for daily free-token usage, remaining allowance, and the midnight UTC reset.
 - Open to new providers: [provider authoring guide](docs/provider.md).
+
+<!-- Generated provider additions: Scripts/regenerate-provider-docs.mjs -->
+- [LithosAI](docs/lithosai.md) — Chrome or manual console cookies for prepaid USD balance and optional UTC spend.
+<!-- End generated provider additions -->
 
 ## Icon & Screenshot
 The menu bar icon is a tiny usage meter. Bar meaning is provider-specific, and errors/stale data can dim the icon or
