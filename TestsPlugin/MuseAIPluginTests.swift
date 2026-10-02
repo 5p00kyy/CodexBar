@@ -101,9 +101,9 @@ struct MuseAIPluginTests {
     func `an expired browser session falls through to the next one`(engine: ProviderPluginEngineKind) async throws {
         let result = try await Self.fetch(
             engine: engine, storedID: Self.actionID, action: Self.free,
-            cookies: ["hatch_sess=expired", "hatch_sess=fixture"])
+            cookies: ["hatch_sess=fixture-rejected-session-value", "hatch_sess=fixture"])
         #expect(result.snapshot.primary?.usedPercent == 28)
-        #expect(result.rejected == ["hatch_sess=expired"])
+        #expect(result.rejected == ["hatch_sess=fixture-rejected-session-value"])
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
@@ -166,7 +166,7 @@ struct MuseAIPluginTests {
         do {
             _ = try await Self.fetch(
                 engine: engine, storedID: Self.actionID, action: Self.free,
-                cookies: ["hatch_sess=expired", "hatch_sess=fixture"], cookieSource: .manual)
+                cookies: ["hatch_sess=fixture-rejected-session-value", "hatch_sess=fixture"], cookieSource: .manual)
             { requests, _ in #expect(requests.count == 1) }
             Issue.record("Expected the manual session to expire")
         } catch let error as ProviderFetchClassifiedError {
@@ -242,7 +242,7 @@ struct MuseAIPluginTests {
                 var status = 200
                 var body = chunks[path] ?? ""
                 var headers: [String: String] = [:]
-                let expired = request.value(forHTTPHeaderField: "Cookie") == "hatch_sess=expired"
+                let expired = request.value(forHTTPHeaderField: "Cookie") == "hatch_sess=fixture-rejected-session-value"
                 if request.httpMethod == "POST" {
                     #expect(request.value(forHTTPHeaderField: "Sec-Fetch-Site") == "same-origin")
                     (status, body) = expired ? (403, #"{"error":"Forbidden"}"#)
