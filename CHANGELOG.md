@@ -5,6 +5,7 @@
 ### Fixed
 
 - Command Code: normalize bare manual session tokens with the current production cookie name while preserving explicit cookie headers (#4192). Thanks @rodrigovzq!
+- Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).
 
 ## 0.71.0 — 2026-10-02
 
