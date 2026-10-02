@@ -2,6 +2,10 @@
 
 ## 0.71.1 — Unreleased
 
+### Fixed
+
+- Command Code: normalize bare manual session tokens with the current production cookie name while preserving explicit cookie headers (#4192). Thanks @rodrigovzq!
+
 ## 0.71.0 — 2026-10-02
 
 ### Highlights
