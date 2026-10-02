@@ -825,19 +825,20 @@ extension CostUsageScanner {
         }
 
         let finalCacheArtifactStamp = CostUsageClaudeFileStamp.read(at: cacheURL)
-        let finalPricingArtifactStamp = CostUsageClaudeFileStamp.read(at: pricingURL)
+        // Keep the window certificate even if pricing was replaced during this pass.
+        // The earlier pricing stamp makes report reuse miss and reprice cached rows.
         let finalReportKey = Self.claudeReportMemoKey(
             provider: provider,
             providerFilter: providerFilter,
             range: range,
             roots: roots,
-            artifactStamps: (cache: finalCacheArtifactStamp, pricing: finalPricingArtifactStamp))
+            artifactStamps: (cache: finalCacheArtifactStamp, pricing: pricingArtifactStamp))
         let cacheArtifactIsCurrent = if shouldMutateCache {
             committedCacheStamp != nil && finalCacheArtifactStamp == committedCacheStamp
         } else {
             finalCacheArtifactStamp == cacheArtifactStamp
         }
-        if cacheArtifactIsCurrent, finalPricingArtifactStamp == pricingArtifactStamp {
+        if cacheArtifactIsCurrent {
             memo.store(
                 provider: provider,
                 canonicalCachePath: canonicalCachePath,
