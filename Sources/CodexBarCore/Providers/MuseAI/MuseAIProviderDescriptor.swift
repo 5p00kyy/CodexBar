@@ -4,11 +4,11 @@ public enum MuseAIProviderDescriptor {
     public static let descriptor: ProviderDescriptor = Self.spec.makeDescriptor()
     public static let spec = PluginProviderSpec(
         id: .museai,
-        displayName: "Muse",
+        displayName: "Muse (muse.ai)",
         sessionLabel: "Weekly",
         weeklyLabel: "Plan",
         dashboardURL: "https://muse.ai/?settings_tab=general",
-        color: .init(hex: 0x0668E1),
+        color: ProviderColor(hex: 0x0668E1),
         confetti: [0x0668E1, 0x8B5CF6, 0xFFFFFF],
         noDataMessage: "muse.ai reports a weekly usage percentage, not a cost history.",
         menuBarMetrics: ProviderMenuBarMetricCapabilities(supported: [.automatic, .primary]),
@@ -17,7 +17,9 @@ public enum MuseAIProviderDescriptor {
             menuCard: ProviderMenuCardPresentation(showsPrimaryBalanceDescription: true)),
         webSource: .init(
             settingsSection: .init(MuseAIProviderSettingsKey.self, cookieSettings: CookieProviderSettings.self),
-            browserCookieOrder: ProviderBrowserCookieDefaults.defaultImportOrder,
+            browserCookieOrder: BrowserCookieImportSupport.chromeOnly(
+                reason: "Muse (muse.ai) imports only Chrome to avoid unrelated browser prompts."),
+            browserSupportExemption: { _, _, settings in settings?.museai?.cookieSource == .manual },
             resolveValues: { $0.settings?.museai?.cookieSource == .off ? nil : .init() },
             field: .init(
                 id: "museai-cookie-header",
@@ -27,9 +29,9 @@ public enum MuseAIProviderDescriptor {
             picker: .init(
                 id: "museai-cookie-source",
                 allowsOff: true,
-                auto: .localized("Automatically imports browser cookies."),
+                auto: .localized("Automatic imports Chrome cookies from muse.ai."),
                 manual: .localized("Paste a Cookie header captured from %@.", argument: "muse.ai"),
-                off: .localized("%@ cookies are disabled.", argument: "Muse")),
+                off: .localized("%@ cookies are disabled.", argument: "Muse (muse.ai)")),
             detailLine: "Browser cookies",
             showsVersionInSettings: false))
 }

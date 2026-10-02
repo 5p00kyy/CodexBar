@@ -187,7 +187,7 @@ enum BurnProviderChoice: String, AppEnum {
         .vercel: DisplayRepresentation(title: "Vercel AI Gateway"),
         .llmman: DisplayRepresentation(title: "llmman"),
         .xkiro: DisplayRepresentation(title: "xKiro"),
-        .museai: DisplayRepresentation(title: "Muse"),
+        .museai: DisplayRepresentation(title: "Muse (muse.ai)"),
     ]
 
     var provider: UsageProvider {

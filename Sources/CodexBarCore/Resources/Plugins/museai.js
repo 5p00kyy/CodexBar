@@ -1,6 +1,6 @@
 defineProvider({
   id: "museai",
-  name: "Muse",
+  name: "Muse (muse.ai)",
   endpoints: ["https://muse.ai"],
   settings: [],
   capabilities: ["browser-cookies", "http-status", "persistent-storage"],
@@ -13,6 +13,11 @@ defineProvider({
     if (policy === "off") throw ctx.fail.missingCredential("muse.ai cookies are disabled.");
     const signedOut = (r) =>
       r.status === 401 || r.status === 403 || (r.headers["location"] ?? "").startsWith("https://auth.muse.ai/");
+    const staleAction = (r) => r.status === 404 && /server action not found/i.test(r.bodyText);
+    const discoveryFailure = () =>
+      ctx.fail.parseFailure(
+        "Could not find a working muse.ai subscription action. muse.ai may have changed. Refresh to retry.",
+      );
     const post = (cookie, actionID) =>
       ctx.http.post(`${origin}/`, {
         body: [{ includeAgreement: true }],
@@ -50,33 +55,39 @@ defineProvider({
       });
       if (signedOut(page)) return undefined;
       // Fetch page chunks a few at a time and stop once the settings loader entry turns up.
-      const paths = chunkPaths(page.bodyText);
+      if (page.status !== 200) throw ctx.fail.apiFailure(`muse.ai returned HTTP ${page.status}.`);
+      const paths = chunkPaths(page.bodyText).slice(0, 96);
       let text = "";
       for (let i = 0; i < paths.length; i += 8) {
         text += "\n" + (await fetchChunks(paths.slice(i, i + 8))).join("\n");
+        if (text.length > 8 * 1024 * 1024) throw discoveryFailure();
         const module = /\.A\((\d+)\)\.then\(\(\{[^}]*Settings/.exec(text)?.[1];
         const loader =
           module && new RegExp(`[,{\\[]${module},\\w+=>\\{\\w+\\.v\\(\\w+=>Promise\\.all\\(\\[([^\\]]*)`).exec(text);
         if (!loader) continue;
-        for (const body of await fetchChunks(chunkPaths(loader[1]))) {
-          const id = /"([0-9a-f]{40,})",[^"]{0,200}"fetchSubscriptionAction"/.exec(body)?.[1];
-          if (id) return id;
+        const settingsPaths = chunkPaths(loader[1]).slice(0, 32);
+        for (let j = 0; j < settingsPaths.length; j += 8) {
+          for (const body of await fetchChunks(settingsPaths.slice(j, j + 8))) {
+            const id = /"([0-9a-f]{40,})",[^"]{0,200}"fetchSubscriptionAction"/.exec(body)?.[1];
+            if (id) return id;
+          }
         }
         break;
       }
-      throw ctx.fail.parseFailure("Could not find the muse.ai subscription action. muse.ai may have changed.");
+      throw discoveryFailure();
     };
 
+    let actionID = ctx.storage.get("actionID");
     const subscription = async (cookie) => {
-      let actionID = ctx.storage.get("actionID");
       const response = actionID ? await post(cookie, actionID) : undefined;
-      if (response && !(response.status === 404 && /server action not found/i.test(response.bodyText))) {
+      if (response && !staleAction(response)) {
         return signedOut(response) ? undefined : response;
       }
+      ctx.storage.remove("actionID");
       actionID = await discover(cookie);
       if (!actionID) return undefined;
-      ctx.storage.set("actionID", actionID);
       const fresh = await post(cookie, actionID);
+      if (staleAction(fresh)) throw discoveryFailure();
       return signedOut(fresh) ? undefined : fresh;
     };
 
@@ -93,7 +104,9 @@ defineProvider({
     if (!response) {
       throw rejected
         ? ctx.fail.authenticationExpired("muse.ai session expired. Sign in at muse.ai and refresh.")
-        : ctx.fail.missingCredential("No muse.ai session found. Sign in at muse.ai in your browser.");
+        : ctx.fail.missingCredential(
+            "No muse.ai session found. Sign in at muse.ai in Chrome, or set a manual Cookie header.",
+          );
     }
     if (response.status !== 200) throw ctx.fail.apiFailure(`muse.ai returned HTTP ${response.status}.`);
 
@@ -107,6 +120,7 @@ defineProvider({
     }
     if (typeof sub?.usage?.percentUsed !== "number") throw ctx.fail.parseFailure("Unexpected muse.ai response.");
 
+    ctx.storage.set("actionID", actionID);
     const seconds = (value) => (typeof value === "number" ? ctx.date.unixSeconds(value) : undefined);
     const tokensLeft = (label) => /\(([^()]+ tokens left)\)/.exec(label ?? "")?.[1];
     // Top-ups (purchased or from referrals) never expire and sit outside the weekly allowance. muse.ai reports

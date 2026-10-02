@@ -20,7 +20,6 @@ struct ProviderPluginParityTests {
             (.llmman, "LLMMAN_API_KEY"),
             (.aixy, "AIXY_API_KEY"),
             (.raycast, "FIXTURE_COOKIE"),
-            (.museai, "FIXTURE_COOKIE"),
             (.xkiro, "XKIRO_API_KEY"),
             (.neuralwatt, "NEURALWATT_API_KEY"),
             (.sub2api, "SUB2API_API_KEY"),

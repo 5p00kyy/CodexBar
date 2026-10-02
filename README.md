@@ -167,7 +167,7 @@ See [CLI configuration](docs/cli-configuration.md) for the full flow.
 - [Notion AI](docs/notion.md) — Browser or manual cookies for rolling and monthly workspace allowances.
 - [Nous Portal](docs/nous.md) — Existing Hermes OAuth login for monthly credits and purchased top-ups.
 - [Muse Code](docs/muse.md) — Existing Muse CLI login for subscription quotas, plus local token history.
-- [Muse](docs/museai.md) — Browser or manual muse.ai session for the Free, Power, or Maximum weekly allowance.
+- [Muse (muse.ai)](docs/museai.md) — Browser or manual muse.ai session for the Free, Power, or Maximum weekly allowance.
 - [CodeRabbit](docs/coderabbit.md) — Local CLI usage report for review counts, billing state, and period resets.
 - [Replicate](docs/replicate.md) — Browser or manual cookies for monthly spend and optional prepaid credits.
 - [Hugging Face](docs/huggingface.md) — Access token for Inference Providers charges and optional ZeroGPU quota.
@@ -288,6 +288,7 @@ CLI install:
 - [KodexBar](https://github.com/tylxr59/KodexBar) — KDE Plasma widget that shows CodexBar usage in the Plasma panel, built on top of the bundled Linux CLI.
 - [codexbar-plasmoid](https://github.com/psimaker/codexbar-plasmoid) — KDE Plasma 6 widget for CodexBar's meter icon, provider switcher, quota windows, pace, credits, local cost, and status, powered by the bundled Linux CLI.
 - [CodexBar Plasma](https://github.com/Lucenx9/codexbar-plasma) — KDE Plasma 6 widget with multi-provider views, account selection, cost history, notifications, configurable providers, and installable `.plasmoid` releases, powered by the bundled Linux CLI.
+- [codexbar-kde](https://github.com/materemias/codexbar-kde) — KDE Plasma 6 widget with usage meters, agent-session search, terminal focus, and kitty session restoration, powered by the bundled Linux CLI.
 - [CodexBar Meter](https://github.com/noctalia-dev/community-plugins/tree/main/codexbar-meter) — Noctalia v5 bar widget and panel showing every enabled provider's quota windows, credits, and pace, installable from Noctalia's plugin store, built on the bundled Linux CLI.
 
 ## Desk display
