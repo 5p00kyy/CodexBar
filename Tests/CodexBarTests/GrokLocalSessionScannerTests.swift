@@ -99,6 +99,31 @@ struct GrokLocalSessionScannerTests {
     }
 
     @Test
+    func `only session root signals contribute to local usage`() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("grok-layout-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let session = home.appendingPathComponent("sessions/project/session")
+        let nested = session.appendingPathComponent("artifacts/nested-session")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        let now = Date()
+        try self.writeSignals(
+            at: session.appendingPathComponent("signals.json"),
+            tokens: 100,
+            model: "example-model",
+            date: now)
+        try self.writeSignals(
+            at: nested.appendingPathComponent("signals.json"),
+            tokens: 900,
+            model: "example-model",
+            date: now)
+        try Data("unrelated".utf8).write(to: home.appendingPathComponent("sessions/project/unrelated.txt"))
+
+        let summary = GrokLocalSessionScanner.summarize(env: ["GROK_HOME": home.path], now: now)
+        #expect(summary.sessionCount == 1)
+        #expect(summary.totalTokens == 100)
+    }
+
+    @Test
     func `empty homes do not publish a spend snapshot`() {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("grok-session-empty-\(UUID().uuidString)", isDirectory: true)
