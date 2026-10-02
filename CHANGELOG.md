@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).
 - Pi: recognize OMP one-hour cache-write counters and reprice older cached estimates without double-counting tokens (#4121, #4176). Thanks @vincent-peng!
 
 ## 0.71.0 — 2026-10-02
