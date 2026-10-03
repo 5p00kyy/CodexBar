@@ -4456,6 +4456,8 @@ enum CostUsageScanner {
                     ? Self.codexModelEvidence(currentModel) : nil)
                 ?? CostUsagePricing.codexUnattributedModel
             let normalizedModel = CostUsagePricing.normalizeCodexModel(model)
+            // A later typed mirror replaces the request identity, not its saved billing evidence.
+            let retainedPricing = legacyRow.flatMap { $0.model == normalizedModel ? $0 : nil }
             let index = codexUsageRowIndex
             codexUsageRowIndex += 1
             requestLedger.countedUsage = Self.codexAddTotals(base, usage)
@@ -4472,6 +4474,10 @@ enum CostUsageScanner {
                     cached: usage.cached,
                     output: usage.output,
                     reasoning: usage.reasoning,
+                    knownCostNanos: retainedPricing?.knownCostNanos,
+                    unpricedTokens: retainedPricing?.unpricedTokens,
+                    pricingModel: retainedPricing?.pricingModel,
+                    pricingMode: retainedPricing?.pricingMode,
                     responseID: responseID,
                     requestMirrorKeys: keys))
                 rowSourceEndOffsets[index] = endOffset

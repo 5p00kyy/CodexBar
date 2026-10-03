@@ -346,6 +346,73 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(fetch(env.root.appendingPathComponent("cold-cache")).data == resumed.data)
     }
 
+    @Test(arguments: ["standard", "priority", "known", "unpriced"], [false, true])
+    func `cached legacy mirrors retain saved pricing after a separate append`(
+        pricing: String, differentTotals: Bool) throws
+    {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let date = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
+        var header = Self.header()
+        header[1]["payload"] = ["turn_id": "synthetic-turn", "model": "gpt-5.4"]
+        let usage = [100_000, 20000, 10000, 4000]
+        let file = try env.writeCodexSessionFile(
+            day: date, filename: "saved-pricing.jsonl", contents: env.jsonl(header + [Self.legacy(
+                timestamp: Self.timestampA, usage: usage, total: usage)]))
+        var options = CostUsageScanner.Options(
+            codexSessionsRoot: env.codexSessionsRoot,
+            cacheRoot: env.cacheRoot,
+            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"),
+            calendar: calendar)
+        options.refreshMinIntervalSeconds = 0
+        func fetch() -> CostUsageDailyReport {
+            CostUsageScanner.loadDailyReport(
+                provider: .codex, since: date, until: date, now: date, options: options)
+        }
+        _ = fetch()
+        var saved = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: calendar)
+        var cached = try #require(saved.files[file.path])
+        var rows = try #require(cached.codexRows)
+        #expect(rows.count == 1)
+        rows[0].pricingModel = "gpt-5.4"
+        rows[0].pricingMode = pricing == "priority" ? "priority" : "standard"
+        var object = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(rows[0])) as? [String: Any])
+        if pricing == "known" { object["knownCostNanos"] = 123_000_000 }
+        if pricing == "unpriced" { object["unpricedTokens"] = 110_000 }
+        rows[0] = try JSONDecoder().decode(
+            CostUsageScanner.CodexUsageRow.self, from: JSONSerialization.data(withJSONObject: object))
+        cached.codexRows = rows
+        saved.files[file.path] = cached
+        #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: saved, calendar: calendar)
+            .catchUpRequired)
+        let expectedCost = CostUsageScanner.codexResolvedCostUSD(
+            for: rows[0], modelsDevCatalog: nil, modelsDevCacheRoot: nil)
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(env.jsonl([Self.record(
+            id: "priced-response",
+            usage: usage,
+            total: differentTotals ? [200_000, 40000, 20000, 8000] : usage)]).utf8))
+        try handle.close()
+        let resumed = fetch()
+        let reopened = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: calendar)
+        let replaced = try #require(reopened.files[file.path]?.codexRows)
+        #expect(replaced.count == 1)
+        let row = try #require(replaced.first)
+        #expect(row.responseID == "priced-response")
+        #expect(row.pricingModel == rows[0].pricingModel)
+        #expect(row.pricingMode == rows[0].pricingMode)
+        #expect(row.knownCostNanos == rows[0].knownCostNanos)
+        #expect(row.unpricedTokens == rows[0].unpricedTokens)
+        #expect(CostUsageScanner.codexResolvedCostUSD(
+            for: row, modelsDevCatalog: nil, modelsDevCacheRoot: nil) == expectedCost)
+        #expect(resumed.summary?.totalTokens == 110_000)
+        #expect(fetch().data == resumed.data)
+    }
+
     @Test(arguments: [false, true])
     func `ledger ownership distinguishes thread identity from execution session identity`(subagent: Bool) throws {
         let env = try CostUsageTestEnvironment()
