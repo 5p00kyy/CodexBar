@@ -167,7 +167,8 @@ defineProvider({
             "optionalAccess",
             async (_6) => _6.teams,
           ]);
-          if (rejected) continue;
+          // A session not yet bound to the login must not end the search for a later bound session.
+          if (rejected || (!Array.isArray(listed) && !webEmail)) continue;
           if (!Array.isArray(listed)) return undefined;
           const teams = [];
           for (const entry of listed) {

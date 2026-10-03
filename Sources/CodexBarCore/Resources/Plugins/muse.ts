@@ -113,7 +113,8 @@ defineProvider({
           // dev.meta.ai can report a blank email; the session user's team membership then supplies it below.
           if (webEmail ? webEmail !== loginEmail : !webUserID) continue;
           const listed = (await get("/api/portal/teams"))?.teams;
-          if (rejected) continue;
+          // A session not yet bound to the login must not end the search for a later bound session.
+          if (rejected || (!Array.isArray(listed) && !webEmail)) continue;
           if (!Array.isArray(listed)) return undefined;
           const teams: WebTeam[] = [];
           for (const entry of listed) {
