@@ -38,6 +38,53 @@ struct UsageStoreSpendDashboardCodexCostCatchUpTests {
         #expect(accountsScanned == ["first", "second"])
     }
 
+    @Test(arguments: [false, true])
+    func `accelerated work does not accumulate automatic sleep debt`(switchDuringYield: Bool) async throws {
+        let store = try Self.makeStore(suite: "acceleration-debt-\(switchDuringYield)")
+        defer { store.cancelSpendDashboardCodexCostCatchUp() }
+        let accounts = [Self.account(id: "account", cacheIdentity: "cache-account")]
+        store.settings.backgroundWorkLowPowerModePreference = .off
+        store._test_spendDashboardCodexCostCatchUpResourceStateOverride = { (.ac, false, .nominal) }
+        store._test_spendDashboardCodexCostCatchUpStatusOverride = { _ in .init(pending: true, progressKey: "start") }
+        store._test_spendDashboardCodexCostCatchUpActiveDuration = 2
+        let expectedAdvances = switchDuringYield ? 4 : 3
+        var advances = 0
+        var switched = false
+        var delayed = false
+        store._test_spendDashboardCodexCostCatchUpAdvanceOverride = { _, _, _ in
+            advances += 1
+            guard advances <= expectedAdvances else { throw CancellationError() }
+            if advances == 3, !switchDuringYield {
+                #expect(store.spendDashboardCodexCostCatchUpPassIsRunning)
+                switched = true
+                store.startSpendDashboardCodexCostCatchUpIfNeeded(accounts: accounts, mode: .automatic)
+            }
+            return .init(pending: true, progressKey: "page-\(advances)")
+        }
+        store._test_spendDashboardCodexCostCatchUpSleepOverride = { delay in
+            if switchDuringYield, advances == 3, !switched {
+                #expect(delay == 0)
+                #expect(!store.spendDashboardCodexCostCatchUpPassIsRunning)
+                switched = true
+                store.startSpendDashboardCodexCostCatchUpIfNeeded(accounts: accounts, mode: .automatic)
+                return
+            }
+            guard delay > 0 else { return }
+            delayed = true
+            #expect(delay == 1998)
+            #expect(advances == expectedAdvances)
+            throw CancellationError()
+        }
+        store.startSpendDashboardCodexCostCatchUpIfNeeded(accounts: accounts, mode: .accelerated)
+        let original = try #require(store.spendDashboardCodexCostCatchUpTask)
+        await original.value
+        await store.spendDashboardCodexCostCatchUpTask?.value
+        #expect(advances == expectedAdvances)
+        #expect(delayed)
+        #expect(switched)
+        #expect(store.spendDashboardCodexCostCatchUpMode == .automatic)
+    }
+
     @Test
     func `automatic sleep uses active scan duration instead of awaited latency`() async throws {
         let store = try Self.makeStore(suite: "active-duration")

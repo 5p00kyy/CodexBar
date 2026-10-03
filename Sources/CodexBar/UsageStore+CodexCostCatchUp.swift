@@ -157,11 +157,11 @@ extension UsageStore {
                         continue
                     case let .runAfter(delay):
                         self.publishCodexCostCatchUpActivity(status: status, context: context, phase: .indexing)
-                        try await self.sleepBetweenCodexCostCatchUpPasses(seconds: delay)
-                        if delay > 0 {
+                        if delay > 0 || self.codexCostCatchUpMode == .accelerated {
                             previousActiveDuration = nil
                             completedPasses = 0
                         }
+                        try await self.sleepBetweenCodexCostCatchUpPasses(seconds: delay)
                     }
 
                     try Task.checkCancellation()

@@ -228,11 +228,11 @@ extension UsageStore {
                         statuses: statuses,
                         context: context,
                         phase: .indexing)
-                    try await self.sleepBetweenCodexCostCatchUpPasses(seconds: delay, dashboard: true)
-                    if delay > 0 {
+                    if delay > 0 || self.spendDashboardCodexCostCatchUpMode == .accelerated {
                         previousActiveDuration = nil
                         completedPasses = 0
                     }
+                    try await self.sleepBetweenCodexCostCatchUpPasses(seconds: delay, dashboard: true)
                 }
 
                 try Task.checkCancellation()
