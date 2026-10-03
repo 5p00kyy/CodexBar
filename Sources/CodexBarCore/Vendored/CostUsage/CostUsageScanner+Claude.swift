@@ -696,7 +696,7 @@ extension CostUsageScanner {
         let cacheArtifactStamp = CostUsageClaudeFileStamp.read(at: cacheURL)
         let pricingURL = ModelsDevCache.cacheFileURL(cacheRoot: options.cacheRoot)
         let pricingArtifactStamp = CostUsageClaudeFileStamp.read(at: pricingURL)
-        let reportKey = Self.claudeReportMemoKey(
+        var reportKey = Self.claudeReportMemoKey(
             provider: provider,
             providerFilter: options.claudeLogProviderFilter,
             range: range,
@@ -825,24 +825,20 @@ extension CostUsageScanner {
         }
 
         let finalCacheArtifactStamp = CostUsageClaudeFileStamp.read(at: cacheURL)
-        let finalPricingArtifactStamp = CostUsageClaudeFileStamp.read(at: pricingURL)
-        let finalReportKey = Self.claudeReportMemoKey(
-            provider: provider,
-            providerFilter: providerFilter,
-            range: range,
-            roots: roots,
-            artifactStamps: (cache: finalCacheArtifactStamp, pricing: finalPricingArtifactStamp))
         let cacheArtifactIsCurrent = if shouldMutateCache {
             committedCacheStamp != nil && finalCacheArtifactStamp == committedCacheStamp
         } else {
             finalCacheArtifactStamp == cacheArtifactStamp
         }
-        if cacheArtifactIsCurrent, finalPricingArtifactStamp == pricingArtifactStamp {
+        if cacheArtifactIsCurrent {
+            // Keep the window certificate even if pricing was replaced during this pass.
+            // The earlier pricing stamp makes report reuse miss and reprice cached rows.
+            reportKey.cacheArtifactStamp = finalCacheArtifactStamp
             memo.store(
                 provider: provider,
                 canonicalCachePath: canonicalCachePath,
                 sourceInventory: sourceInventory,
-                reportKey: finalReportKey,
+                reportKey: reportKey,
                 report: report,
                 hasWindowScopedRows: hasWindowScopedBaseline || (shouldMutateCache && forceFullScan))
         }

@@ -1,46 +1,5 @@
 import Foundation
 
-enum CostUsagePersistenceAction: Equatable {
-    case reuse
-    case append(startingAt: Int)
-    case replace
-
-    func materialize<Source, Persisted>(
-        _ source: [Source],
-        transform: (Int, Source) -> Persisted?) -> [Persisted]
-    {
-        let start: Int
-        switch self {
-        case .reuse:
-            return []
-        case let .append(startingAt):
-            start = startingAt
-        case .replace:
-            start = 0
-        }
-        return source.enumerated().dropFirst(start).compactMap { transform($0.offset, $0.element) }
-    }
-}
-
-enum CostUsagePersistencePlanner {
-    static func action<Element: Equatable>(
-        canReuse: Bool,
-        appendSafe: Bool,
-        persistedCount: Int,
-        baseline: [Element],
-        source: [Element]) -> CostUsagePersistenceAction
-    {
-        guard canReuse, baseline.count == persistedCount else { return .replace }
-        if baseline == source {
-            return .reuse
-        }
-        if appendSafe, source.starts(with: baseline) {
-            return .append(startingAt: persistedCount)
-        }
-        return .replace
-    }
-}
-
 extension CostUsageStore {
     static let defaultRowBudget = 25000
     static let defaultFileBudgetBytes: Int64 = 256 * 1024 * 1024
@@ -239,20 +198,25 @@ extension CostUsageStore {
             // authorize a comparison or rewrite against this scanner's stale decoded baseline.
             guard let locked = self.codexBaselineAfterRetention(baseline),
                   Self.persistedContentMatches(baseline: locked, cache: cache, calendar: calendar),
-                  self.codexBaselineIsCurrent(locked)
+                  self.codexBaselineIsCurrent(locked),
+                  let retained = self.persistScanMetadata(previous: locked, cache: cache)
             else {
                 _ = self.rollbackSaveTransaction()
                 return Self.rescanRequired(result)
             }
-            guard self.persistPriorityTurnsCursorIfChanged(previous: locked, cache: cache) else {
-                _ = self.rollbackSaveTransaction()
-                return Self.rescanRequired(result)
-            }
-            guard self.advanceLastScanUnixMsInCurrentTransaction(cache.lastScanUnixMs) else {
-                _ = self.rollbackSaveTransaction()
-                return Self.rescanRequired(result)
-            }
             guard self.endSaveTransaction() else { return Self.rescanRequired(result) }
+            #if DEBUG
+            if let checkpoint = CostUsageStoreTestHooks.current.identicalContentPostCommitCheckpoint,
+               checkpoint.databaseURL == self.databaseURL
+            {
+                checkpoint.checkpoint()
+            }
+            #endif
+            // Keep the stamp established under the writer lock. The next load revalidates
+            // it, including external commits or database replacement after COMMIT.
+            if !retained.tokenSnapshotsLoaded {
+                self.retainedCodexScan = retained
+            }
             return result
         }
         let canReuseStoredRows = previous.metadata.timeZoneIdentifier == calendar.timeZone.identifier
@@ -358,23 +322,47 @@ extension CostUsageStore {
         var incoming = cache
         incoming.timeZoneIdentifier = calendar.timeZone.identifier
         incoming.files = incoming.files.mapValues(Self.normalizingScanComplete)
+        // Hydrated empty histories and unloaded histories are equivalent only when no
+        // snapshot rows exist. Clearing an actual history must still take the write path.
+        for (path, usage) in incoming.files where (baseline.persistence.snapshotCounts[path] ?? 0) == 0 {
+            guard let stored = restored.files[path] else { continue }
+            if usage.codexTokenSnapshots?.isEmpty == true, stored.codexTokenSnapshots == nil {
+                incoming.files[path]?.codexTokenSnapshots = nil
+            }
+            if usage.codexTokenCheckpoints?.isEmpty == true, stored.codexTokenCheckpoints == nil {
+                incoming.files[path]?.codexTokenCheckpoints = nil
+            }
+        }
         restored.codexPriorityTurnsCursor = incoming.codexPriorityTurnsCursor
         return restored == incoming
     }
 
-    /// Writes only `scan_metadata.priorityTurnStatePayload` when the sqlite cursor advanced.
-    /// Caller already owns the save transaction.
-    private func persistPriorityTurnsCursorIfChanged(
+    /// Only this metadata row may change under the save's writer lock. An unexpected
+    /// own write must request a rescan instead of giving stale content a newer stamp.
+    private func persistScanMetadata(
         previous: CodexDecodedBaseline,
-        cache: CostUsageCache) -> Bool
+        cache: CostUsageCache) -> CodexDecodedBaseline?
     {
-        guard previous.decoded.codexPriorityTurnsCursor != cache.codexPriorityTurnsCursor else {
-            return true
-        }
-        guard let payload = Self.priorityTurnStatePayload(cache: cache) else { return false }
+        var retained = previous
         var metadata = previous.persistence.metadata
-        metadata.priorityTurnStatePayload = payload
-        return self.setMetadata(metadata)
+        if previous.decoded.codexPriorityTurnsCursor != cache.codexPriorityTurnsCursor {
+            guard let payload = Self.priorityTurnStatePayload(cache: cache) else { return nil }
+            metadata.priorityTurnStatePayload = payload
+        }
+        // Pending catch-up must not be disguised by a newer freshness stamp.
+        if !metadata.catchUpPending {
+            metadata.lastScanUnixMs = max(metadata.lastScanUnixMs, cache.lastScanUnixMs)
+        }
+        if metadata != previous.persistence.metadata {
+            guard self.setMetadata(metadata) else { return nil }
+            retained.stamp.totalChanges += 1
+        }
+        guard self.codexBaselineIsCurrent(retained) else { return nil }
+        retained.decoded.lastScanUnixMs = metadata.lastScanUnixMs
+        retained.decoded.codexPriorityTurnsCursor = cache.codexPriorityTurnsCursor
+        retained.persistence.metadata = metadata
+        retained.hydratedTokenSnapshots = [:]
+        return retained
     }
 
     private static func normalizingScanComplete(_ usage: CostUsageFileUsage) -> CostUsageFileUsage {
@@ -1565,7 +1553,14 @@ enum CostUsageStoreAccess {
     }
 
     static func load(cacheRoot: URL?, calendar: Calendar) -> CostUsageStoreLoad {
-        self.sharedScanStores.store(cacheRoot: cacheRoot).syncLoadCodexScan(calendar: calendar)
+        #if DEBUG
+        if let store = CostUsageStoreTestHooks.current.scanStoreOverride,
+           store.databaseURL == CostUsageStore(cacheRoot: cacheRoot).databaseURL
+        {
+            return store.syncLoadCodexScan(calendar: calendar)
+        }
+        #endif
+        return self.sharedScanStores.store(cacheRoot: cacheRoot).syncLoadCodexScan(calendar: calendar)
     }
 
     static func read(cacheRoot: URL?, calendar: Calendar = .current) -> CostUsageCache {
