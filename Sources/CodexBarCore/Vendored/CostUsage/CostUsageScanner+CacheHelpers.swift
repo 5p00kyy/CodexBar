@@ -889,6 +889,7 @@ extension CostUsageScanner {
             range: context.range,
             startOffset: startOffset,
             initialModel: cached.lastModel,
+            initialSessionID: cached.sessionId,
             initialTotals: initialCountedTotals,
             initialRawTotalsBaseline: initialRawTotalsBaseline,
             initialRawTotalsWatermark: cached.lastRawTotalsWatermark,

@@ -285,6 +285,183 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 110)
     }
 
+    @Test(arguments: [false, true])
+    func `ordinary cached tails retain ownership inside the same reporting window`(legacyFirst: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let date = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "UTC"))
+        let first = Self.record(id: "first", usage: [100, 20, 10, 4], total: [100, 20, 10, 4])
+        let file = try env.writeCodexSessionFile(
+            day: date, filename: "same-window.jsonl", contents: env.jsonl(Self.header() + [first, Self.legacy(
+                timestamp: Self.timestampA, usage: [100, 20, 10, 4], total: [100, 20, 10, 4])]))
+        var options = CostUsageScanner.Options(
+            codexSessionsRoot: env.codexSessionsRoot,
+            cacheRoot: env.cacheRoot,
+            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"),
+            calendar: calendar)
+        options.refreshMinIntervalSeconds = 0
+        func fetch(_ cacheRoot: URL = env.cacheRoot) -> CostUsageDailyReport {
+            var selected = options
+            selected.cacheRoot = cacheRoot
+            return CostUsageScanner.loadDailyReport(
+                provider: .codex, since: date, until: date, now: date, options: selected)
+        }
+        #expect(fetch().summary?.totalTokens == 110)
+        let prefix = try #require(CostUsageStore(cacheRoot: env.cacheRoot)
+            .syncLoadCodexCache(calendar: calendar).files[file.path])
+        let record = Self.record(
+            id: "second",
+            timestamp: Self.timestampC,
+            usage: [60, 20, 6, 3],
+            total: [160, 40, 16, 7])
+        let mirror = Self.legacy(timestamp: Self.timestampC, usage: [60, 20, 6, 3], total: [160, 40, 16, 7])
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(env.jsonl(legacyFirst ? [mirror, record] : [record, mirror]).utf8))
+        try handle.close()
+        let delta = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file,
+            range: .init(since: date, until: date, calendar: calendar),
+            startOffset: #require(prefix.parsedBytes),
+            initialModel: prefix.lastModel,
+            initialSessionID: prefix.sessionId,
+            initialTotals: prefix.lastCountedTotals,
+            initialRawTotalsBaseline: prefix.lastRawTotalsBaseline,
+            initialRawTotalsWatermark: prefix.lastRawTotalsWatermark,
+            initialSeenRawTotals: prefix.seenRawTotals ?? [],
+            initialCodexTurnID: prefix.lastCodexTurnID,
+            initialCodexUsageRowIndex: #require(prefix.codexNextUsageRowIndex),
+            initialRequestLedgerState: prefix.codexRequestLedgerState,
+            initialRequestLedgerRows: prefix.codexRows ?? [])
+        #expect(delta.rows.compactMap(\.responseID) == ["second"])
+        #expect(delta.rows.reduce(0) { $0 + $1.input + $1.output } == 66)
+        let resumed = fetch()
+        #expect(resumed.summary?.totalTokens == 176)
+        let cache = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: calendar)
+        #expect(cache.files[file.path]?.codexRows?.compactMap(\.responseID) == ["first", "second"])
+        #expect(cache.files[file.path]?.codexRows?.count == 2)
+        #expect(fetch().data == resumed.data)
+        #expect(fetch(env.root.appendingPathComponent("cold-cache")).data == resumed.data)
+    }
+
+    @Test(arguments: [false, true])
+    func `ledger ownership distinguishes thread identity from execution session identity`(subagent: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var header = Self.header()
+        var metadata: [String: Any] = ["id": "synthetic-thread", "session_id": "execution-session"]
+        if subagent {
+            metadata["source"] = ["subagent": ["thread_spawn": ["parent_thread_id": "parent"]]]
+            metadata["subagent_history_start_ordinal"] = 10
+        }
+        header[0]["payload"] = metadata
+        header[1]["ordinal"] = 10
+        var owned = Self.record(id: "owned", usage: [60, 20, 6, 3], total: [60, 20, 6, 3])
+        var payload = try #require(owned["payload"] as? [String: Any])
+        payload["session_id"] = "execution-session"
+        owned["payload"] = payload
+        owned["ordinal"] = 11
+        var wrongSession = owned
+        payload["response_id"] = "wrong-session"
+        payload["session_id"] = "another-execution"
+        wrongSession["payload"] = payload
+        wrongSession["ordinal"] = 12
+        let result = try Self.parse(header + [owned, wrongSession], env: env)
+        #expect(result.rows.compactMap(\.responseID) == ["owned"])
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 66)
+    }
+
+    @Test(arguments: [false, true])
+    func `explicit subagent boundary excludes matching thread ledger rows in copied history`(
+        hasOwnedSuffix: Bool) throws
+    {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var header = Self.header()
+        header[0]["payload"] = [
+            "id": "synthetic-thread",
+            "subagent_history_start_ordinal": 10,
+            "source": ["subagent": ["thread_spawn": ["parent_thread_id": "parent"]]],
+        ]
+        header[1]["ordinal"] = 1
+        var copied = Self.record(id: "copied", usage: [1000, 200, 100, 40], total: [1000, 200, 100, 40])
+        copied["ordinal"] = 2
+        var owned = Self.record(id: "owned", usage: [60, 20, 6, 3], total: [1060, 220, 106, 43])
+        owned["ordinal"] = 11
+        let result = try Self.parse(header + [copied] + (hasOwnedSuffix ? [owned] : []), env: env)
+        #expect(result.rows.compactMap(\.responseID) == (hasOwnedSuffix ? ["owned"] : []))
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == (hasOwnedSuffix ? 66 : 0))
+    }
+
+    @Test
+    func `bounded subagent ledger routing survives serialized replay buffers`() throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        var header = Self.header()
+        header[0]["payload"] = [
+            "id": "synthetic-thread", "session_id": "execution-session", "subagent_history_start_ordinal": 10,
+            "source": ["subagent": ["thread_spawn": ["parent_thread_id": "parent"]]],
+        ]
+        header[1]["ordinal"] = 10
+        func ownedRecord(_ id: String, ordinal: Int, input: Int) throws -> [String: Any] {
+            var record = Self.record(id: id, usage: [input, 0, 0, 0], total: [input, 0, 0, 0])
+            var payload = try #require(record["payload"] as? [String: Any])
+            payload["session_id"] = "execution-session"
+            record["payload"] = payload
+            record["ordinal"] = ordinal
+            return record
+        }
+        let prefix = try env.jsonl([header[0], ownedRecord("copied", ordinal: 2, input: 1000)])
+        let suffix = try env.jsonl([header[1], ownedRecord("owned", ordinal: 11, input: 60)])
+        let file = env.root.appendingPathComponent("buffered-ledger.jsonl")
+        try (prefix + suffix).write(to: file, atomically: false, encoding: .utf8)
+        let day = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        let range = CostUsageScanner.CostUsageDayRange(since: day, until: day, calendar: .current)
+        let partial = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file, range: range, maxBytesToRead: Int64(prefix.utf8.count))
+        #expect(partial.rows.isEmpty)
+        let buffer = try #require(partial.bufferedSubagentLines)
+        #expect(buffer.contains {
+            if case .tokenUsageRecord = $0.line {
+                true
+            } else {
+                false
+            }
+        })
+        let restored = try JSONDecoder().decode(
+            [CostUsageScanner.CodexBufferedFastLine].self, from: JSONEncoder().encode(buffer))
+        let resumed = try CostUsageScanner.parseCodexFileCancellable(
+            fileURL: file,
+            range: range,
+            startOffset: partial.parsedBytes,
+            initialSessionID: partial.sessionId,
+            initialBufferedSubagentLines: restored,
+            initialJSONLResumeState: partial.jsonlResumeState,
+            initialRequestLedgerState: partial.requestLedgerState)
+        #expect(resumed.rows.compactMap(\.responseID) == ["owned"])
+        #expect(resumed.rows.reduce(0) { $0 + $1.input + $1.output } == 60)
+        #expect(resumed.bufferedSubagentLines == nil)
+        let cold = try CostUsageScanner.parseCodexFileCancellable(fileURL: file, range: range)
+        #expect(resumed.rows == cold.rows)
+    }
+
+    @Test(arguments: [false, true])
+    func `adjacent mirrors reconcile distinct cumulative domains once`(legacyFirst: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let ledger = Self.record(id: "one", usage: [100, 20, 10, 4], total: [1100, 220, 110, 44])
+        let legacy = Self.legacy(timestamp: Self.timestampA, usage: [100, 20, 10, 4], total: [100, 20, 10, 4])
+        let result = try Self.parse(Self.header() + (legacyFirst ? [legacy, ledger] : [ledger, legacy]) + [
+            Self.legacy(timestamp: Self.timestampB, usage: [100, 20, 10, 4], total: [200, 40, 20, 8]),
+            Self.record(id: "two", timestamp: Self.timestampC, usage: [60, 20, 6, 3], total: [1260, 260, 126, 51]),
+        ], env: env)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 286)
+        #expect(result.rows.compactMap(\.responseID) == ["one", "two"])
+        #expect(result.rows.count == 3)
+    }
+
     private static func parse(_ lines: [[String: Any]], env: CostUsageTestEnvironment, spacedJSON: Bool = false) throws
         -> CostUsageScanner.CodexParseResult
     {

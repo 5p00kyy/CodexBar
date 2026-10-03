@@ -358,7 +358,23 @@ enum CostUsageScanner {
         var legacyRowIndices: [String: Int] = [:]
         var turnModels: [String: String] = [:]
         var activeTurnID: String?
+        var sessionID: String?
+        var pendingLedgerMirror: String?
+        var pendingLegacyMirror: String?
+        var pendingLegacyRowIndex: Int?
         var countedUsage: CostUsageCodexTotals?
+
+        mutating func clearPendingMirrors() {
+            self.pendingLedgerMirror = nil
+            self.pendingLegacyMirror = nil
+            self.pendingLegacyRowIndex = nil
+        }
+
+        mutating func beginLegacyObservation(key: String?, snapshot: String?) {
+            defer { self.clearPendingMirrors() }
+            guard let key, key == self.pendingLedgerMirror, let snapshot else { return }
+            self.mirroredSnapshots.insert(snapshot)
+        }
 
         mutating func rememberLegacyRow(key: String?, index: Int) {
             if let key {
@@ -3372,6 +3388,7 @@ enum CostUsageScanner {
         let isSubagentThread: Bool
         let subagentHistoryStartOrdinal: Int?
         let historyBaseThreadId: String?
+        let requestSessionID: String?
 
         init(
             sessionId: String?,
@@ -3380,7 +3397,8 @@ enum CostUsageScanner {
             projectPath: String?,
             isSubagentThread: Bool,
             subagentHistoryStartOrdinal: Int?,
-            historyBaseThreadId: String? = nil)
+            historyBaseThreadId: String? = nil,
+            requestSessionID: String? = nil)
         {
             self.sessionId = sessionId
             self.forkedFromId = forkedFromId
@@ -3389,6 +3407,7 @@ enum CostUsageScanner {
             self.isSubagentThread = isSubagentThread
             self.subagentHistoryStartOrdinal = subagentHistoryStartOrdinal
             self.historyBaseThreadId = historyBaseThreadId
+            self.requestSessionID = requestSessionID
         }
     }
 
@@ -3408,18 +3427,45 @@ enum CostUsageScanner {
         let total: CostUsageCodexTotals?
     }
 
+    struct CodexRequestUsageRecord: Codable, Equatable {
+        let timestamp: String
+        let threadID: String
+        let sessionID: String?
+        let responseID: String
+        let turnID: String?
+        let model: String?
+        let usage: CostUsageCodexTotals
+        let threadTotal: CostUsageCodexTotals
+        let turnTotal: CostUsageCodexTotals?
+    }
+
     enum CodexFastLine: Codable, Equatable {
         case sessionMeta(CodexSessionMetadata)
         case turnContext(CodexTurnContextMetadata)
         case interAgentCommunication(triggerTurn: Bool)
         case taskStarted(turnID: String?)
         case tokenCount(CodexTokenCountRecord)
+        case tokenUsageRecord(CodexRequestUsageRecord)
+
+        var boundaryTokenCount: CodexTokenCountRecord? {
+            switch self {
+            case let .tokenCount(record): record
+            case let .tokenUsageRecord(record):
+                CodexTokenCountRecord(
+                    timestamp: record.timestamp,
+                    model: record.model,
+                    turnID: record.turnID,
+                    last: record.usage,
+                    total: record.threadTotal)
+            default: nil
+            }
+        }
 
         var requiresValidTimestamp: Bool {
             switch self {
             case .sessionMeta:
                 false
-            case .turnContext, .interAgentCommunication, .taskStarted, .tokenCount:
+            case .turnContext, .interAgentCommunication, .taskStarted, .tokenCount, .tokenUsageRecord:
                 true
             }
         }
@@ -3737,6 +3783,11 @@ enum CostUsageScanner {
             else { return nil }
 
             switch type {
+            case "token_usage_record":
+                guard let object = (try? JSONSerialization.jsonObject(with: bytes)) as? [String: Any],
+                      let record = Self.codexRequestUsageRecord(from: object) else { return nil }
+                return .tokenUsageRecord(record)
+
             case "session_meta":
                 let payloadRange = Self.extractJSONByteObjectField(
                     Self.codexJSONFieldPayload,
@@ -3771,6 +3822,13 @@ enum CostUsageScanner {
                     },
                     historyBaseThreadId: payloadRange.flatMap {
                         Self.codexHistoryBaseThreadId(from: rawBuffer, in: $0)
+                    },
+                    requestSessionID: payloadRange.flatMap {
+                        Self.extractJSONByteStringField(
+                            Self.codexJSONFieldSessionId,
+                            from: rawBuffer,
+                            in: $0,
+                            atDepth: 1)
                     })
                 return .sessionMeta(metadata)
 
@@ -3976,6 +4034,30 @@ enum CostUsageScanner {
             modelEvidence(obj) ?? (obj["data"] as? [String: Any]).flatMap(modelEvidence))
     }
 
+    private static func codexRequestUsageRecord(from object: [String: Any]) -> CodexRequestUsageRecord? {
+        guard let payload = object["payload"] as? [String: Any],
+              let threadID = codexModelEvidence(payload["thread_id"] as? String),
+              let responseID = codexModelEvidence(payload["response_id"] as? String),
+              let timestamp = object["timestamp"] as? String,
+              let usage = (payload["usage"] as? [String: Any]).flatMap(codexRequestUsage),
+              let total = (payload["thread_token_usage"] as? [String: Any]).flatMap(codexRequestUsage),
+              codexTotalsAtLeast(total, usage)
+        else { return nil }
+        let sessionID = Self.codexModelEvidence(payload["session_id"] as? String)
+        guard payload["session_id"] == nil || sessionID != nil else { return nil }
+        let turnTotal = (payload["turn_token_usage"] as? [String: Any]).flatMap(Self.codexRequestUsage)
+        return CodexRequestUsageRecord(
+            timestamp: timestamp,
+            threadID: threadID,
+            sessionID: sessionID,
+            responseID: responseID,
+            turnID: Self.codexTurnID(from: payload),
+            model: Self.codexModelEvidence(payload["model"] as? String),
+            usage: usage,
+            threadTotal: total,
+            turnTotal: turnTotal.flatMap { Self.codexTotalsAtLeast($0, usage) ? $0 : nil })
+    }
+
     private static func codexRequestUsage(_ usage: [String: Any]) -> CostUsageCodexTotals? {
         func integer(_ key: String, defaultValue: Int? = nil) -> Int? {
             guard let value = usage[key] else { return defaultValue }
@@ -4055,7 +4137,8 @@ enum CostUsageScanner {
             projectPath: Self.normalizedCodexProjectPath(payload?["cwd"] as? String),
             isSubagentThread: Self.codexIsSubagentThread(from: payload),
             subagentHistoryStartOrdinal: (payload?["subagent_history_start_ordinal"] as? NSNumber)?.intValue,
-            historyBaseThreadId: Self.codexHistoryBaseThreadId(from: payload))
+            historyBaseThreadId: Self.codexHistoryBaseThreadId(from: payload),
+            requestSessionID: payload?["session_id"] as? String)
     }
 
     private static func parseCodexSessionMetadata(
@@ -4227,6 +4310,7 @@ enum CostUsageScanner {
         range: CostUsageDayRange,
         startOffset: Int64 = 0,
         initialModel: String? = nil,
+        initialSessionID: String? = nil,
         initialTotals: CostUsageCodexTotals? = nil,
         initialRawTotalsBaseline: CostUsageCodexTotals? = nil,
         initialRawTotalsWatermark: CostUsageCodexTotals? = nil,
@@ -4249,12 +4333,12 @@ enum CostUsageScanner {
     {
         var currentModel = initialModel
         var previousTotals = initialTotals
-        var sessionId = initialForkAccountingState?.metadata.sessionId
+        var sessionId = initialForkAccountingState?.metadata.sessionId ?? initialSessionID
         var forkedFromId = initialForkAccountingState?.metadata.forkedFromId
         var historyBaseThreadId = initialForkAccountingState?.metadata.historyBaseThreadId
         var projectPath = initialForkAccountingState?.metadata.projectPath
         var isSubagentThread = false
-        var didCaptureLeafMetadata = initialForkAccountingState != nil
+        var didCaptureLeafMetadata = sessionId != nil
         var forkTimestamp = initialForkAccountingState?.metadata.forkTimestamp
         var subagentHistoryStartOrdinal: Int?
         var subagentCounterSemantics: CodexSubagentCounterSemantics?
@@ -4308,36 +4392,36 @@ enum CostUsageScanner {
             return components.joined(separator: "\u{1F}")
         }
 
-        func handleRequestLedger(_ object: [String: Any], endOffset: Int64) {
-            guard object["type"] as? String == "token_usage_record",
-                  let payload = object["payload"] as? [String: Any],
-                  let owner = Self.codexModelEvidence(payload["thread_id"] as? String),
-                  owner == sessionId,
-                  payload["session_id"] == nil || payload["session_id"] as? String == owner,
-                  let responseID = Self.codexModelEvidence(payload["response_id"] as? String),
-                  let timestamp = object["timestamp"] as? String,
-                  let day = Self.dayKeyFromTimestamp(timestamp, calendar: range.calendar)
-                  ?? Self.dayKeyFromParsedISO(timestamp, calendar: range.calendar),
-                  let usageObject = payload["usage"] as? [String: Any],
-                  let usage = Self.codexRequestUsage(usageObject),
-                  let threadUsage = payload["thread_token_usage"] as? [String: Any],
-                  let threadTotal = Self.codexRequestUsage(threadUsage),
-                  Self.codexTotalsAtLeast(threadTotal, usage)
+        func handleRequestLedger(_ record: CodexRequestUsageRecord, endOffset: Int64?) {
+            guard !suppressUnownedCopiedPrefix, record.threadID == sessionId,
+                  record.sessionID == nil || record.sessionID == (requestLedger.sessionID ?? sessionId),
+                  let day = Self.dayKeyFromTimestamp(record.timestamp, calendar: range.calendar)
+                  ?? Self.dayKeyFromParsedISO(record.timestamp, calendar: range.calendar)
             else { return }
-            let turnID = Self.codexTurnID(from: payload) ?? currentTurnID ?? requestLedger.activeTurnID
-            var keys = [mirrorKey(turnID: turnID, usage: usage, total: threadTotal)]
-            if let turnUsage = payload["turn_token_usage"] as? [String: Any],
-               let turnTotal = Self.codexRequestUsage(turnUsage), Self.codexTotalsAtLeast(turnTotal, usage)
-            {
+            let usage = record.usage
+            let responseID = record.responseID
+            let timestamp = record.timestamp
+            let turnID = record.turnID ?? currentTurnID ?? requestLedger.activeTurnID
+            var keys = [mirrorKey(turnID: turnID, usage: usage, total: record.threadTotal)]
+            if let turnTotal = record.turnTotal {
                 keys.append(mirrorKey(turnID: turnID, usage: usage, total: turnTotal))
             }
             // Identity, rather than cumulative counters, proves that a reset is a new request.
             // Copied parent records fail the ownership check above even if the parent is unavailable.
             let isReplay = requestLedger.responseIDs.contains(responseID)
             let mirror = keys.first(where: { requestLedger.legacyRowIndices[$0] != nil })
-            let mirrorIndex = mirror.flatMap { requestLedger.legacyRowIndices[$0] }
+            let adjacentKey = mirrorKey(turnID: turnID, usage: usage, total: nil)
+            let adjacentIndex = requestLedger.pendingLegacyMirror == adjacentKey
+                ? requestLedger.pendingLegacyRowIndex : nil
+            let mirrorIndex = mirror.flatMap { requestLedger.legacyRowIndices[$0] } ?? adjacentIndex
+            requestLedger.pendingLegacyMirror = nil
+            requestLedger.pendingLegacyRowIndex = nil
+            requestLedger.pendingLedgerMirror = mirrorIndex == nil ? adjacentKey : nil
             let legacyRow = mirrorIndex.flatMap { index in
                 rows.first(where: { $0.eventIndex == index }) ?? retainedRows[index]
+            }
+            if let legacyRow {
+                keys.append(contentsOf: legacyRow.requestMirrorKeys ?? [])
             }
             let base = requestLedger.countedUsage ?? .init(input: 0, cached: 0, output: 0)
             if !isReplay {
@@ -4351,9 +4435,8 @@ enum CostUsageScanner {
             requestLedger.mirroredSnapshots.formUnion(keys)
             requestLedger.responseIDs.insert(responseID)
 
-            if let key = mirror, let index = requestLedger.legacyRowIndices.removeValue(forKey: key),
-               let legacy = legacyRow
-            {
+            if let index = mirrorIndex, let legacy = legacyRow {
+                requestLedger.legacyRowIndices = requestLedger.legacyRowIndices.filter { $0.value != index }
                 replacedLegacyRowIndices.insert(index)
                 if rows.contains(where: { $0.eventIndex == index }) {
                     add(
@@ -4367,7 +4450,7 @@ enum CostUsageScanner {
                 }
             }
             guard !isReplay else { return }
-            let model = Self.codexModelEvidence(payload["model"] as? String)
+            let model = record.model
                 ?? turnID.flatMap { requestLedger.turnModels[$0] }
                 ?? (turnID == currentTurnID || turnID == requestLedger.activeTurnID
                     ? Self.codexModelEvidence(currentModel) : nil)
@@ -4561,6 +4644,10 @@ enum CostUsageScanner {
                 // A same-leaf restart may add metadata that was absent from the initial record.
                 // Enrich missing fork/project fields without allowing an ancestor to replace identity.
                 guard CodexSubagentRolloutShape.sameConcreteSessionID(metadata.sessionId, sessionId) else { return }
+                isSubagentThread = isSubagentThread || metadata.isSubagentThread
+                if requestLedger.sessionID == nil {
+                    requestLedger.sessionID = metadata.requestSessionID ?? metadata.sessionId
+                }
                 if forkedFromId == nil, let enrichedParentID = metadata.forkedFromId {
                     forkedFromId = enrichedParentID
                     codexSession.forkedFromId = enrichedParentID
@@ -4584,6 +4671,7 @@ enum CostUsageScanner {
             }
             didCaptureLeafMetadata = true
             sessionId = metadata.sessionId
+            requestLedger.sessionID = metadata.requestSessionID ?? metadata.sessionId
             forkedFromId = metadata.forkedFromId
             historyBaseThreadId = metadata.historyBaseThreadId
             forkTimestamp = metadata.forkTimestamp
@@ -4616,6 +4704,12 @@ enum CostUsageScanner {
                     usage: $0,
                     total: record.total)
             }
+            // Legacy snapshots and typed records can use different cumulative counter domains.
+            // Pair adjacent opposite-format usage observations one-to-one, never every identical request.
+            let adjacentKey = last.map {
+                mirrorKey(turnID: record.turnID ?? currentTurnID ?? requestLedger.activeTurnID, usage: $0, total: nil)
+            }
+            requestLedger.beginLegacyObservation(key: adjacentKey, snapshot: requestMirrorKey)
             // A cumulative fork counter is not attributable until either the parent snapshot or
             // a trustworthy child-owned suffix establishes the inherited baseline. Publishing
             // best-effort `last` rows here can replay billions of copied-prefix tokens.
@@ -4804,6 +4898,8 @@ enum CostUsageScanner {
             let eventIndex = codexUsageRowIndex
             codexUsageRowIndex += 1
             requestLedger.rememberLegacyRow(key: requestMirrorKey, index: eventIndex)
+            requestLedger.pendingLegacyMirror = adjacentKey
+            requestLedger.pendingLegacyRowIndex = eventIndex
             let normModel = CostUsagePricing.normalizeCodexModel(model)
             add(
                 dayKey: dayKey,
@@ -4839,6 +4935,7 @@ enum CostUsageScanner {
             case let .sessionMeta(metadata):
                 try handleSessionMetadata(metadata)
             case let .turnContext(metadata):
+                requestLedger.clearPendingMirrors()
                 observeTimestamp(metadata.timestamp)
                 observeCwd(metadata.cwd)
                 observeTitle(metadata.title)
@@ -4855,9 +4952,12 @@ enum CostUsageScanner {
             case .interAgentCommunication:
                 break
             case let .taskStarted(turnID):
+                requestLedger.clearPendingMirrors()
                 currentTurnID = turnID
             case let .tokenCount(record):
                 try handleTokenCount(record, sourceEndOffset: sourceEndOffset)
+            case let .tokenUsageRecord(record):
+                handleRequestLedger(record, endOffset: sourceEndOffset)
             }
         }
 
@@ -4996,17 +5096,7 @@ enum CostUsageScanner {
                         return
                     }
 
-                    if line.bytes.containsAscii(#""token_usage_record""#) {
-                        let isRequestLedger = autoreleasepool { () -> Bool in
-                            guard let object = (try? JSONSerialization.jsonObject(with: line.bytes)) as? [String: Any],
-                                  object["type"] as? String == "token_usage_record"
-                            else { return false }
-                            handleRequestLedger(object, endOffset: line.endOffset)
-                            return true
-                        }
-                        if isRequestLedger { return }
-                    }
-                    if line.bytes.containsAscii(#""usage""#) {
+                    if !line.bytes.containsAscii(#""token_usage_record""#), line.bytes.containsAscii(#""usage""#) {
                         autoreleasepool {
                             guard let obj = (try? JSONSerialization.jsonObject(with: line.bytes)) as? [String: Any],
                                   obj["type"] == nil,
@@ -5030,6 +5120,7 @@ enum CostUsageScanner {
                         || line.bytes.containsAscii(#""session_meta""#)
                         || line.bytes.containsAscii(#""type":"inter_agent_communication_metadata""#)
                         || line.bytes.containsAscii(#""inter_agent_communication_metadata""#)
+                        || line.bytes.containsAscii(#""token_usage_record""#)
                     else { return }
 
                     if line.bytes.containsAscii(#""type":"event_msg""#),
@@ -5248,7 +5339,8 @@ enum CostUsageScanner {
                         kind = .turnContext
                     case let .interAgentCommunication(triggerTurn):
                         kind = .interAgentCommunication(triggerTurn: triggerTurn)
-                    case let .tokenCount(record):
+                    case .tokenCount, .tokenUsageRecord:
+                        guard let record = buffered.line.boundaryTokenCount else { return nil }
                         kind = .tokenCount(total: record.total, last: record.last)
                     case .taskStarted:
                         return nil
@@ -5276,14 +5368,15 @@ enum CostUsageScanner {
                     var inheritedTotal = pendingSubagentLines
                         .prefix(while: { ($0.ordinal ?? Int.min) < startOrdinal })
                         .compactMap { buffered -> CostUsageCodexTotals? in
-                            guard case let .tokenCount(record) = buffered.line else { return nil }
-                            return record.total
+                            buffered.line.boundaryTokenCount?.total
                         }
                         .last
                     let firstOwnedToken = pendingSubagentLines.first { buffered in
                         guard (buffered.ordinal ?? Int.min) >= startOrdinal,
-                              case let .tokenCount(record) = buffered.line
+                              let record = buffered.line.boundaryTokenCount
                         else { return false }
+                        // An owned response identity proves new usage even after a counter reset.
+                        if case .tokenUsageRecord = buffered.line { return true }
                         if let total = record.total, let baseline = inheritedTotal,
                            Self.codexTotalsEqual(total, baseline)
                            || (CodexSubagentRolloutShape.totalsContainUsage(baseline)
@@ -5295,7 +5388,7 @@ enum CostUsageScanner {
                         return record.total != nil || record.last != nil
                     }
                     let inferredTotal = firstOwnedToken.flatMap { buffered -> CostUsageCodexTotals? in
-                        guard case let .tokenCount(record) = buffered.line else { return nil }
+                        guard let record = buffered.line.boundaryTokenCount else { return nil }
                         if let total = record.total, let last = record.last {
                             return Self.codexTotalDelta(from: last, to: total)
                         }
@@ -5450,6 +5543,7 @@ enum CostUsageScanner {
             rowSourceEndOffsets: rowSourceEndOffsets,
             forkAccountingState: forkAccountingState,
             requestLedgerState: requestLedger.responseIDs.isEmpty && requestLedger.legacyRowIndices.isEmpty
+                && requestLedger.turnModels.isEmpty && requestLedger.activeTurnID == nil
                 ? nil : requestLedger,
             replacedLegacyRowIndices: replacedLegacyRowIndices)
     }

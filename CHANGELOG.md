@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Codex costs: count owned request-ledger records after resumed counters reset, deduplicate mirrored legacy events and archived responses, and retain request identities across cache restarts (#3303).
+
 - Codex: refresh weekly quota, reset credits, and update time after a confirmed reset when the previous snapshot lacks credit inventory (#4210).
 - Status: prevent older status requests from replacing newer incidents, emitting false recovery hooks, or scheduling redundant retries (#4175). Thanks @Shenrui-Ma!
 - Widgets: use current menu accents for Abacus, Amp, Augment, Bedrock, Cline Pass, Codebuff, Cursor, DeepSeek, Devin, Kiro, LongCat, Mistral, NeuralWatt, Sub2API, and Venice while preserving intentionally distinct widget colors (#4199). Thanks @raulgg!
@@ -47,8 +49,6 @@
 - Codex: reduce repeated Gatekeeper CPU use for unchanged standalone hardened-runtime CLIs on fully enforcing hosts, checking every architecture’s complete signature before reusing a verdict (#4078, #4080). Thanks @dustball!
 
 ### Fixed
-
-- Codex costs: count owned request-ledger records after resumed counters reset, deduplicate mirrored legacy events and archived responses, and retain request identities across cache restarts (#3303).
 
 - Codex: discover the current ChatGPT bundled CLI launcher and skip npm launchers with missing native payloads or unsafe Node discovery environments so managed login can use a working fallback (#4143). Thanks @Yuxin-Qiao!
 - iCloud Sync: prevent cancelled or superseded sync applies and removed-record recovery from overwriting provider settings, preferences, fleet records, or newer sync metadata (#4161).
