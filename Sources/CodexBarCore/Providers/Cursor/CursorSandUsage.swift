@@ -8,6 +8,8 @@ public struct CursorSandUsageStatus: Decodable, Sendable, Equatable {
     public static let extraWindowID = "cursor-grok-bot"
     public static let extraWindowTitle = "Grok Bot"
     public static let endpointPath = "/api/dashboard/get-sand-usage-status"
+    /// Included Grok Bot usage resets weekly (cursor.com/help/grok-bot/plans).
+    static let weeklyWindowMinutes = 10080
 
     public let currentPeriodStart: String?
     public let nextResetTimestampUtc: String?
@@ -49,9 +51,16 @@ public struct CursorSandUsageStatus: Decodable, Sendable, Equatable {
             title: Self.extraWindowTitle,
             window: RateWindow(
                 usedPercent: UsagePercent(raw: usagePercent).displayClamped,
-                windowMinutes: Self.windowMinutes(start: start, end: resetsAt),
+                windowMinutes: Self.allowanceWindowMinutes(start: start, end: resetsAt),
                 resetsAt: resetsAt,
                 resetDescription: resetsAt.map(resetDescription)))
+    }
+
+    /// Cursor can report a currentPeriodStart after the last weekly reset. Keep the weekly
+    /// duration so pace covers the whole allowance; longer reported spans stay as reported.
+    static func allowanceWindowMinutes(start: Date?, end: Date?) -> Int? {
+        guard let minutes = self.windowMinutes(start: start, end: end) else { return nil }
+        return max(minutes, self.weeklyWindowMinutes)
     }
 
     static func windowMinutes(start: Date?, end: Date?) -> Int? {

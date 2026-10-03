@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Cursor: keep Grok Bot weekly pace visible when Cursor reports a `currentPeriodStart` after the last weekly reset.
 - Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).
 
 ## 0.71.0 — 2026-10-02

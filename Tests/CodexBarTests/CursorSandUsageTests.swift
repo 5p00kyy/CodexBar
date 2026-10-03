@@ -189,6 +189,34 @@ struct CursorSandUsageTests {
         #expect(snapshot.rawJSON?.contains("get-sand-usage-status") == true)
     }
 
+    @Test
+    func `mid-week period start keeps the weekly grok bot window`() throws {
+        let status = CursorSandUsageStatus(
+            currentPeriodStart: "2026-10-02T18:03:04Z",
+            nextResetTimestampUtc: "2026-10-05T11:20:04Z",
+            usagePercent: 21.78,
+            hasAvailableUsage: true,
+            includedLimitZero: false)
+        let now = try #require(ISO8601DateParser.parse("2026-10-02T22:56:58Z"))
+        let window = try #require(status.extraRateWindow(now: now, resetDescription: { _ in "Resets" }))
+        #expect(window.window.windowMinutes == 10080)
+        let pace = try #require(UsagePace.weekly(window: window.window, now: now))
+        #expect(abs(pace.expectedUsedPercent - 64.06) < 0.1)
+        #expect(pace.willLastToReset)
+    }
+
+    @Test
+    func `reported grok bot span longer than a week is kept`() {
+        let status = CursorSandUsageStatus(
+            currentPeriodStart: "2026-09-14T09:12:32Z",
+            nextResetTimestampUtc: "2026-09-22T09:12:32Z",
+            usagePercent: 10,
+            hasAvailableUsage: true,
+            includedLimitZero: false)
+        let window = status.extraRateWindow(now: Self.now, resetDescription: { _ in "Resets" })
+        #expect(window?.window.windowMinutes == 11520)
+    }
+
     private static let now = Date(timeIntervalSince1970: 1_789_344_000)
 
     private static func status(
