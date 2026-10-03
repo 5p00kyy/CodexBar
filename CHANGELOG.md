@@ -15,6 +15,7 @@
 - Codex: reuse decoded local cost history across unchanged refreshes, including priority-cursor updates (#4200, #4205). Thanks @Yuxin-Qiao!
 - Claude: keep parsed transcript windows reusable when pricing changes during a refresh, while recalculating the next report with the new prices (#4202, #4204). Thanks @Yuxin-Qiao!
 - Pi: recognize OMP one-hour cache-write counters and reprice older cached estimates without double-counting tokens (#4121, #4176). Thanks @vincent-peng!
+- Usage & Spend: keep same-named project directories separate and show saved Codex project names on fresh and cached loads, preserving totals across renames and hiding paths with personal information (#4172). Thanks @Yuxin-Qiao!
 - Browser cookies: name each plugin provider's supported automatic browsers in settings and cookie sign-in guidance, with Manual as the alternative for other browsers (#4215).
 
 ## 0.71.0 — 2026-10-02

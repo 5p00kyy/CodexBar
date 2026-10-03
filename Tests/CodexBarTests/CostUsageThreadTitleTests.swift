@@ -15,11 +15,28 @@ struct CostUsageThreadTitleTests {
         defer { fixture.remove() }
         let manager = ListingFileManager()
 
-        let result = CostUsageFetcher.codexSessionsWithThreadTitles(
+        let project = CostUsageProjectBreakdown(
+            name: "Synthetic",
+            path: "/synthetic/canonical",
+            totalTokens: nil,
+            totalCostUSD: nil,
+            daily: [],
+            modelBreakdowns: nil,
+            sources: Set(fixture.sessions.compactMap(\.workingDirectory)).map {
+                CostUsageProjectSourceBreakdown(
+                    name: "Worktree",
+                    path: $0,
+                    totalTokens: nil,
+                    totalCostUSD: nil,
+                    daily: [],
+                    modelBreakdowns: nil)
+            })
+        let result = CostUsageFetcher.codexBreakdownsWithMetadata(
             fixture.sessions,
+            projects: [project],
             sessionsRoot: fixture.home.appendingPathComponent("sessions"),
             environment: ["CODEX_SQLITE_HOME": ".codex"],
-            fileManager: manager)
+            fileManager: manager).sessions
 
         #expect(result == fixture.expected)
         #expect(manager.listings.count == 3)
@@ -37,11 +54,11 @@ struct CostUsageThreadTitleTests {
         let manager = ListingFileManager()
         let environment = ["CODEX_SQLITE_HOME": configured ? "/unused/environment/home" : fixture.home.path]
 
-        let result = CostUsageFetcher.codexSessionsWithThreadTitles(
+        let result = CostUsageFetcher.codexBreakdownsWithMetadata(
             fixture.sessions,
             sessionsRoot: fixture.home.appendingPathComponent("sessions"),
             environment: environment,
-            fileManager: manager)
+            fileManager: manager).sessions
 
         #expect(result == fixture.sessions.enumerated().map { index, session in
             session.withTitle(index == 0 ? "Explicit name" : "Home 0: \(index)")
@@ -57,21 +74,21 @@ struct CostUsageThreadTitleTests {
         let manager = ListingFileManager()
         let sessions = Array(fixture.sessions.prefix(2))
         let sessionsRoot = fixture.home.appendingPathComponent("sessions")
-        let initial = CostUsageFetcher.codexSessionsWithThreadTitles(
-            sessions, sessionsRoot: sessionsRoot, environment: [:], fileManager: manager)
+        let initial = CostUsageFetcher.codexBreakdownsWithMetadata(
+            sessions, sessionsRoot: sessionsRoot, environment: [:], fileManager: manager).sessions
         #expect(initial.map(\.title) == ["Explicit name", "Home 0: 1"])
 
         try Fixture.createDatabase(at: fixture.home.appendingPathComponent("state_10.sqlite"), home: 10)
         try "{\"id\":\"session-0\",\"thread_name\":\"Renamed\"}\n".write(
             to: fixture.home.appendingPathComponent("session_index.jsonl"), atomically: true, encoding: .utf8)
-        let newer = CostUsageFetcher.codexSessionsWithThreadTitles(
-            sessions, sessionsRoot: sessionsRoot, environment: [:], fileManager: manager)
+        let newer = CostUsageFetcher.codexBreakdownsWithMetadata(
+            sessions, sessionsRoot: sessionsRoot, environment: [:], fileManager: manager).sessions
         #expect(newer.map(\.title) == ["Renamed", "Home 10: 1"])
 
         try "sqlite_home = '\(fixture.sqliteHomes[1].path)'\n".write(
             to: fixture.home.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
-        let redirected = CostUsageFetcher.codexSessionsWithThreadTitles(
-            sessions, sessionsRoot: sessionsRoot, environment: [:], fileManager: manager)
+        let redirected = CostUsageFetcher.codexBreakdownsWithMetadata(
+            sessions, sessionsRoot: sessionsRoot, environment: [:], fileManager: manager).sessions
         #expect(redirected.map(\.title) == ["Renamed", "Home 1: 1"])
         #expect(manager.listings == [fixture.home, fixture.home, fixture.sqliteHomes[1]])
     }
@@ -82,11 +99,11 @@ struct CostUsageThreadTitleTests {
         defer { fixture.remove() }
         let manager = ListingFileManager()
         let missing = fixture.home.appendingPathComponent("missing", isDirectory: true)
-        let result = CostUsageFetcher.codexSessionsWithThreadTitles(
+        let result = CostUsageFetcher.codexBreakdownsWithMetadata(
             fixture.sessions,
             sessionsRoot: fixture.home.appendingPathComponent("sessions"),
             environment: ["CODEX_SQLITE_HOME": missing.path],
-            fileManager: manager)
+            fileManager: manager).sessions
 
         #expect(result == fixture.sessions.enumerated().map { index, session in
             index == 0 ? session.withTitle("Explicit name") : session

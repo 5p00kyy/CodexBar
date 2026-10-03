@@ -127,7 +127,7 @@ public struct CostUsageSessionBreakdown: Sendable, Equatable, Identifiable {
     public let modelBreakdowns: [CostUsageDailyReport.ModelBreakdown]
     /// Canonical project path, matching the key of the session's Projects row.
     public let projectPath: String?
-    public let projectName: String?
+    public internal(set) var projectName: String?
     /// Thread name from Codex metadata, when one exists.
     public private(set) var title: String?
     /// Original rollout directory; relative SQLite homes must not use the canonical project path.
@@ -417,7 +417,7 @@ public struct CostUsageTokenSnapshot: Sendable, Equatable {
 public struct CostUsageProjectBreakdown: Sendable, Equatable {
     public static let unknownProjectName = "Unknown project"
 
-    public let name: String
+    public internal(set) var name: String
     public let path: String?
     public let totalTokens: Int?
     public let totalCostUSD: Double?

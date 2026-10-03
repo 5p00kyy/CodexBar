@@ -404,6 +404,20 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
 
 ### Usage & Spend session rows
 
+Projects are grouped by account source and full directory identity, so equal folder names stay separate and
+renaming a project does not split its totals. Project and session rows use saved names from the selected Codex
+home's project metadata, matching each original rollout directory to the longest root on directory boundaries.
+Missing source directories, conflicting labels, or unavailable metadata keep
+the folder name. Fresh scans and cached dashboard loads share one metadata lookup per database per refresh;
+later loads pick up renames without rebuilding usage history. Worktree sources retain their original directories
+when resolving relative SQLite homes.
+Metadata reads are bounded to 1,024 roots per database and a SQLite execution budget. If either limit is exceeded,
+the lookup keeps folder labels rather than choosing a potentially ambiguous name from an incomplete result.
+
+Duplicate project labels show their paths for disambiguation. **Hide personal information** replaces the labels
+with numbered projects and hides those paths, including tooltips. Dashboard-v1 and widget cost summaries contain
+aggregate values only, with no project names or directory paths.
+
 Codex session rows show the local thread title when available, with the project, model, and last-activity date
 beneath it. Untitled sessions use a shortened session ID. Titles come from `session_index.jsonl`, with the local
 thread database as a fallback; relative `CODEX_SQLITE_HOME` paths resolve against each rollout's original working
