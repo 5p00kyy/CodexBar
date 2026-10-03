@@ -8,6 +8,7 @@
 - Antigravity: opt in to additional Gemini profile homes in provider settings or config.json to combine local token/cost history without double-counting copied conversations (#4177). Thanks @keeuu!
 ### Fixed
 
+- Codex: continue bounded local-history discovery before sleeping so validated current-day tokens can publish promptly during catch-up, while preserving power limits and complete-window checks (#3508). Thanks @kernnel!
 - Browser cookies: adopt SweetCookieKit 0.5.5 for Aside, Opera, and Opera Neon support, including Cursor account switching, and let Muse (muse.ai) automatically import from the full supported browser catalog (#4215, #2429). Thanks @mvicari!
 
 ## 0.71.1 — 2026-10-03

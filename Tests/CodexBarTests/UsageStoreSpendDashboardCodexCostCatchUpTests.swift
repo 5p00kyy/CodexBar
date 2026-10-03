@@ -6,6 +6,38 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct UsageStoreSpendDashboardCodexCostCatchUpTests {
+    @Test(arguments: [0.1, 0.75])
+    func `shared automatic worker bounds discovery bursts across accounts`(duration: TimeInterval) async throws {
+        let store = try Self.makeStore(suite: "bounded-discovery")
+        defer { store.cancelSpendDashboardCodexCostCatchUp() }
+        store.settings.backgroundWorkLowPowerModePreference = .off
+        store._test_spendDashboardCodexCostCatchUpResourceStateOverride = { (.ac, false, .nominal) }
+        store._test_spendDashboardCodexCostCatchUpStatusOverride = { _ in .init(pending: true, progressKey: "start") }
+        store._test_spendDashboardCodexCostCatchUpActiveDuration = duration
+        var advances = 0
+        var accountsScanned: Set<String> = []
+        store._test_spendDashboardCodexCostCatchUpAdvanceOverride = { account, _, _ in
+            advances += 1
+            accountsScanned.insert(account.id)
+            return .init(pending: account.id != "first", progressKey: "page-\(advances)")
+        }
+        var delayed = false
+        store._test_spendDashboardCodexCostCatchUpSleepOverride = { delay in
+            guard delay > 0 else { return }
+            delayed = true
+            #expect(advances == (duration == 0.1 ? 8 : 3))
+            #expect(abs(delay - Double(advances) * duration * 999) < 0.000001)
+            throw CancellationError()
+        }
+        store.startSpendDashboardCodexCostCatchUpIfNeeded(accounts: [
+            Self.account(id: "first", cacheIdentity: "first"),
+            Self.account(id: "second", cacheIdentity: "second"),
+        ])
+        await store.spendDashboardCodexCostCatchUpTask?.value
+        #expect(delayed)
+        #expect(accountsScanned == ["first", "second"])
+    }
+
     @Test
     func `automatic sleep uses active scan duration instead of awaited latency`() async throws {
         let store = try Self.makeStore(suite: "active-duration")
@@ -28,7 +60,7 @@ struct UsageStoreSpendDashboardCodexCostCatchUpTests {
             accounts: [Self.account(id: "account", cacheIdentity: "cache-account")])
         let task = try #require(store.spendDashboardCodexCostCatchUpTask)
         await task.value
-        #expect(sleeps == [1998, 1998])
+        #expect(sleeps == [0, 1998])
     }
 
     @Test(arguments: [CodexCostCatchUpMode.automatic, .accelerated])
