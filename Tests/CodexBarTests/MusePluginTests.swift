@@ -290,22 +290,57 @@ struct MusePluginTests {
     func `an unbound session without a team list does not end the search for a matching session`(
         engine: ProviderPluginEngineKind) async throws
     {
+        let blankWeb = Self.blankEmailWeb(members: (Self.members(), 200))
+        let (result, _) = try await Self.fetchWithSessions(
+            engine: engine,
+            teamID: nil,
+            first: { path in path == "/api/auth/me" ? (Self.blankEmailMe, 200) : ("{}", 200) },
+            second: blankWeb)
+        let teams = try #require(result.usage.details.first { $0.title == "Browser teams" })
+        #expect(teams.rows.contains { $0.label == "My Team" && $0.value == Self.teamID })
+    }
+
+    @Test(arguments: [
+        (Self.members(), 403),
+        (Self.members(email: "bob@example.com"), 200),
+    ], BundledPluginTestSupport.engines)
+    func `a session matched by email is tried before a blank email session spends its membership check`(
+        members: (body: String, status: Int),
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let (result, requests) = try await Self.fetchWithSessions(
+            engine: engine,
+            teamID: Self.teamID,
+            first: Self.blankEmailWeb(members: members),
+            second: Self.web(quota: Self.quota()))
+        #expect(result.sourceLabel == "oauth+web")
+        #expect(result.usage.secondary != nil)
+        #expect(requests.value.filter { $0.session == "first" }.map(\.path) == ["/api/auth/me"])
+    }
+
+    /// Two Automatic browser sessions, "first" then "second", each answering dev.meta.ai paths on its own.
+    static func fetchWithSessions(
+        engine: ProviderPluginEngineKind,
+        teamID: String?,
+        first: @escaping @Sendable (String) -> (String, Int),
+        second: @escaping @Sendable (String) -> (String, Int)) async throws
+        -> (ProviderPluginResult, LockIsolated<[(session: String, path: String)]>)
+    {
         let next = LockIsolated(0)
+        let requests = LockIsolated<[(session: String, path: String)]>([])
         let runtime = try BundledPluginTestSupport.runtime(
             "muse", engine: engine, transport: ProviderHTTPTransportHandler { request in
                 guard request.url?.host == "dev.meta.ai" else {
                     return try Self.response(request, body: Self.activeWithoutWindows)
                 }
                 let path = request.url?.path ?? ""
-                if request.value(forHTTPHeaderField: "Cookie") == "session=first" {
-                    let body = path == "/api/auth/me" ? Self.blankEmailMe : "{}"
-                    return try Self.response(request, body: body)
-                }
-                let (body, code) = Self.web(quota: Self.quota())(path)
+                let session = request.value(forHTTPHeaderField: "Cookie") == "session=first" ? "first" : "second"
+                requests.setValue(requests.value + [(session, path)])
+                let (body, code) = (session == "first" ? first : second)(path)
                 return try Self.response(request, body: body, status: code)
             })
         let result = try await runtime.fetchResult(
-            settings: ["MUSE_WEB_TEAM_ID": Self.teamID],
+            settings: teamID.map { ["MUSE_WEB_TEAM_ID": $0] } ?? [:],
             secrets: ["MUSE_DEVICE_TOKEN": "dca:fixture-token"],
             now: Date(timeIntervalSince1970: TimeInterval(Self.now)),
             cookieSource: .auto,
@@ -313,14 +348,13 @@ struct MusePluginTests {
                 let index = next.value
                 next.setValue(index + 1)
                 guard index < 2 else { return nil }
-                let name = index == 0 ? "first" : "matching"
+                let name = index == 0 ? "first" : "second"
                 return ProviderPluginCookieSession(
                     header: "session=\(name)", source: "fixture", origin: "https://dev.meta.ai", id: name)
             },
             cookieSessionInvalidator: { _, _ in },
             cookieResolver: { _, _ in "session=first" })
-        #expect(result.sourceLabel == "oauth+web")
-        #expect(result.usage.secondary != nil)
+        return (result, requests)
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)

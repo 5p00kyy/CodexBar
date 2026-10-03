@@ -58,7 +58,7 @@ Setup, in **Settings → Providers → Muse Code**:
 2. Refresh Muse Code. When the login omits `subs_usage`, **Browser team** lists the teams the session can see, with their IDs. It starts at **Choose a team…** and never selects the first team automatically. The same list appears in the Muse menu.
 3. Choose the team whose web quota you want to display, then refresh. A saved team that is no longer visible stays marked unavailable; CodexBar never switches to another team for you.
 
-Automatic mode tries later browser sessions when the first session is expired or belongs to another account. The fallback makes at most five web requests per refresh; Manual uses only the pasted session.
+Automatic mode tries later browser sessions when the first session is expired or belongs to another account. Sessions with a blank email go last, after every session whose email matches the login, because their membership check costs one more request. The fallback makes at most five web requests per refresh; Manual uses only the pasted session.
 
 In `~/.codexbar/config.json`, the team ID is the Muse entry's `workspaceID`:
 
