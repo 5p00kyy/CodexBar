@@ -647,6 +647,9 @@ final class JavaScriptCoreProviderPluginEngine: ProviderPluginEngine, @unchecked
     {
         let ctx = JSValue(newObjectIn: self.context)!
         let host = JSValue(newObjectIn: self.context)!
+        host.setObject(
+            BrowserCookieImportSupport.browserNames(for: self.manifest.id.firstPartyProvider),
+            forKeyedSubscript: "cookieBrowserNames" as NSString)
         ctx.setObject(now.timeIntervalSince1970 * 1000, forKeyedSubscript: "__codexbarNowMillis" as NSString)
         if let optionalRequestTimeoutSeconds = contextOptions.optionalRequestTimeoutSeconds {
             ctx.setObject(

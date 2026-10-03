@@ -354,8 +354,7 @@ final class ProviderPluginCookieBroker: @unchecked Sendable {
         #if os(macOS)
         let query = Self.cookieQuery(domain: domain)
         let client = BrowserCookieClient()
-        let order = provider.map { ProviderDefaults.metadata[$0]?.browserCookieOrder ?? Browser.defaultImportOrder }
-            ?? [Browser.chrome]
+        let order = BrowserCookieImportSupport.importOrder(for: provider)
         var sessions: [(header: String, source: String)] = []
         for browser in order.cookieImportCandidates(using: browserDetection) {
             do {

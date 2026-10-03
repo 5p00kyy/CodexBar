@@ -116,6 +116,8 @@ defineProvider({
     }
     if (expired)
       throw ctx.fail.authenticationExpired("LithosAI session expired. Sign in again or paste fresh cookies.");
-    throw ctx.fail.missingCredential("Sign in to console.lithosai.cloud in Chrome or paste its Cookie header.");
+    throw ctx.fail.missingCredential(
+      `Sign in to console.lithosai.cloud. Supported browsers: ${ctx.browser.supportedBrowsers}. Or paste its Cookie header.`,
+    );
   },
 });

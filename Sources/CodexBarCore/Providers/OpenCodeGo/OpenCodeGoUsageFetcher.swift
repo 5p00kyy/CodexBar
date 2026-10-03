@@ -98,7 +98,9 @@ public struct OpenCodeGoUsageFetcher: Sendable {
         workspaceIDOverride: String? = nil,
         includeZenBalance: Bool = true,
         waitForZenBalance: Bool = false,
-        session: URLSession? = nil) async throws -> OpenCodeGoUsageSnapshot
+        session: URLSession? = nil,
+        clockNow: @Sendable () -> ContinuousClock
+            .Instant = { ContinuousClock.now }) async throws -> OpenCodeGoUsageSnapshot
     {
         let session = session ?? self.redirectGuardSession
         guard let requestCookieHeader = OpenCodeWebCookieSupport.requestCookieHeader(from: cookieHeader) else {
@@ -124,7 +126,7 @@ public struct OpenCodeGoUsageFetcher: Sendable {
                 timeout: timeout,
                 session: session)
         }
-        let zenBalanceStart = ContinuousClock.now
+        let zenBalanceStart = clockNow()
         let zenBalanceTask = includeZenBalance ? Task {
             try await Task.sleep(for: self.optionalZenBalanceStartDelay)
             return try await self.fetchZenBalance(
@@ -155,8 +157,6 @@ public struct OpenCodeGoUsageFetcher: Sendable {
                 for: error,
                 request: zenBalanceRequest,
                 now: now)
-        } catch {
-            throw error
         }
         let snapshot: OpenCodeGoUsageSnapshot
         do {
@@ -175,7 +175,8 @@ public struct OpenCodeGoUsageFetcher: Sendable {
             from: zenBalanceTask,
             timeout: self.optionalZenBalanceJoinTimeout(
                 since: zenBalanceStart,
-                waitForZenBalance: waitForZenBalance))
+                waitForZenBalance: waitForZenBalance,
+                now: clockNow()))
         return snapshot.withZenBalanceUSD(zenBalance)
     }
 
