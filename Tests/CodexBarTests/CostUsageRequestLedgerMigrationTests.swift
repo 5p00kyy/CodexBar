@@ -19,7 +19,7 @@ struct CostUsageRequestLedgerMigrationTests {
         func pair(_ id: String, input: Int, total: Int) -> [[String: Any]] {
             [
                 ["type": "token_usage_record", "timestamp": timestamp, "payload": [
-                    "thread_id": "migration-thread", "session_id": "migration-thread", "response_id": id,
+                    "thread_id": "migration-thread", "session_id": "execution-session", "response_id": id,
                     "turn_id": "migration-turn", "usage": tokens(input), "thread_token_usage": tokens(total),
                 ]],
                 ["type": "event_msg", "timestamp": timestamp, "payload": [
@@ -30,7 +30,11 @@ struct CostUsageRequestLedgerMigrationTests {
             ]
         }
         let header: [[String: Any]] = [
-            ["type": "session_meta", "timestamp": timestamp, "payload": ["id": "migration-thread"]],
+            [
+                "type": "session_meta",
+                "timestamp": timestamp,
+                "payload": ["id": "migration-thread", "session_id": "execution-session"],
+            ],
             [
                 "type": "turn_context",
                 "timestamp": timestamp,

@@ -5544,6 +5544,7 @@ enum CostUsageScanner {
             forkAccountingState: forkAccountingState,
             requestLedgerState: requestLedger.responseIDs.isEmpty && requestLedger.legacyRowIndices.isEmpty
                 && requestLedger.turnModels.isEmpty && requestLedger.activeTurnID == nil
+                && requestLedger.sessionID == sessionId
                 ? nil : requestLedger,
             replacedLegacyRowIndices: replacedLegacyRowIndices)
     }
