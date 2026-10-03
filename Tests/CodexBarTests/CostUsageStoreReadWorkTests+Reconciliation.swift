@@ -62,7 +62,7 @@ extension CostUsageStoreReadWorkTests {
     }
 
     @Test
-    func `receipt persists cursor-only changes without grouping or decoding again`() async throws {
+    func `receipt persists freshness and cursor changes in one metadata write`() async throws {
         let fixture = try ReadWorkFixture(fileCount: 2, rowsPerFile: 4)
         defer { fixture.remove() }
         let recorder = CostUsageStoreReadWorkRecorder(databaseURL: fixture.store.databaseURL)
@@ -88,7 +88,7 @@ extension CostUsageStoreReadWorkTests {
                 completedTurnIDInsertionOrderStartIndex: 0)
             incoming.lastScanUnixMs += 1000
             #expect(!fixture.save(incoming, load: loaded).catchUpRequired)
-            #expect(await fixture.store.persistenceWriteMetricsForTesting().rows - before.rows == 2)
+            #expect(await fixture.store.persistenceWriteMetricsForTesting().rows - before.rows == 1)
             #expect(recorder.snapshot().fullSnapshotReads == 0)
             #expect(recorder.snapshot().scannerSnapshotReads == 1)
             #expect(recorder.snapshot().usageRowDecodeAttempts == fixture.rowCount)
@@ -125,14 +125,17 @@ extension CostUsageStoreReadWorkTests {
         let recorder = CostUsageStoreReadWorkRecorder(databaseURL: CostUsageStore(cacheRoot: env.cacheRoot).databaseURL)
         var recordingHooks = CostUsageStoreTestHooks.current
         recordingHooks.readWorkRecorder = recorder
+        recordingHooks.scanStoreOverride = CostUsageStore(cacheRoot: env.cacheRoot)
         try CostUsageStoreTestHooks.$current.withValue(recordingHooks) {
-            let unchanged = scan(day.addingTimeInterval(1))
+            _ = scan(day.addingTimeInterval(1))
+            recorder.reset()
+            let unchanged = scan(day.addingTimeInterval(2))
             #expect(unchanged.data == original.data)
             #expect(unchanged.summary == original.summary)
             #expect(recorder.snapshot().fullSnapshotReads == 0)
-            #expect(recorder.snapshot().scannerSnapshotReads == 1)
-            #expect(recorder.snapshot().cacheConversions == 1)
-            #expect(recorder.snapshot().usageRowDecodeAttempts == 1)
+            #expect(recorder.snapshot().scannerSnapshotReads == 0)
+            #expect(recorder.snapshot().cacheConversions == 0)
+            #expect(recorder.snapshot().usageRowDecodeAttempts == 0)
             #expect(recorder.snapshot().aggregateGroupingRowVisits == 0)
         }
     }

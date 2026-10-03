@@ -327,7 +327,7 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     connection, database identity and SQLite change observations,
     checking again under the writer lock. Filesystem/anchor and catch-up reconciliation still run at comparison
     time; a concurrent database change requests a rescan. Fresh database opens retain integrity validation.
-  - Scan loads also retain decoded baselines for up to four recently used cache roots while the database stamp is unchanged. Each load issues a fresh save receipt and rechecks transcript identity; writes, failed operations, schema changes, and database replacement invalidate reuse.
+  - Scan loads retain decoded baselines for up to four recently used cache roots. Transaction-validated freshness and priority-cursor updates share one metadata write and keep the decoded history warm. Content changes, external commits, failed operations, schema changes, and database replacement invalidate reuse. Each load still issues a fresh save receipt and rechecks transcript identity.
   - Up to four recently used cache roots retain validated reader connections and decoded status/activity data.
     External writes invalidate cached data; database replacement or incompatible metadata reopens the reader through
     existing validation on its next access. Every read still reconciles file identities, and detailed report history
