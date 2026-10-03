@@ -5,6 +5,15 @@ import Testing
 
 struct BrowserCookieImportSupportTests {
     @Test
+    func `browser labels and keychain requirements follow catalog metadata without discovery`() {
+        #expect(BrowserCookieImportSupport.browserNames(for: nil) == "Chrome")
+        #expect(BrowserCookieImportSupport.browserNames(for: .museai) == "Chrome")
+        for browser in Browser.allCases {
+            #expect(browser.usesKeychainForCookieDecryption == browser.usesChromiumProfileStore)
+        }
+    }
+
+    @Test
     func `empty session iterators let the plugin classify missing credentials`() throws {
         let sessions: [String] = try BrowserCookieImportSupport.collectSessions(
             from: [.chrome],
