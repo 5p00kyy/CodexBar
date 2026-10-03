@@ -254,6 +254,76 @@ struct MusePluginTests {
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
+    func `a blank session email without the login's membership lists no teams when none is selected`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let requests = RequestLog()
+        let result = try await Self.fetchWithWeb(
+            engine: engine,
+            teamID: nil,
+            requests: requests,
+            web: Self.blankEmailWeb(members: (Self.members(email: "bob@example.com"), 200)))
+        #expect(!result.usage.details.contains { $0.title == "Browser teams" })
+        #expect(requests.all.contains { $0.url?.path == "/api/portal/teams/\(Self.teamID)/members" })
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `a blank session email binds through the first team when the selected team is not visible`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let requests = RequestLog()
+        let result = try await Self.fetchWithWeb(
+            engine: engine,
+            teamID: "999",
+            requests: requests,
+            web: Self.blankEmailWeb(members: (Self.members(), 200)))
+        let teams = try #require(result.usage.details.first { $0.title == "Browser teams" })
+        #expect(teams.rows.contains {
+            $0.label == "Status" && $0.value == "The selected browser team is not visible to this session"
+        })
+        #expect(teams.rows.contains { $0.label == "My Team" && $0.value == Self.teamID })
+        #expect(result.usage.secondary == nil)
+        #expect(!requests.all.contains { $0.url?.path.hasSuffix("/subscription-quota") == true })
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `an unbound session without a team list does not end the search for a matching session`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let next = LockIsolated(0)
+        let runtime = try BundledPluginTestSupport.runtime(
+            "muse", engine: engine, transport: ProviderHTTPTransportHandler { request in
+                guard request.url?.host == "dev.meta.ai" else {
+                    return try Self.response(request, body: Self.activeWithoutWindows)
+                }
+                let path = request.url?.path ?? ""
+                if request.value(forHTTPHeaderField: "Cookie") == "session=first" {
+                    let body = path == "/api/auth/me" ? Self.blankEmailMe : "{}"
+                    return try Self.response(request, body: body)
+                }
+                let (body, code) = Self.web(quota: Self.quota())(path)
+                return try Self.response(request, body: body, status: code)
+            })
+        let result = try await runtime.fetchResult(
+            settings: ["MUSE_WEB_TEAM_ID": Self.teamID],
+            secrets: ["MUSE_DEVICE_TOKEN": "dca:fixture-token"],
+            now: Date(timeIntervalSince1970: TimeInterval(Self.now)),
+            cookieSource: .auto,
+            cookieSessionResolver: { _, _ in
+                let index = next.value
+                next.setValue(index + 1)
+                guard index < 2 else { return nil }
+                let name = index == 0 ? "first" : "matching"
+                return ProviderPluginCookieSession(
+                    header: "session=\(name)", source: "fixture", origin: "https://dev.meta.ai", id: name)
+            },
+            cookieSessionInvalidator: { _, _ in },
+            cookieResolver: { _, _ in "session=first" })
+        #expect(result.sourceLabel == "oauth+web")
+        #expect(result.usage.secondary != nil)
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
     func `selected team quota fills omitted login quotas`(engine: ProviderPluginEngineKind) async throws {
         let requests = RequestLog()
         let quota = Self.quota(windowUsed: "4000000000", windowResetsAt: Self.now + 3600)
