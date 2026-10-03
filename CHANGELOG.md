@@ -4,7 +4,6 @@
 
 ### Fixed
 
-- Browser cookies: name each plugin provider's supported automatic browsers in settings and cookie sign-in guidance, with Manual as the alternative for other browsers (#4215).
 - Status: prevent older status requests from replacing newer incidents, emitting false recovery hooks, or scheduling redundant retries (#4175). Thanks @Shenrui-Ma!
 - Widgets: use current menu accents for Abacus, Amp, Augment, Bedrock, Cline Pass, Codebuff, Cursor, DeepSeek, Devin, Kiro, LongCat, Mistral, NeuralWatt, Sub2API, and Venice while preserving intentionally distinct widget colors (#4199). Thanks @raulgg!
 - Command Code: normalize bare manual session tokens with the current production cookie name while preserving explicit cookie headers (#4192). Thanks @rodrigovzq!
@@ -13,6 +12,7 @@
 - Codex: reuse decoded local cost history across unchanged refreshes, including priority-cursor updates (#4200, #4205). Thanks @Yuxin-Qiao!
 - Claude: keep parsed transcript windows reusable when pricing changes during a refresh, while recalculating the next report with the new prices (#4202, #4204). Thanks @Yuxin-Qiao!
 - Pi: recognize OMP one-hour cache-write counters and reprice older cached estimates without double-counting tokens (#4121, #4176). Thanks @vincent-peng!
+- Browser cookies: name each plugin provider's supported automatic browsers in settings and cookie sign-in guidance, with Manual as the alternative for other browsers (#4215).
 
 ## 0.71.0 — 2026-10-02
 
