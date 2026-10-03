@@ -63,7 +63,8 @@ extension OpenCodeGoUsageFetcher {
         now: ContinuousClock.Instant = ContinuousClock.now) -> Duration
     {
         guard waitForZenBalance else { return self.optionalZenBalanceJoinGrace }
-        let remaining = .seconds(Self.optionalZenBalanceTimeout) - (now - startedAt)
+        let elapsed = startedAt.duration(to: now)
+        let remaining = Duration.seconds(Self.optionalZenBalanceTimeout) - elapsed
         return max(Duration.zero, remaining)
     }
 
