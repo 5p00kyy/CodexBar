@@ -102,7 +102,7 @@ enum PiSessionCostScanner {
 
     static let costScale = 1_000_000_000.0
     /// Bump for Pi-only cost formula changes not represented by the parser or pricing fingerprints.
-    private static let costFormulaVersion = 3
+    private static let costFormulaVersion = 4
     private static let maxLineBytes = 16 * 1024 * 1024
     private static let sessionStartFilenameRegex = try? NSRegularExpression(
         pattern: "^(\\d{4}-\\d{2}-\\d{2})T(\\d{2})-(\\d{2})-(\\d{2})-(\\d{3})Z_")
@@ -1140,28 +1140,20 @@ enum PiSessionCostScanner {
     }
 
     private static func parseTimestampValue(_ value: Any?) -> Date? {
-        if let number = value as? NSNumber {
+        let raw: Double
+        switch value {
+        case let number as NSNumber:
             // JSON booleans bridge to NSNumber on Darwin; they are not timestamps.
             guard CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
-            let raw = number.doubleValue
-            guard raw.isFinite else { return nil }
-            if raw > 1_000_000_000_000 {
-                return Date(timeIntervalSince1970: raw / 1000)
-            }
-            return Date(timeIntervalSince1970: raw)
+            raw = number.doubleValue
+        case let string as String:
+            guard let numeric = Double(string) else { return self.parseISO(string) }
+            raw = numeric
+        default:
+            return nil
         }
-
-        if let string = value as? String {
-            if let numeric = Double(string), numeric.isFinite {
-                if numeric > 1_000_000_000_000 {
-                    return Date(timeIntervalSince1970: numeric / 1000)
-                }
-                return Date(timeIntervalSince1970: numeric)
-            }
-            return self.parseISO(string)
-        }
-
-        return nil
+        guard raw.isFinite else { return nil }
+        return Date(timeIntervalSince1970: raw > 1_000_000_000_000 ? raw / 1000 : raw)
     }
 
     private static func extractUsage(
@@ -1199,7 +1191,13 @@ enum PiSessionCostScanner {
                 ?? usage["cache_creation_tokens"]
                 ?? usage["cacheCreationInputTokens"]
                 ?? usage["cache_creation_input_tokens"])
-        let cacheWrite1h = read(usage["cacheWrite1h"])
+        let cttl = usage["cttl"] as? [String: Any]
+        // First present spelling wins, including malformed values rejected by the shared reader.
+        let cacheWrite1h = read(
+            usage["cacheWrite1h"]
+                ?? usage["cache_write_1h"]
+                ?? cttl?["ephemeral1h"]
+                ?? cttl?["ephemeral_1h"])
         let output = read(
             usage["output"]
                 ?? usage["outputTokens"]

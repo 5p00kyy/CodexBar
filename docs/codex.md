@@ -327,7 +327,7 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     connection, database identity and SQLite change observations,
     checking again under the writer lock. Filesystem/anchor and catch-up reconciliation still run at comparison
     time; a concurrent database change requests a rescan. Fresh database opens retain integrity validation.
-  - Scan loads also retain decoded baselines for up to four recently used cache roots while the database stamp is unchanged. Each load issues a fresh save receipt and rechecks transcript identity; writes, failed operations, schema changes, and database replacement invalidate reuse.
+  - Scan loads retain decoded baselines for up to four recently used cache roots. Transaction-validated freshness and priority-cursor updates share one metadata write and keep the decoded history warm. Content changes, external commits, failed operations, schema changes, and database replacement invalidate reuse. Each load still issues a fresh save receipt and rechecks transcript identity.
   - Up to four recently used cache roots retain validated reader connections and decoded status/activity data.
     External writes invalidate cached data; database replacement or incompatible metadata reopens the reader through
     existing validation on its next access. Every read still reconciles file identities, and detailed report history
@@ -340,6 +340,8 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   - Saves skip unchanged files using the transaction-validated scan baseline, so a changed session or scan metadata
     does not rewrite every retained file's metadata, aggregates, fork state, buffers, and accumulator. Changed files,
     parser/calendar migrations, and incomplete persisted row sets still take the normal persistence path.
+    Hydrating an empty token history does not force a content rewrite when no snapshot rows are stored for that file.
+    Clearing a non-empty history still removes its snapshot rows and preserves sibling histories.
   - Excess cached request rows trigger bounded revalidation of readable, unchanged session files. Ordered source
     replay determines the request sequence; matching token totals alone cannot establish a request partition.
     Unanimous saved pricing survives partial scans and restarts. Files with authoritative monetary amounts, existing
