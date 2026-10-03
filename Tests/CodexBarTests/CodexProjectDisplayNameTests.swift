@@ -37,12 +37,7 @@ struct CodexProjectDisplayNameTests {
             """)
             let projects = [Self.project("/work"), Self.project("/unmatched")]
             let sessionsRoot = url.deletingLastPathComponent().appendingPathComponent("sessions")
-            let renamed = CostUsageFetcher.codexProjectsWithDisplayNames(
-                projects,
-                sessionsRoot: sessionsRoot,
-                environment: [:])
-            #expect(renamed == [projects[0].withName("Workspace Label"), projects[1]])
-            let session = CostUsageSessionBreakdown(
+            var session = CostUsageSessionBreakdown(
                 sessionID: "test",
                 lastActivity: Date(timeIntervalSince1970: 0),
                 inputTokens: 10,
@@ -55,15 +50,29 @@ struct CodexProjectDisplayNameTests {
                 projectPath: "/work",
                 projectName: "work",
                 title: "Existing title")
-            #expect(CostUsageFetcher.codexSessionsWithThreadTitles(
+            session.workingDirectory = "/work"
+            var lookups: [URL: Set<String>] = [:]
+            let result = CostUsageFetcher.codexBreakdownsWithMetadata(
                 [session],
+                projects: projects,
                 sessionsRoot: sessionsRoot,
-                environment: [:]) ==
-                [session.withProjectName("Workspace Label")])
-            #expect(CostUsageFetcher.codexProjectsWithDisplayNames(
-                projects,
-                sessionsRoot: nil,
-                environment: [:]) == projects)
+                environment: [:],
+                projectNameLookup: { database, paths in
+                    #expect(lookups[database] == nil)
+                    lookups[database] = paths
+                    return CodexThreadMetadataReader(databaseURL: database).projectNames(for: paths)
+                })
+            var expectedProject = projects[0]
+            expectedProject.name = "Workspace Label"
+            var expectedSession = session
+            expectedSession.projectName = "Workspace Label"
+            #expect(result.projects == [expectedProject, projects[1]])
+            #expect(result.sessions == [expectedSession])
+            #expect(Dictionary(uniqueKeysWithValues: lookups.map {
+                ($0.key.resolvingSymlinksInPath(), $0.value)
+            }) == [url.resolvingSymlinksInPath(): ["/work", "/unmatched"]])
+            #expect(CostUsageFetcher.codexBreakdownsWithMetadata(
+                [], projects: projects, sessionsRoot: nil, environment: [:]).projects == projects)
         }
     }
 
@@ -82,7 +91,7 @@ struct CodexProjectDisplayNameTests {
                 CREATE TABLE projects (id TEXT, name TEXT);
                 CREATE TABLE project_roots (project_id TEXT, path TEXT);
                 INSERT INTO projects VALUES ('project', '\(label)');
-                INSERT INTO project_roots VALUES ('project', '/work');
+                INSERT INTO project_roots VALUES ('project', '/work'), ('project', '\(cwd.path)');
                 """)
                 sources.append(CostUsageProjectSourceBreakdown(
                     name: label,
@@ -92,10 +101,12 @@ struct CodexProjectDisplayNameTests {
                     daily: [],
                     modelBreakdowns: []))
             }
-            func project(_ sources: [CostUsageProjectSourceBreakdown]) -> CostUsageProjectBreakdown {
+            func project(
+                _ sources: [CostUsageProjectSourceBreakdown], path: String = "/work") -> CostUsageProjectBreakdown
+            {
                 CostUsageProjectBreakdown(
                     name: "work",
-                    path: "/work",
+                    path: path,
                     totalTokens: 26,
                     totalCostUSD: 2,
                     daily: [],
@@ -104,11 +115,18 @@ struct CodexProjectDisplayNameTests {
             }
             let first = project([sources[0]])
             let combined = project(sources)
-            let renamed = CostUsageFetcher.codexProjectsWithDisplayNames(
-                [first, combined],
+            let unknown = CostUsageProjectSourceBreakdown(
+                name: "Unknown", path: nil, totalTokens: nil, totalCostUSD: nil, daily: [], modelBreakdowns: nil)
+            let mixed = project([sources[0], unknown])
+            let unproven = try project([], path: #require(sources[0].path))
+            let renamed = CostUsageFetcher.codexBreakdownsWithMetadata(
+                [],
+                projects: [first, combined, mixed, unproven],
                 sessionsRoot: home.appendingPathComponent("sessions"),
-                environment: ["CODEX_SQLITE_HOME": "state"])
-            #expect(renamed == [first.withName("First"), combined])
+                environment: ["CODEX_SQLITE_HOME": "state"]).projects
+            var expected = first
+            expected.name = "First"
+            #expect(renamed == [expected, combined, mixed, unproven])
         }
     }
 
@@ -130,7 +148,9 @@ struct CodexProjectDisplayNameTests {
             totalTokens: 13,
             totalCostUSD: 1,
             daily: [],
-            modelBreakdowns: [])
+            modelBreakdowns: [],
+            sources: [CostUsageProjectSourceBreakdown(
+                name: "Source", path: path, totalTokens: 13, totalCostUSD: 1, daily: [], modelBreakdowns: [])])
     }
 
     private static func withDatabase(_ body: (URL) throws -> Void) throws {

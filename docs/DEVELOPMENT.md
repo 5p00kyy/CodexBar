@@ -524,6 +524,19 @@ factory tests; exclude those when running a nonpersistent-only focused check.
 
 ### CI Aggregate Contract
 
+`make check` and portable CI lint run `node Scripts/check-package-resolved.mjs` and its synthetic regression tests
+(`node --test Scripts/test_package_resolved.mjs`). This offline, read-only check compares every package identity,
+revision, and version in the root and widget workspace `Package.resolved` files, including missing or extra pins.
+Pin order and workspace-specific `originHash` values do not affect the comparison. After changing dependencies,
+resolve the widget workspace from the repository root and commit both resolved files together:
+
+```bash
+xcodebuild -resolvePackageDependencies -project WidgetExtension/CodexBarWidgetExtension.xcodeproj
+```
+
+The check names each drifted package and prints this repair command before packaging can fail with an out-of-date
+resolved file when automatic resolution is disabled.
+
 The `lint-build-test` check in `.github/workflows/ci.yml` keeps its existing name and requires successful lint,
 change detection, and the full `build-linux-cli` glibc matrix (x86_64 and ARM64 build, tests, and smoke checks).
 Glibc Linux has no path or draft skip: failure, cancellation, skipped, empty, missing, or unknown matrix results

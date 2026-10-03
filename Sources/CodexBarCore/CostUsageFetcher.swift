@@ -897,15 +897,9 @@ public struct CostUsageFetcher: Sendable {
                     staleSnapshotUpdatedAt = previous.updatedAt
                 } else {
                     daily = view.dailyReport(range: range, cacheRoot: options.scanOptions.cacheRoot)
-                    projects = Self.codexProjectsWithDisplayNames(
-                        view.projects(range: range, cacheRoot: options.scanOptions.cacheRoot),
-                        sessionsRoot: roots.first,
-                        environment: options.environment)
-                    sessions = Self.codexSessionsWithThreadTitles(
-                        view.sessions(
-                            range: range,
-                            cacheRoot: options.scanOptions.cacheRoot,
-                            roots: roots),
+                    (projects, sessions) = Self.codexBreakdownsWithMetadata(
+                        view.sessions(range: range, cacheRoot: options.scanOptions.cacheRoot, roots: roots),
+                        projects: view.projects(range: range, cacheRoot: options.scanOptions.cacheRoot),
                         sessionsRoot: roots.first,
                         environment: options.environment)
                 }
@@ -965,80 +959,78 @@ public struct CostUsageFetcher: Sendable {
         }
     }
 
-    /// Refresh labels from the selected Codex home without changing paths, usage, or persisted history.
-    static func codexProjectsWithDisplayNames(
-        _ projects: [CostUsageProjectBreakdown],
-        sessionsRoot: URL?,
-        environment: [String: String] = ProcessInfo.processInfo.environment) -> [CostUsageProjectBreakdown]
-    {
-        guard !projects.isEmpty, let sessionsRoot, sessionsRoot.lastPathComponent == "sessions" else {
-            return projects
-        }
-        let home = sessionsRoot.deletingLastPathComponent()
-        // Canonical project paths can combine worktrees with different relative SQLite homes.
-        // Resolve from each original source directory, just like the session-title overlay.
-        let databases = projects.map { project -> Set<URL> in
-            let sources = project.sources.compactMap(\.path)
-            return Set((sources.isEmpty ? [project.path].compactMap(\.self) : sources).map { path in
-                CodexThreadMetadataReader(
-                    codexHomeDirectory: home,
-                    environment: environment,
-                    resolvedWorkingDirectory: URL(fileURLWithPath: path, isDirectory: true)).databaseURL
-            })
-        }
-        let paths = Set(projects.compactMap(\.path))
-        var namesByDatabase: [URL: [String: String]] = [:]
-        for database in Set(databases.flatMap(\.self)) {
-            namesByDatabase[database] = CodexThreadMetadataReader(databaseURL: database).projectNames(for: paths)
-        }
-        return zip(projects, databases).map { project, databases in
-            guard let path = project.path, !databases.isEmpty else { return project }
-            let names = databases.compactMap { namesByDatabase[$0]?[path] }
-            guard names.count == databases.count, Set(names).count == 1, let name = names.first else { return project }
-            return project.withName(name)
-        }
-    }
-
-    /// Codex keeps thread names outside the rollout files, so overlay them after the cost scan.
-    static func codexSessionsWithThreadTitles(
+    /// Refresh presentation metadata once per database, without changing the cached accounting.
+    static func codexBreakdownsWithMetadata(
         _ sessions: [CostUsageSessionBreakdown],
+        projects: [CostUsageProjectBreakdown] = [],
         sessionsRoot: URL?,
-        environment: [String: String] = ProcessInfo.processInfo.environment) -> [CostUsageSessionBreakdown]
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default,
+        projectNameLookup: (URL, Set<String>) -> [String: String] = {
+            CodexThreadMetadataReader(databaseURL: $0).projectNames(for: $1)
+        }) -> (projects: [CostUsageProjectBreakdown], sessions: [CostUsageSessionBreakdown])
     {
-        guard !sessions.isEmpty,
-              let sessionsRoot,
-              sessionsRoot.lastPathComponent == "sessions"
-        else {
-            return sessions
-        }
+        var result = (projects: projects, sessions: sessions)
+        guard !projects.isEmpty || !sessions.isEmpty,
+              let sessionsRoot, sessionsRoot.lastPathComponent == "sessions"
+        else { return result }
         let home = sessionsRoot.deletingLastPathComponent()
-        let indexedNames = CodexThreadMetadataReader.indexedThreadNames(
-            codexHomeDirectory: home, sessionIDs: Set(sessions.map(\.sessionID)))
-        let groups = Dictionary(grouping: sessions) { session in
-            CodexThreadMetadataReader(
+        var databasesByWorkingDirectory: [String?: URL] = [:]
+        var databasesBySQLiteHome: [URL: URL] = [:]
+        func database(for workingDirectory: String?) -> URL {
+            if let database = databasesByWorkingDirectory[workingDirectory] { return database }
+            let sqliteHome = CodexThreadMetadataReader.sqliteHomeDirectory(
                 codexHomeDirectory: home,
                 environment: environment,
-                resolvedWorkingDirectory: session.workingDirectory.map {
-                    URL(fileURLWithPath: $0, isDirectory: true)
-                }).databaseURL
+                resolvedWorkingDirectory: workingDirectory.map { URL(fileURLWithPath: $0, isDirectory: true) })
+            let database = databasesBySQLiteHome[sqliteHome] ?? CodexThreadMetadataReader.databaseURL(
+                sqliteHomeDirectory: sqliteHome, fileManager: fileManager)
+            databasesBySQLiteHome[sqliteHome] = database
+            databasesByWorkingDirectory[workingDirectory] = database
+            return database
         }
-        var metadata: [String: CodexThreadMetadata] = [:]
-        var projectNames: [String: String] = [:]
-        for (database, sessions) in groups {
-            metadata.merge(CodexThreadMetadataReader(databaseURL: database).metadata(
-                for: Set(sessions.map(\.sessionID)), indexedNames: indexedNames)) { _, latest in latest }
-            let names = CodexThreadMetadataReader(databaseURL: database).projectNames(
-                for: Set(sessions.compactMap(\.projectPath)))
-            for session in sessions {
-                if let path = session.projectPath { projectNames[session.sessionID] = names[path] }
+        var pathsByDatabase: [URL: Set<String>] = [:]
+        let projectLookups = projects.map { project in
+            // A canonical project may combine worktrees with different relative SQLite homes.
+            project.sources.compactMap { source -> (database: URL, path: String)? in
+                guard let path = source.path else { return nil }
+                let database = database(for: path)
+                pathsByDatabase[database, default: []].insert(path)
+                return (database, path)
             }
         }
-        return sessions.map { session in
-            var result = session
-            if let title = metadata[session.sessionID]?.title { result = result.withTitle(title) }
-            if let name = projectNames[session.sessionID] { result = result.withProjectName(name) }
-            return result
+        let sessionGroups = Dictionary(grouping: sessions.indices) { index in
+            let database = database(for: sessions[index].workingDirectory)
+            if let path = sessions[index].workingDirectory { pathsByDatabase[database, default: []].insert(path) }
+            return database
         }
+        let namesByDatabase = Dictionary(uniqueKeysWithValues: pathsByDatabase.map { database, paths in
+            (database, projectNameLookup(database, paths))
+        })
+        for index in projects.indices {
+            let lookups = projectLookups[index]
+            guard !lookups.isEmpty, lookups.count == projects[index].sources.count else { continue }
+            let names = lookups.compactMap { namesByDatabase[$0.database]?[$0.path] }
+            guard names.count == lookups.count, Set(names).count == 1,
+                  let name = names.first else { continue }
+            result.projects[index].name = name
+        }
+        let indexedNames = CodexThreadMetadataReader.indexedThreadNames(
+            codexHomeDirectory: home, sessionIDs: Set(sessions.map(\.sessionID)))
+        for (database, indices) in sessionGroups {
+            let metadata = CodexThreadMetadataReader(databaseURL: database).metadata(
+                for: Set(indices.map { sessions[$0].sessionID }), indexedNames: indexedNames)
+            for index in indices {
+                let session = sessions[index]
+                if let title = metadata[session.sessionID]?.title {
+                    result.sessions[index] = session.withTitle(title)
+                }
+                if let path = session.workingDirectory, let name = namesByDatabase[database]?[path] {
+                    result.sessions[index].projectName = name
+                }
+            }
+        }
+        return result
     }
 
     private static func codexReportView(
@@ -1408,6 +1400,8 @@ public struct CostUsageFetcher: Sendable {
                                 range: range,
                                 cacheRoot: options.cacheRoot))
                         }
+                        (projects, sessions) = Self.codexBreakdownsWithMetadata(
+                            sessions, projects: projects, sessionsRoot: roots.first, environment: environment)
                     }
                 }
             }

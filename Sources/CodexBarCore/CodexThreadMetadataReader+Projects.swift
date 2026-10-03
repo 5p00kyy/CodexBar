@@ -37,9 +37,9 @@ extension CodexThreadMetadataReader {
             if status == SQLITE_DONE { break }
             guard status == SQLITE_ROW, count < 1024 else { return [:] }
             count += 1
-            guard let id = Self.projectString(statement, column: 0),
-                  let name = Self.projectString(statement, column: 1),
-                  let rawPath = Self.projectString(statement, column: 2),
+            guard let id = Self.string(statement, column: 0),
+                  let name = Self.string(statement, column: 1),
+                  let rawPath = Self.string(statement, column: 2),
                   (rawPath as NSString).isAbsolutePath
             else { continue }
             roots.append((id, name, URL(fileURLWithPath: rawPath).standardizedFileURL.path))
@@ -60,12 +60,4 @@ extension CodexThreadMetadataReader {
         return [:]
         #endif
     }
-
-    #if canImport(SQLite3) || canImport(CSQLite3)
-    private static func projectString(_ statement: OpaquePointer, column: Int32) -> String? {
-        guard let value = sqlite3_column_text(statement, column) else { return nil }
-        let string = String(cString: value).trimmingCharacters(in: .whitespacesAndNewlines)
-        return string.isEmpty ? nil : string
-    }
-    #endif
 }
