@@ -340,6 +340,8 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
   - Saves skip unchanged files using the transaction-validated scan baseline, so a changed session or scan metadata
     does not rewrite every retained file's metadata, aggregates, fork state, buffers, and accumulator. Changed files,
     parser/calendar migrations, and incomplete persisted row sets still take the normal persistence path.
+    Hydrating an empty token history does not force a content rewrite when no snapshot rows are stored for that file.
+    Clearing a non-empty history still removes its snapshot rows and preserves sibling histories.
   - Excess cached request rows trigger bounded revalidation of readable, unchanged session files. Ordered source
     replay determines the request sequence; matching token totals alone cannot establish a request partition.
     Unanimous saved pricing survives partial scans and restarts. Files with authoritative monetary amounts, existing
