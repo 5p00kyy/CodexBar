@@ -90,10 +90,10 @@ defineProvider({
           if (requestsLeft <= 0) break;
           let rejected = false;
           const headers = { Cookie: session.header ?? "", "User-Agent": "CodexBar" };
-          const get = async (path: string): Promise<Record<string, unknown> | undefined> => {
+          const get = async (path: string, forbiddenRejectsSession = true) => {
             if (requestsLeft-- <= 0) throw new Error("Muse browser request budget exhausted");
             const response = await ctx.http.get(`https://dev.meta.ai${path}`, { headers, timeoutSeconds: 8 });
-            if (response.status === 401 || response.status === 403) {
+            if (response.status === 401 || (response.status === 403 && forbiddenRejectsSession)) {
               rejected = true;
               ctx.browser.rejectCookie("dev.meta.ai", session);
               return undefined;
@@ -107,26 +107,36 @@ defineProvider({
           // The browser session must belong to the same Meta account as the CLI login.
           const loginEmail = text(root.user_email, "user_email")?.toLowerCase();
           const me = await get("/api/auth/me");
-          const webEmail = typeof me?.email === "string" ? me.email.trim().toLowerCase() : undefined;
-          if (!loginEmail || !webEmail || loginEmail !== webEmail) continue;
+          if (!loginEmail || !me) continue;
+          const webEmail = typeof me.email === "string" ? me.email.trim().toLowerCase() : "";
+          const webUserID = numericID(me.userId);
+          // dev.meta.ai can report a blank email; the session user's team membership then supplies it below.
+          if (webEmail ? webEmail !== loginEmail : !webUserID) continue;
           const listed = (await get("/api/portal/teams"))?.teams;
           if (rejected) continue;
           if (!Array.isArray(listed)) return undefined;
           const teams: WebTeam[] = [];
           for (const entry of listed) {
             const item = entry && typeof entry === "object" ? (entry as Record<string, unknown>) : {};
-            const id =
-              typeof item.team_id === "string"
-                ? item.team_id
-                : Number.isSafeInteger(item.team_id)
-                  ? String(item.team_id)
-                  : "";
-            if (!/^[0-9]+$/.test(id)) continue;
+            const id = numericID(item.team_id);
+            if (!id) continue;
             const name = typeof item.team_name === "string" && item.team_name.trim() ? item.team_name.trim() : id;
             teams.push({ id, name });
           }
           const selected = ctx.settings.get("MUSE_WEB_TEAM_ID")?.trim() ?? "";
           const team = teams.find((candidate) => candidate.id === selected);
+          if (!webEmail) {
+            // Accept the session only if a visible team lists its user with the login's email.
+            const probe = team ?? teams[0];
+            if (!probe) continue;
+            // Member lists can be forbidden to some roles; that does not mean the session expired.
+            const members = (await get(`/api/portal/teams/${probe.id}/members`, false))?.members;
+            if (rejected || !Array.isArray(members)) continue;
+            const own = members
+              .map((member) => (member && typeof member === "object" ? (member as Record<string, unknown>) : {}))
+              .find((member) => numericID(member.user_id) === webUserID);
+            if (typeof own?.email !== "string" || own.email.trim().toLowerCase() !== loginEmail) continue;
+          }
           if (!selected) return { teams, note: "Choose a browser team in Muse Code settings" };
           if (!team) return { teams, note: "The selected browser team is not visible to this session" };
           const quota = (await get(`/api/portal/teams/${team.id}/subscription-quota`))?.subscription_quota;
@@ -145,6 +155,10 @@ defineProvider({
         void error;
       }
       return undefined;
+    }
+    function numericID(value: unknown): string | undefined {
+      const id = typeof value === "string" ? value.trim() : Number.isSafeInteger(value) ? String(value) : "";
+      return /^[0-9]+$/.test(id) ? id : undefined;
     }
     function parseWebQuota(quota: Record<string, unknown>) {
       // Limits and usage are weighted token counts encoded as decimal strings.

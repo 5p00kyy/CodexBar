@@ -174,6 +174,85 @@ struct MusePluginTests {
         }
     }
 
+    /// dev.meta.ai sessions can report a blank email; the session user's team membership then carries it.
+    static let blankEmailMe = #"{"userId":"1001","displayName":"1001","email":""}"#
+
+    static func members(userID: String = "1001", email: String = "Ada@Example.com") -> String {
+        #"{"members":[{"member_id":"9","user_id":"\#(userID)","name":"Ada","email":"\#(email)","role":"owner"}]}"#
+    }
+
+    static func blankEmailWeb(members: (String, Int)) -> @Sendable (String) -> (String, Int) {
+        { path in
+            switch path {
+            case "/api/auth/me": (Self.blankEmailMe, 200)
+            case "/api/portal/teams/\(Self.teamID)/members": members
+            default: Self.web(quota: Self.quota())(path)
+            }
+        }
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `a blank session email is resolved from the session user's team membership`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let requests = RequestLog()
+        let result = try await Self.fetchWithWeb(
+            engine: engine,
+            requests: requests,
+            web: Self.blankEmailWeb(members: (Self.members(), 200)))
+        #expect(result.sourceLabel == "oauth+web")
+        #expect(result.usage.secondary != nil)
+        #expect(requests.all.filter { $0.url?.host == "dev.meta.ai" }.map { $0.url?.path ?? "" } == [
+            "/api/auth/me",
+            "/api/portal/teams",
+            "/api/portal/teams/\(Self.teamID)/members",
+            "/api/portal/teams/\(Self.teamID)/subscription-quota",
+        ])
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `a blank session email lists teams for selection once membership matches the login`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let requests = RequestLog()
+        let result = try await Self.fetchWithWeb(
+            engine: engine,
+            teamID: nil,
+            requests: requests,
+            web: Self.blankEmailWeb(members: (Self.members(), 200)))
+        let teams = try #require(result.usage.details.first { $0.title == "Browser teams" })
+        #expect(teams.rows.contains { $0.label == "My Team" && $0.value == Self.teamID })
+        #expect(!requests.all.contains { $0.url?.path.hasSuffix("/subscription-quota") == true })
+    }
+
+    @Test(arguments: [
+        (Self.members(email: "bob@example.com"), 200),
+        // The login's email belongs to another member, not to the session user.
+        (
+            #"{"members":[{"user_id":"2002","email":"ada@example.com"},"#
+                + #"{"user_id":"1001","email":"bob@example.com"}]}"#,
+            200),
+        (Self.members(userID: "2002"), 200),
+        (#"{"error":"Forbidden"}"#, 403),
+    ], BundledPluginTestSupport.engines)
+    func `a blank session email without the login's membership supplies no teams or quota`(
+        members: (body: String, status: Int),
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let requests = RequestLog()
+        let rejected = RequestLog()
+        let result = try await Self.fetchWithWeb(
+            engine: engine,
+            requests: requests,
+            rejected: rejected,
+            web: Self.blankEmailWeb(members: members))
+        #expect(result.usage.secondary == nil)
+        #expect(!result.usage.details.contains { $0.title == "Browser teams" })
+        #expect(!requests.all.contains { $0.url?.path.hasSuffix("/subscription-quota") == true })
+        // A forbidden member list is a role limit, not an expired session.
+        #expect(rejected.domains.isEmpty)
+    }
+
     @Test(arguments: BundledPluginTestSupport.engines)
     func `selected team quota fills omitted login quotas`(engine: ProviderPluginEngineKind) async throws {
         let requests = RequestLog()
@@ -380,7 +459,7 @@ struct MusePluginTests {
         #expect(rejected.domains == (quota.status == 401 ? ["dev.meta.ai"] : []))
     }
 
-    @Test(arguments: [#"{"email":"bob@example.com"}"#, #"{"userId":"1"}"#], BundledPluginTestSupport.engines)
+    @Test(arguments: [#"{"email":"bob@example.com"}"#, #"{"email":""}"#], BundledPluginTestSupport.engines)
     func `a browser session for another account never supplies quotas`(
         me: String,
         engine: ProviderPluginEngineKind) async throws

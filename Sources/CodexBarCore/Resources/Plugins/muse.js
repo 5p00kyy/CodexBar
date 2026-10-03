@@ -134,10 +134,10 @@ defineProvider({
           if (requestsLeft <= 0) break;
           let rejected = false;
           const headers = { Cookie: _nullishCoalesce(session.header, () => ""), "User-Agent": "CodexBar" };
-          const get = async (path) => {
+          const get = async (path, forbiddenRejectsSession = true) => {
             if (requestsLeft-- <= 0) throw new Error("Muse browser request budget exhausted");
             const response = await ctx.http.get(`https://dev.meta.ai${path}`, { headers, timeoutSeconds: 8 });
-            if (response.status === 401 || response.status === 403) {
+            if (response.status === 401 || (response.status === 403 && forbiddenRejectsSession)) {
               rejected = true;
               ctx.browser.rejectCookie("dev.meta.ai", session);
               return undefined;
@@ -157,28 +157,23 @@ defineProvider({
             (_5) => _5(),
           ]);
           const me = await get("/api/auth/me");
-          const webEmail =
-            typeof _optionalChain([me, "optionalAccess", (_6) => _6.email]) === "string"
-              ? me.email.trim().toLowerCase()
-              : undefined;
-          if (!loginEmail || !webEmail || loginEmail !== webEmail) continue;
+          if (!loginEmail || !me) continue;
+          const webEmail = typeof me.email === "string" ? me.email.trim().toLowerCase() : "";
+          const webUserID = numericID(me.userId);
+          // dev.meta.ai can report a blank email; the session user's team membership then supplies it below.
+          if (webEmail ? webEmail !== loginEmail : !webUserID) continue;
           const listed = await _asyncOptionalChain([
             await get("/api/portal/teams"),
             "optionalAccess",
-            async (_7) => _7.teams,
+            async (_6) => _6.teams,
           ]);
           if (rejected) continue;
           if (!Array.isArray(listed)) return undefined;
           const teams = [];
           for (const entry of listed) {
             const item = entry && typeof entry === "object" ? entry : {};
-            const id =
-              typeof item.team_id === "string"
-                ? item.team_id
-                : Number.isSafeInteger(item.team_id)
-                  ? String(item.team_id)
-                  : "";
-            if (!/^[0-9]+$/.test(id)) continue;
+            const id = numericID(item.team_id);
+            if (!id) continue;
             const name = typeof item.team_name === "string" && item.team_name.trim() ? item.team_name.trim() : id;
             teams.push({ id, name });
           }
@@ -186,25 +181,45 @@ defineProvider({
             _optionalChain([
               ctx,
               "access",
-              (_8) => _8.settings,
+              (_7) => _7.settings,
               "access",
-              (_9) => _9.get,
+              (_8) => _8.get,
               "call",
-              (_10) => _10("MUSE_WEB_TEAM_ID"),
+              (_9) => _9("MUSE_WEB_TEAM_ID"),
               "optionalAccess",
-              (_11) => _11.trim,
+              (_10) => _10.trim,
               "call",
-              (_12) => _12(),
+              (_11) => _11(),
             ]),
             () => "",
           );
           const team = teams.find((candidate) => candidate.id === selected);
+          if (!webEmail) {
+            // Accept the session only if a visible team lists its user with the login's email.
+            const probe = _nullishCoalesce(team, () => teams[0]);
+            if (!probe) continue;
+            // Member lists can be forbidden to some roles; that does not mean the session expired.
+            const members = await _asyncOptionalChain([
+              await get(`/api/portal/teams/${probe.id}/members`, false),
+              "optionalAccess",
+              async (_12) => _12.members,
+            ]);
+            if (rejected || !Array.isArray(members)) continue;
+            const own = members
+              .map((member) => (member && typeof member === "object" ? member : {}))
+              .find((member) => numericID(member.user_id) === webUserID);
+            if (
+              typeof _optionalChain([own, "optionalAccess", (_13) => _13.email]) !== "string" ||
+              own.email.trim().toLowerCase() !== loginEmail
+            )
+              continue;
+          }
           if (!selected) return { teams, note: "Choose a browser team in Muse Code settings" };
           if (!team) return { teams, note: "The selected browser team is not visible to this session" };
           const quota = await _asyncOptionalChain([
             await get(`/api/portal/teams/${team.id}/subscription-quota`),
             "optionalAccess",
-            async (_13) => _13.subscription_quota,
+            async (_14) => _14.subscription_quota,
           ]);
           if (rejected) continue;
           if (!quota || typeof quota !== "object")
@@ -221,6 +236,10 @@ defineProvider({
         void error;
       }
       return undefined;
+    }
+    function numericID(value) {
+      const id = typeof value === "string" ? value.trim() : Number.isSafeInteger(value) ? String(value) : "";
+      return /^[0-9]+$/.test(id) ? id : undefined;
     }
     function parseWebQuota(quota) {
       // Limits and usage are weighted token counts encoded as decimal strings.
@@ -265,7 +284,7 @@ defineProvider({
       // The login response omits quotas while the 5-hour window is idle, even when the weekly limit has usage.
       // The dev.meta.ai usage page reads the same subscription quota with the browser session.
       const web = await webQuota();
-      if (!_optionalChain([web, "optionalAccess", (_14) => _14.quota]))
+      if (!_optionalChain([web, "optionalAccess", (_15) => _15.quota]))
         rows.push({ label: "Quota", value: "Not included in this login response" });
       if (!web) return snapshot;
       const teamRows = _nullishCoalesce(web.teams, () => []).map((team) => ({ label: team.name, value: team.id }));
@@ -273,11 +292,11 @@ defineProvider({
       _optionalChain([
         snapshot,
         "access",
-        (_15) => _15.details,
+        (_16) => _16.details,
         "optionalAccess",
-        (_16) => _16.push,
+        (_17) => _17.push,
         "call",
-        (_17) => _17({ title: "Browser teams", rows: teamRows }),
+        (_18) => _18({ title: "Browser teams", rows: teamRows }),
       ]);
       if (!web.quota) return snapshot;
       const { team, primary, secondary } = web.quota;
@@ -289,11 +308,11 @@ defineProvider({
       _optionalChain([
         snapshot,
         "access",
-        (_18) => _18.details,
+        (_19) => _19.details,
         "optionalAccess",
-        (_19) => _19.push,
+        (_20) => _20.push,
         "call",
-        (_20) => _20({ title: "Browser team quota (dev.meta.ai)", rows: webRows }),
+        (_21) => _21({ title: "Browser team quota (dev.meta.ai)", rows: webRows }),
       ]);
       // Weighted usage reported for a user-selected team, not by the CLI login itself.
       return { usage: { ...snapshot, primary, secondary, dataConfidence: "estimated" }, sourceLabel: "oauth+web" };
