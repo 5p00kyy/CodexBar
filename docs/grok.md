@@ -160,6 +160,9 @@ The grok.com billing gRPC-web endpoint remains a best-effort fallback.
 5) **Local session signals** (informational fallback)
    - Quota fetches scan `~/.grok/sessions/<encoded-cwd>/<session-id>/signals.json` for the last 30 local calendar days,
      including today. Files dated outside that window are excluded so daily buckets and aggregate totals agree.
+   - Discovery stops at each session directory and reads only its direct `signals.json`; artifact subtrees are not
+     traversed, and nested signal files do not count as sessions. Quota enrichment and billing-failure fallback share
+     this bounded scan.
    - Aggregates `totalTokensBeforeCompaction`, `contextTokensUsed`, `modelsUsed`,
      and the most recent session timestamp.
 

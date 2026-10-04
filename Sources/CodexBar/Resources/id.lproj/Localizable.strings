@@ -80,6 +80,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "Rata-rata (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "Hindari permintaan Keychain";
 "Balance" = "Saldo";
+"Cloud credits" = "Kredit cloud";
+"Expired" = "Kedaluwarsa";
 "Battery Saver" = "Penghemat Baterai";
 "Bordered" = "Berbingkai";
 "Build" = "Build";
@@ -858,7 +860,6 @@
 "No local data found" = "Tidak ada data lokal ditemukan";
 "Credits unavailable; keep Codex running to refresh." = "Kredit tidak tersedia; biarkan Codex berjalan untuk menyegarkan.";
 "No available fetch strategy for minimax." = "Tidak ada strategi pengambilan tersedia untuk minimax.";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "Sesi Cursor tidak ditemukan. Silakan masuk ke cursor.com di Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, atau Edge Canary. Jika Anda menggunakan Safari, berikan CodexBar Akses Disk Penuh di Pengaturan Sistem ▸ Privasi & Keamanan. Anda juga dapat masuk ke Cursor dari menu CodexBar (Tambah / beralih akun).";
 "No OpenCode session cookies found in browsers." = "Cookie sesi OpenCode tidak ditemukan di browser.";
 "No available fetch strategy for %@." = "Tidak ada strategi pengambilan tersedia untuk %@.";
 "Today" = "Hari ini";
@@ -1637,3 +1638,4 @@
 "antigravity_cost_estimate_hint" = "Penggunaan lokal × harga API publik · bukan tagihan atau kredit Antigravity";
 "antigravity_quota_window_note" = "Biaya jendela mencakup semua model · jendela yang ditampilkan adalah keluarga paling terbatas";
 "antigravity_no_priced_token_history" = "Tidak ada riwayat token Antigravity berharga yang tersedia.";
+"Supported browsers: %@. Use Manual for other browsers." = "Browser yang didukung: %@. Gunakan Manual untuk browser lain.";

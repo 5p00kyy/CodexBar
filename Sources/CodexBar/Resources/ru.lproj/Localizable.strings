@@ -101,6 +101,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "Среднее (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "Избегать запросов Keychain";
 "Balance" = "Баланс";
+"Cloud credits" = "Облачные кредиты";
+"Expired" = "Истекло";
 "Battery Saver" = "Экономия энергии";
 "Bordered" = "С рамкой";
 "Build" = "Сборка";
@@ -851,7 +853,6 @@
 "No local data found" = "Локальные данные не найдены";
 "Credits unavailable; keep Codex running to refresh." = "Кредиты недоступны; оставьте Codex запущенным для обновления.";
 "No available fetch strategy for minimax." = "Нет доступной стратегии получения для MiniMax.";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "Сеанс Cursor не найден. Войдите на cursor.com в Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Яндекс.Браузере, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX или Edge Canary. Если используете Safari, выдайте CodexBar полный доступ к диску в «Системные настройки» ▸ «Конфиденциальность и безопасность». Также можно войти в Cursor из меню CodexBar: «Добавить/переключить аккаунт».";
 "No OpenCode session cookies found in browsers." = "В браузерах не найдены cookie сеанса OpenCode.";
 "No available fetch strategy for %@." = "Нет доступной стратегии получения для %@.";
 "Today" = "Сегодня";
@@ -1635,3 +1636,4 @@
 "antigravity_cost_estimate_hint" = "Локальное использование × публичные цены API · это не счета и не кредиты Antigravity";
 "antigravity_quota_window_note" = "Стоимость окна включает все модели · показано окно самого ограниченного семейства";
 "antigravity_no_priced_token_history" = "Нет оценённой истории токенов Antigravity.";
+"Supported browsers: %@. Use Manual for other browsers." = "Поддерживаемые браузеры: %@. Для других браузеров используйте ручной режим.";

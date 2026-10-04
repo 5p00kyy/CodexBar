@@ -54,8 +54,8 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(result.rows.first?.input == 100)
     }
 
-    @Test(arguments: [false, true])
-    func `request accounting survives append and SQLite reopen`(legacyFirst: Bool) async throws {
+    @Test(arguments: [false, true], [false, true])
+    func `request accounting survives append and SQLite reopen`(legacyFirst: Bool, sameWindow: Bool) async throws {
         let env = try CostUsageTestEnvironment()
         defer { env.cleanup() }
         var calendar = Calendar(identifier: .gregorian)
@@ -87,8 +87,8 @@ struct CostUsageCodexRequestLedgerTests {
                 includePiSessions: false,
                 scannerOptions: options)
         }
-        let initial = try await fetch(start)
-        #expect(initial.sessionTokens == 1100)
+        let initial = try await fetch(sameWindow ? end : start)
+        #expect(initial.sessionTokens == (sameWindow ? 0 : 1100))
         _ = await CostUsageStore(cacheRoot: env.cacheRoot).readSnapshot()
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
@@ -226,33 +226,6 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(anotherThread.count == 1)
     }
 
-    @Test(arguments: [false, true])
-    func `separate legacy and ledger pages count a mirrored request once`(ledgerFirst: Bool) throws {
-        let env = try CostUsageTestEnvironment()
-        defer { env.cleanup() }
-        let ledger = try Self.parse(Self.header() + [
-            Self.record(id: "one", usage: [100, 20, 10, 4], total: [100, 20, 10, 4]),
-        ], env: env)
-        let legacy = try Self.parse(Self.header() + [
-            Self.legacy(timestamp: Self.timestampA, usage: [100, 20, 10, 4], total: [100, 20, 10, 4]),
-        ], env: env)
-        var state = CostUsageScanner.CodexScanState()
-        let first = ledgerFirst ? ledger.rows : legacy.rows
-        let second = ledgerFirst ? legacy.rows : ledger.rows
-        let accepted = CostUsageScanner.uniqueCodexRows(
-            rows: first,
-            sessionId: "synthetic-thread",
-            fileIdentity: "first",
-            state: &state)
-        let mirrored = CostUsageScanner.uniqueCodexRows(
-            rows: second,
-            sessionId: "synthetic-thread",
-            fileIdentity: "second",
-            state: &state)
-        #expect(accepted.count == 1)
-        #expect(mirrored.isEmpty)
-    }
-
     @Test
     func `totals-only legacy requests retain their baseline after a ledger mirror`() throws {
         let env = try CostUsageTestEnvironment()
@@ -378,12 +351,8 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(rows.count == 1)
         rows[0].pricingModel = "gpt-5.4"
         rows[0].pricingMode = pricing == "priority" ? "priority" : "standard"
-        var object = try #require(
-            JSONSerialization.jsonObject(with: JSONEncoder().encode(rows[0])) as? [String: Any])
-        if pricing == "known" { object["knownCostNanos"] = 123_000_000 }
-        if pricing == "unpriced" { object["unpricedTokens"] = 110_000 }
-        rows[0] = try JSONDecoder().decode(
-            CostUsageScanner.CodexUsageRow.self, from: JSONSerialization.data(withJSONObject: object))
+        if pricing == "known" { rows[0].knownCostNanos = 123_000_000 }
+        if pricing == "unpriced" { rows[0].unpricedTokens = 110_000 }
         cached.codexRows = rows
         saved.files[file.path] = cached
         #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: saved, calendar: calendar)
@@ -420,6 +389,7 @@ struct CostUsageCodexRequestLedgerTests {
         var header = Self.header()
         var metadata: [String: Any] = ["id": "synthetic-thread", "session_id": "execution-session"]
         if subagent {
+            metadata["forked_from_id"] = "execution-session"
             metadata["source"] = ["subagent": ["thread_spawn": ["parent_thread_id": "parent"]]]
             metadata["subagent_history_start_ordinal"] = 10
         }
@@ -529,11 +499,167 @@ struct CostUsageCodexRequestLedgerTests {
         #expect(result.rows.count == 3)
     }
 
-    private static func parse(_ lines: [[String: Any]], env: CostUsageTestEnvironment, spacedJSON: Bool = false) throws
-        -> CostUsageScanner.CodexParseResult
+    @Test
+    func `typed records survive the JSON timestamp fallback`() throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let result = try Self.parse(
+            Self.header() + [
+                Self.record(id: "escaped-timestamp", usage: [100, 20, 10, 4], total: [100, 20, 10, 4]),
+            ],
+            env: env,
+            transform: { $0.replacingOccurrences(of: #""timestamp""#, with: #""time\u0073tamp""#) })
+        #expect(result.rows.compactMap(\.responseID) == ["escaped-timestamp"])
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 110)
+    }
+
+    @Test
+    func `repeated counter tuples do not replace an earlier legacy request`() throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let usage = [100, 20, 10, 4]
+        let result = try Self.parse(Self.header() + [
+            Self.legacy(timestamp: Self.timestampA, usage: usage, total: usage),
+            Self.header()[1],
+            Self.record(
+                id: "after-reset",
+                timestamp: Self.timestampB,
+                usage: usage,
+                total: [200, 40, 20, 8],
+                turnTotal: usage),
+            Self.legacy(timestamp: Self.timestampB, usage: usage, total: usage),
+        ], env: env)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 220)
+        #expect(result.rows.map(\.day) == ["2026-08-29", "2026-08-30"])
+    }
+
+    @Test(arguments: [false, true], ["standard", "priority", "known", "unpriced"])
+    func `owned response date and saved prices survive cross-file mirrors`(
+        ledgerFirst: Bool, pricing: String) throws
+    {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let start = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        let end = try #require(ISO8601DateFormatter().date(from: Self.timestampC))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        let usage = [100, 20, 10, 4]
+        let legacy = Self.legacy(timestamp: Self.timestampA, usage: usage, total: usage)
+        let ledger = Self.record(id: "owned", timestamp: Self.timestampB, usage: usage, total: usage)
+        let legacyFile = try env.writeCodexSessionFile(
+            day: start,
+            filename: ledgerFirst ? "z-page.jsonl" : "a-page.jsonl",
+            contents: env.jsonl(Self.header() + [legacy]))
+        var options = CostUsageScanner.Options(
+            codexSessionsRoot: env.codexSessionsRoot,
+            cacheRoot: env.cacheRoot,
+            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"),
+            calendar: calendar)
+        options.refreshMinIntervalSeconds = 0
+        func fetch() -> CostUsageDailyReport {
+            CostUsageScanner.loadDailyReport(provider: .codex, since: start, until: end, now: end, options: options)
+        }
+        _ = fetch()
+        var cache = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: calendar)
+        var file = try #require(cache.files[legacyFile.path])
+        var savedPrice = try #require(file.codexRows?.first)
+        savedPrice.pricingModel = "gpt-5.4"
+        savedPrice.pricingMode = pricing == "priority" ? "priority" : "standard"
+        if pricing == "known" { savedPrice.knownCostNanos = 123_000_000 }
+        if pricing == "unpriced" { savedPrice.unpricedTokens = 110 }
+        file.codexRows = [savedPrice]
+        cache.files[legacyFile.path] = file
+        #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: cache, calendar: calendar)
+            .catchUpRequired)
+        // The paired page proves which legacy observation mirrors this response across midnight.
+        _ = try env.writeCodexSessionFile(
+            day: start,
+            filename: ledgerFirst ? "a-page.jsonl" : "z-page.jsonl",
+            contents: env.jsonl(Self.header() + (ledgerFirst ? [ledger, legacy] : [legacy, ledger])))
+        let report = fetch()
+        #expect(report.summary?.totalTokens == 110)
+        #expect(report.data.filter { ($0.totalTokens ?? 0) > 0 }.map(\.date) == ["2026-08-30"])
+        let reopened = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: calendar)
+        let rows = reopened.files.values.flatMap { $0.codexRows ?? [] }
+        #expect(rows.compactMap(\.responseID) == ["owned"])
+        let row = try #require(rows.first)
+        #expect(row.knownCostNanos == savedPrice.knownCostNanos)
+        #expect(row.unpricedTokens == savedPrice.unpricedTokens)
+        #expect(row.pricingModel == savedPrice.pricingModel)
+        #expect(row.pricingMode == savedPrice.pricingMode)
+        #expect(fetch().data == report.data)
+    }
+
+    @Test(arguments: [false, true])
+    func `adjacent equal usage without shared timestamp or totals remains distinct`(ledgerFirst: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let usage = [100, 20, 10, 4]
+        let total = [200, 40, 20, 8]
+        let first = ledgerFirst
+            ? Self.record(id: "first", usage: usage, total: usage)
+            : Self.legacy(timestamp: Self.timestampA, usage: usage, total: usage)
+        let second = ledgerFirst
+            ? Self.legacy(timestamp: Self.timestampB, usage: usage, total: total)
+            : Self.record(id: "second", timestamp: Self.timestampB, usage: usage, total: total)
+        let result = try Self.parse(Self.header() + [first, second], env: env)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 220)
+        #expect(result.rows.map(\.day) == ["2026-08-29", "2026-08-30"])
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func `partial legacy observations mirror a typed response once`(legacyFirst: Bool, lastOnly: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let legacy = try Self.partialLegacy(lastOnly: lastOnly)
+        let ledger = Self.record(id: "partial", usage: [100, 20, 10, 4], total: [100, 20, 10, 4])
+        let result = try Self.parse(Self.header() + (legacyFirst ? [legacy, ledger] : [ledger, legacy]), env: env)
+        #expect(result.rows.reduce(0) { $0 + $1.input + $1.output } == 110)
+        #expect(result.rows.compactMap(\.responseID) == ["partial"])
+    }
+
+    @Test(arguments: [false, true])
+    func `partial legacy observations reconcile across separate pages`(lastOnly: Bool) throws {
+        let env = try CostUsageTestEnvironment()
+        defer { env.cleanup() }
+        let day = try #require(ISO8601DateFormatter().date(from: Self.timestampA))
+        let pages = try [
+            [Self.partialLegacy(lastOnly: lastOnly)],
+            [Self.record(id: "partial", usage: [100, 20, 10, 4], total: [100, 20, 10, 4])],
+        ]
+        for (index, page) in pages.enumerated() {
+            _ = try env.writeCodexSessionFile(
+                day: day, filename: "partial-\(index).jsonl", contents: env.jsonl(Self.header() + page))
+        }
+        let options = CostUsageScanner.Options(
+            codexSessionsRoot: env.codexSessionsRoot,
+            cacheRoot: env.cacheRoot,
+            codexTraceDatabaseURL: env.root.appendingPathComponent("missing-traces.sqlite"))
+        let report = CostUsageScanner.loadDailyReport(
+            provider: .codex, since: day, until: day, now: day, options: options)
+        #expect(report.summary?.totalTokens == 110)
+        let cache = CostUsageStore(cacheRoot: env.cacheRoot).syncLoadCodexCache(calendar: .current)
+        #expect(cache.files.values.flatMap { $0.codexRows ?? [] }.compactMap(\.responseID) == ["partial"])
+    }
+
+    private static func partialLegacy(lastOnly: Bool) throws -> [String: Any] {
+        var row = Self.legacy(timestamp: Self.timestampA, usage: [100, 20, 10, 4], total: [100, 20, 10, 4])
+        var payload = try #require(row["payload"] as? [String: Any])
+        var info = try #require(payload["info"] as? [String: Any])
+        info.removeValue(forKey: lastOnly ? "total_token_usage" : "last_token_usage")
+        payload["info"] = info
+        row["payload"] = payload
+        return row
+    }
+
+    private static func parse(
+        _ lines: [[String: Any]],
+        env: CostUsageTestEnvironment,
+        spacedJSON: Bool = false,
+        transform: (String) -> String = { $0 }) throws -> CostUsageScanner.CodexParseResult
     {
         let file = env.root.appendingPathComponent("synthetic.jsonl")
-        let content = try env.jsonl(lines)
+        let content = try transform(env.jsonl(lines))
         try (spacedJSON ? content.replacingOccurrences(of: "\":", with: "\": ") : content)
             .write(to: file, atomically: false, encoding: .utf8)
         var calendar = Calendar(identifier: .gregorian)

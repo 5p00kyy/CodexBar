@@ -87,6 +87,7 @@ actor CostUsageStore {
         parserHash: CodexParserHash.value)
     static let cacheGeneration = "sqlite:\(CostUsageStore.schemaVersion)"
     static let compatiblePredecessorParserHashes: Set<String> = [
+        "029fe80aa98f27e8", // Revision 7 caches retain history during bounded JSON-fallback reparsing.
         "c61aebb9cf043a72", // Revision 6 ledger caches reparse through the shared ownership router.
         "4a4c4ef34ce6f037", // Request-ledger accounting uses bounded native parser-revision migration.
         "04a6361469a4ff77", // Settled orphan scheduling preserves rows, replay buffers, and checkpoints.

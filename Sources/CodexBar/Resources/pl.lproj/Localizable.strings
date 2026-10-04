@@ -80,6 +80,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "Średnia (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "Unikaj monitów pęku kluczy";
 "Balance" = "Saldo";
+"Cloud credits" = "Kredyty w chmurze";
+"Expired" = "Wygasło";
 "Battery Saver" = "Oszczędzanie baterii";
 "Bordered" = "Z obramowaniem";
 "Build" = "Wersja kompilacji";
@@ -858,7 +860,6 @@
 "No local data found" = "Nie znaleziono danych lokalnych";
 "Credits unavailable; keep Codex running to refresh." = "Kredyty są niedostępne; pozostaw Codex uruchomiony, aby je odświeżyć.";
 "No available fetch strategy for minimax." = "Brak dostępnej strategii pobierania dla minimax.";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "Nie znaleziono sesji Cursor. Zaloguj się do cursor.com w Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX lub Edge Canary. Jeśli używasz Safari, przyznaj CodexBar pełny dostęp do dysku w Ustawieniach systemowych ▸ Prywatność i bezpieczeństwo. Możesz też zalogować się do Cursor z menu CodexBar (Dodaj / przełącz konto).";
 "No OpenCode session cookies found in browsers." = "Nie znaleziono w przeglądarkach plików cookie sesji OpenCode.";
 "No available fetch strategy for %@." = "Brak dostępnej strategii pobierania dla %@.";
 "Today" = "Dziś";
@@ -1637,3 +1638,4 @@
 "antigravity_cost_estimate_hint" = "Lokalne użycie × publiczne ceny API · to nie opłaty ani kredyty Antigravity";
 "antigravity_quota_window_note" = "Koszt okna obejmuje wszystkie modele · pokazane okno to najbardziej ograniczona rodzina";
 "antigravity_no_priced_token_history" = "Brak wycenionej historii tokenów Antigravity.";
+"Supported browsers: %@. Use Manual for other browsers." = "Obsługiwane przeglądarki: %@. W przypadku innych przeglądarek użyj trybu ręcznego.";

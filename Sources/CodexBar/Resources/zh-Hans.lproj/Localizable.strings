@@ -104,6 +104,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "平均（\\(metadata.sessionLabel) + \\(metadata.weeklyLabel)）";
 "Avoid Keychain prompts" = "避免钥匙串提示";
 "Balance" = "余额";
+"Cloud credits" = "云端额度";
+"Expired" = "已过期";
 "Battery Saver" = "省电模式";
 "Bordered" = "带边框";
 "Build" = "构建";
@@ -810,7 +812,6 @@
 "No local data found" = "未找到本地数据";
 "Credits unavailable; keep Codex running to refresh." = "额度暂不可用；请保持 Codex 运行后再刷新。";
 "No available fetch strategy for minimax." = "没有可用的 MiniMax 抓取策略。";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "未找到 Cursor 会话。请在 Safari、Chrome、Microsoft Edge、Brave、Arc、Dia、ChatGPT Atlas、Chromium、Helium、Vivaldi、Yandex Browser、Firefox、Zen、Colibri、Sidekick、Opera、Opera GX 或 Edge Canary 中登录 cursor.com。若使用 Safari，请在“系统设置 ▸ 隐私与安全性”中授予 CodexBar“完全磁盘访问权限”。你也可以在 CodexBar 菜单中登录 Cursor（添加/切换账户）。";
 "No OpenCode session cookies found in browsers." = "在浏览器中未找到 OpenCode 会话 Cookie。";
 "No available fetch strategy for %@." = "%@ 暂无可用的获取策略。";
 "Today" = "今日";
@@ -1649,3 +1650,4 @@
 "antigravity_cost_estimate_hint" = "本地用量 × 公开 API 价格 · 并非 Antigravity 账单或额度";
 "antigravity_quota_window_note" = "窗口费用涵盖所有模型 · 所示窗口为最受限的模型系列";
 "antigravity_no_priced_token_history" = "没有可计价的 Antigravity 令牌历史记录。";
+"Supported browsers: %@. Use Manual for other browsers." = "支持的浏览器：%@。其他浏览器请使用“手动”模式。";

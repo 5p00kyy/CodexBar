@@ -80,6 +80,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "المتوسط (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "تجنب Keychain الأسئلة";
 "Balance" = "التوازن";
+"Cloud credits" = "رصيد السحابة";
+"Expired" = "منتهية الصلاحية";
 "Battery Saver" = "منقذ البطارية";
 "Bordered" = "الحدود";
 "Build" = "البناء";
@@ -856,7 +858,6 @@
 "No local data found" = "لم يتم العثور على بيانات محلية";
 "Credits unavailable; keep Codex running to refresh." = "الاعتمادات غير متوفرة؛ استمر في Codex لتجديد النشاط.";
 "No available fetch strategy for minimax." = "لا توجد استراتيجية جلب متاحة للمينيماكس.";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "لم يتم العثور على جلسة Cursor. يرجى تسجيل الدخول إلى cursor.com في Safari، Chrome، مايكروسوفت إيدج، بريف، آرك، دييا، شات جي بي تي أطلس، كروميوم، هيليوم، فيفالدي، متصفح ياندكس، فايرفوكس، زين، كوليبري، سايدكيك، أوبرا، أوبرا GX، أو إيدج كاناري. إذا كنت تستخدم Safari، امنح CodexBar الوصول الكامل للقرص في إعدادات النظام ▸ الخصوصية والأمان. يمكنك أيضا تسجيل الدخول إلى Cursor من قائمة CodexBar (إضافة / تغيير الحساب).";
 "No OpenCode session cookies found in browsers." = "لا توجد ملفات تعريف الارتباط للجلسة OpenCode في المتصفحات.";
 "No available fetch strategy for %@." = "لا توجد استراتيجية جلب متاحة %@.";
 "Today" = "اليوم";
@@ -1638,3 +1639,4 @@
 "antigravity_cost_estimate_hint" = "الاستخدام المحلي × أسعار واجهة البرمجة العامة · ليست رسوم أو أرصدة Antigravity";
 "antigravity_quota_window_note" = "تكلفة النافذة تشمل كل النماذج · النافذة المعروضة هي الفئة الأكثر تقييدًا";
 "antigravity_no_priced_token_history" = "لا يتوفر سجل رموز Antigravity مُسعّر.";
+"Supported browsers: %@. Use Manual for other browsers." = "المتصفحات المدعومة: %@. استخدم الوضع اليدوي للمتصفحات الأخرى.";

@@ -3,6 +3,42 @@
     <channel>
         <title>CodexBar</title>
         <item>
+            <title>0.71.1</title>
+            <pubDate>Sat, 03 Oct 2026 00:57:34 -0700</pubDate>
+            <link>https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml</link>
+            <sparkle:version>163</sparkle:version>
+            <sparkle:shortVersionString>0.71.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>CodexBar 0.71.1</h2>
+<h3>Highlights</h3>
+<ul>
+<li>Lighter cost tracking: unchanged Codex refreshes reuse the decoded local history instead of decoding the whole cache, empty session histories stop being rewritten on every pass, Claude keeps parsed transcript windows across pricing changes, and Grok scans no longer walk session artifact trees.</li>
+<li>Codex weekly quota recovers after a reset: when the previous snapshot had no credit inventory, the fresh quota, reset credits, and update time are published instead of &quot;1% left&quot; lingering for hours.</li>
+<li>Clearer cookie sign-in: every browser-cookie provider now names the browsers automatic import supports and offers Manual for the rest, instead of saying &quot;Chrome&quot; regardless.</li>
+<li>Steadier cards: the Cursor card shows Grok Bot&#x27;s weekly pace again, provider status can no longer be overwritten by a late response from an older refresh, long statistics headings wrap instead of truncating, and widgets follow the menu accent for the providers whose widget color was pinned by accident.</li>
+<li>Spend dashboard keeps projects with the same folder name apart and shows saved Codex project names, so renaming a project no longer splits its totals.</li>
+</ul>
+<h3>Fixed</h3>
+<ul>
+<li>Codex: refresh weekly quota, reset credits, and update time after a confirmed reset when the previous snapshot lacks credit inventory (#4210).</li>
+<li>Codex: reuse decoded local cost history across unchanged refreshes, including priority-cursor updates (#4200, #4205). Thanks @Yuxin-Qiao!</li>
+<li>Codex: avoid repeatedly rewriting empty session histories during local cost refreshes (#4201, #4203). Thanks @Yuxin-Qiao!</li>
+<li>Claude: keep parsed transcript windows reusable when pricing changes during a refresh, while recalculating the next report with the new prices (#4202, #4204). Thanks @Yuxin-Qiao!</li>
+<li>Pi: recognize OMP one-hour cache-write counters and reprice older cached estimates without double-counting tokens (#4121, #4176). Thanks @vincent-peng!</li>
+<li>Grok: skip session artifact trees during local usage scans and exclude nested signal files from token totals (#4209, #4208). Thanks @alexander-schneider!</li>
+<li>Usage &amp; Spend: keep same-named project directories separate and show saved Codex project names on fresh and cached loads, preserving totals across renames and hiding paths with personal information (#4172). Thanks @Yuxin-Qiao!</li>
+<li>Cursor: restore Grok Bot weekly pace and reserve when the reported period starts mid-week (#4221, #4222). Thanks @dimpurr!</li>
+<li>Status: prevent older status requests from replacing newer incidents, emitting false recovery hooks, or scheduling redundant retries (#4175). Thanks @Shenrui-Ma!</li>
+<li>Widgets: use current menu accents for Abacus, Amp, Augment, Bedrock, Cline Pass, Codebuff, Cursor, DeepSeek, Devin, Kiro, LongCat, Mistral, NeuralWatt, Sub2API, and Venice while preserving intentionally distinct widget colors (#4199). Thanks @raulgg!</li>
+<li>Menu: wrap long statistics headings, including estimated current-window tokens, so they remain readable in the two-column provider card across app languages (#4193).</li>
+<li>Command Code: normalize bare manual session tokens with the current production cookie name while preserving explicit cookie headers (#4192). Thanks @rodrigovzq!</li>
+<li>Browser cookies: name each plugin provider&#x27;s supported automatic browsers in settings and cookie sign-in guidance, with Manual as the alternative for other browsers (#4215).</li>
+</ul>
+<p><a href="https://github.com/steipete/CodexBar/blob/main/CHANGELOG.md">View full changelog</a></p>
+]]></description>
+            <enclosure url="https://github.com/steipete/CodexBar/releases/download/v0.71.1/CodexBar-macos-universal-0.71.1.zip" length="75613940" type="application/octet-stream" sparkle:edSignature="LDO9aeUslzxcXQDCm6/Xdq0U0UeXDNhx/CRM2QWI9CX2s2aHTRSDmlxxtk/MRCU/WNwcmT3QsB502n9QSa87BA=="/>
+        </item>
+        <item>
             <title>0.71.0</title>
             <pubDate>Fri, 02 Oct 2026 10:16:27 -0700</pubDate>
             <link>https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml</link>
@@ -105,68 +141,6 @@
 <p><a href="https://github.com/steipete/CodexBar/blob/main/CHANGELOG.md">View full changelog</a></p>
 ]]></description>
             <enclosure url="https://github.com/steipete/CodexBar/releases/download/v0.70.0/CodexBar-macos-universal-0.70.0.zip" length="74897657" type="application/octet-stream" sparkle:edSignature="yFtKvsKSELbebYn8eu/g8KaHs44p9UPAGSbmajDOsAISFUxADlBQXESpJHz/nLt8bWuVA6WzYue8TAM5zEeFCg=="/>
-        </item>
-        <item>
-            <title>0.69.0</title>
-            <pubDate>Mon, 28 Sep 2026 11:05:39 -0700</pubDate>
-            <link>https://raw.githubusercontent.com/steipete/CodexBar/main/appcast.xml</link>
-            <sparkle:version>160</sparkle:version>
-            <sparkle:shortVersionString>0.69.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description><![CDATA[<h2>CodexBar 0.69.0</h2>
-<h3>Highlights</h3>
-<ul>
-<li>Plugins feel native: user plugins now get their own switcher tab by default, and Notion AI, ZoomMate, and LongCat run as bundled plugins with browser sessions kept private to the host (#4074, #4098, #4059).</li>
-<li>Lighter on CPU and disk: Claude and Vertex cost history is reused instead of re-decoded on every scan, the history cache is about a quarter smaller, and cost scans no longer expand priority days back to year 1 (#4053, #4092, #4045). Thanks @djbclark for the CPU sample that pinned this down!</li>
-<li>Steadier refreshes: Codex rereads credentials while the CLI rewrites them and picks up plan upgrades right away, a stalled Keychain signature check can no longer freeze every provider, and Claude recovers from rejected cache writes on the next refresh (#4088, #4089). Thanks @lozcalver and @SilentKnight87!</li>
-<li>Widgets and the menu bar hold on to good data: each widget provider keeps its last good reading after failed refreshes, and corrupt saved menu bar positions are never restored (#4095, #4082).</li>
-<li>More accurate numbers: Grok token totals and model names survive billing outages, Claude shows saved limit resets from the Web source, Kimi marks windows blocked once the monthly pool is exhausted, Antigravity shows Starter quotas, and TypeSafe shows its balance in the menu bar (#4093, #4056, #4048, #4091, #4084, #4050).</li>
-<li>Leaner under the hood: the app ships with about 700 fewer lines of code than 0.68.0, even with the new plugin host capabilities.</li>
-</ul>
-<h3>Security</h3>
-<ul>
-<li>Test and debug output no longer includes environment variable values: stored environments render only an entry count, and test runners scrub credential-shaped variables before running (#4097).</li>
-</ul>
-<h3>Added</h3>
-<ul>
-<li>Claude: show saved usage-limit resets and their expiry from the Web source in the menu and <code>codexbar usage</code> details (#4048). Thanks @enieuwy!</li>
-</ul>
-<h3>Changed</h3>
-<ul>
-<li>Plugins: user plugins now get their own switcher tab by default when Merge Icons is on; set <code>topLevel: false</code> to keep the appended card (#4074).</li>
-<li>Notion AI, ZoomMate, and LongCat: usage fetching runs through bundled plugins with host-owned cookie sessions, preserving browser-session reuse, validated cache migration, Notion over-quota values, ZoomMate credits history, and LongCat fuel-pack data (#4098, #4059).</li>
-<li>Menu bar: the persistent Refresh row drops its decorative icon to match other menu actions, keeping the shortcut and accessibility action (#4057). Thanks @elijahfriedman!</li>
-</ul>
-<h3>Fixed</h3>
-<ul>
-<li>Codex: retry brief credential-file publication races before reporting refresh errors, and discard the previous plan&#x27;s quota baseline after a subscription change so fresh usage appears (#4088, #3635, #3389).</li>
-<li>Codex: publish newly validated token and cost totals after each catch-up pass, even while historical scanning is still pending (#4087, #3508). Thanks @kernnel!</li>
-<li>Claude: retain valid in-memory credentials after a rejected OAuth cache write once stale-cache cleanup succeeds, so the next automatic refresh recovers without a manual Refresh (#4089, #3395).</li>
-<li>Keychain: bound stalled code-signature validation so it cannot hold cache locks and freeze all provider refreshes (#4089, #3249).</li>
-<li>Claude: keep priced local spend as a partial estimate when an incomplete Pi or OMP mirror is included, across Usage &amp; Spend, Overview, and sharing (#4052). Fixes #4051. Thanks @BUKOWSKIREAL!</li>
-<li>Claude and Vertex: reuse unchanged decoded cost-history caches, skip encoding unchanged caches, and compact retained row fields to cut CPU and disk writes during refreshes (#4053, #4092, #3882). Thanks @djbclark!</li>
-<li>Costs: keep All-history priority checks proportional to recorded days instead of generating centuries of empty days, preserving older logs (#4045). Thanks @djbclark!</li>
-<li>Configuration: treat empty or whitespace-only config files like missing files so usage keeps working; malformed non-empty files still report errors (#4081, #4071). Thanks @kvnloo!</li>
-<li>Menu bar: reject corrupt saved positions during status-item visibility changes and removal while preserving valid placement across restarts (#4082, #3355).</li>
-<li>Widgets: keep each eligible provider&#x27;s last good reading and original age after failed refreshes, even when another provider is unavailable, disabled, or changes accounts (#4095, #3500).</li>
-<li>Adaptive refresh: recognize ChatGPT&#x27;s nested Codex app-server with per-scan running-process validation and update-aware bundle assessment caching (#4090, #4069). Thanks @jaychou0642-create!</li>
-<li>Grok: keep local token totals visible in Usage &amp; Spend and shared cards across wider history views and billing outages (#4093, #3716). Thanks @Chipagosfinest!</li>
-<li>Grok: keep the product usage breakdown on the grok.com billing fallback, with bounded shared protobuf decoding (#4041). Thanks @olddonkey!</li>
-<li>Token history: show observed model names when per-model totals are unavailable, including Grok local sessions (#4056). Fixes #4054. Thanks @BUKOWSKIREAL!</li>
-<li>Kimi: point stale CLI sessions to running <code>kimi</code> or adding an API key in Settings, keeping web fallback and leaving rotating CLI credentials read-only (#4086, #4063). Thanks @kid0114!</li>
-<li>Kimi Code: mark shorter windows as blocked when the monthly membership pool is exhausted, without fresh quota or pace forecasts (#4091, #3536).</li>
-<li>z.ai: explain unavailable Coding Plan usage for empty or unsupported quota shapes while keeping recognized quotas and analytics (#4091, #2522).</li>
-<li>Antigravity: preserve grouped OAuth quotas, including weekly-only Starter allowances, and honor explicit quota-window cadence (#4084, #2427, #3789).</li>
-<li>Antigravity: usage probes no longer leave MCP server processes behind; cleanup only touches processes carrying the probe&#x27;s inherited ownership marker, so unrelated processes in the same directory are never killed (#4077). Thanks @bcharleson!</li>
-<li>TypeSafe: show the credit balance in the menu bar and layout preview instead of missing-value dashes (#4050). Thanks @lg!</li>
-<li>Pi: preserve the directory marker for session roots that do not exist yet (#4067). Thanks @Sogl!</li>
-<li>Agent Sessions: avoid the macOS 15 isolated-teardown crash while keeping task cancellation and Stay Awake cleanup (#4068). Thanks @Sogl!</li>
-<li>Browser sessions: keep distinct host-only and domain-scoped cookies when merging stores from the same profile, and preserve interactive cookie-refresh authorization across plugin engine callbacks (#4059, #4098).</li>
-<li>CLI and development: macOS CLI release builds and the test suite compile on Xcode 26.3 again, and CI now builds app, CLI, and tests on that toolchain (#4058, #4079, #4070). Thanks @RowboTony!</li>
-</ul>
-<p><a href="https://github.com/steipete/CodexBar/blob/main/CHANGELOG.md">View full changelog</a></p>
-]]></description>
-            <enclosure url="https://github.com/steipete/CodexBar/releases/download/v0.69.0/CodexBar-macos-universal-0.69.0.zip" length="74820928" type="application/octet-stream" sparkle:edSignature="BU9QC4DHjmSFBwnnRLNxWI6RG2fn7kK4loNDDlkzex4UjTV7iaUs7N3v3cEd+D9xEr9cEkdko8NW9V+l4aMTCw=="/>
         </item>
         <item>
             <title>0.14.0</title>

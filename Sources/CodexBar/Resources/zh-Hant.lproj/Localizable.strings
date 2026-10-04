@@ -104,6 +104,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "平均（\\(metadata.sessionLabel) + \\(metadata.weeklyLabel)）";
 "Avoid Keychain prompts" = "避免鑰匙圈提示";
 "Balance" = "餘額";
+"Cloud credits" = "雲端額度";
+"Expired" = "已過期";
 "Battery Saver" = "省電模式";
 "Bordered" = "有邊框";
 "Build" = "建置";
@@ -1258,7 +1260,6 @@
 "Clearing removes past resume, continue, and rewind history." = "會移除過去的 resume、continue 和 rewind 歷史。";
 "%@ is unavailable in the current environment." = "目前環境無法使用 %@。";
 "Clearing removes local temporary provider data." = "會移除本機提供者暫存資料。";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "找不到 Cursor 工作階段。請在 Safari、Chrome、Microsoft Edge、Brave、Arc、Dia、ChatGPT Atlas、Chromium、Helium、Vivaldi、Yandex Browser、Firefox、Zen、Colibri、Sidekick、Opera、Opera GX 或 Edge Canary 中登入 cursor.com。如果你使用 Safari，請在「系統設定」▸「隱私權與安全性」授予 CodexBar 完整磁碟存取權。你也可以從 CodexBar 選單登入 Cursor（新增 / 切換帳號）。";
 "On pace" = "用量正常";
 "Lasts until reset" = "可撐到重置";
 "z.ai API token not found. Set apiKey in ~/.codexbar/config.json or Z_AI_API_KEY." = "找不到 z.ai API token。請在 ~/.codexbar/config.json 設定 apiKey，或設定 Z_AI_API_KEY。";
@@ -1665,3 +1666,4 @@
 "antigravity_cost_estimate_hint" = "本機用量 × 公開 API 價格 · 並非 Antigravity 帳單或額度";
 "antigravity_quota_window_note" = "視窗費用涵蓋所有模型 · 所示視窗為最受限的模型系列";
 "antigravity_no_priced_token_history" = "沒有可計價的 Antigravity 權杖歷史記錄。";
+"Supported browsers: %@. Use Manual for other browsers." = "支援的瀏覽器：%@。其他瀏覽器請使用「手動」模式。";

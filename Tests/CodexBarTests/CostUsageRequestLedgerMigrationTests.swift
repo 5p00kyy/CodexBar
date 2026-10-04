@@ -4,7 +4,7 @@ import Testing
 
 @Suite(.serialized)
 struct CostUsageRequestLedgerMigrationTests {
-    @Test(arguments: [5, 6], [false, true])
+    @Test(arguments: [5, 6, 7], [false, true])
     func `bounded ledger upgrades retain prior pricing across reopen and append`(
         revision: Int,
         priority: Bool) async throws
@@ -55,21 +55,39 @@ struct CostUsageRequestLedgerMigrationTests {
         var old = CostUsageStoreAccess.read(cacheRoot: env.cacheRoot)
         var usage = try #require(old.files[file.path])
         usage.codexParserRevision = revision
-        // Construct the persisted legacy representation: no response identities, priority retained.
-        usage.codexRequestLedgerState = nil
+        // Older revisions may have only legacy rows; revision 7 retains its typed identities.
+        if revision < 7 { usage.codexRequestLedgerState = nil }
+        if revision == 7, let state = usage.codexRequestLedgerState {
+            var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(state)) as? [String: Any])
+            object["mirroredSnapshots"] = Array((state.mirroredResponses ?? [:]).keys)
+            object.removeValue(forKey: "mirroredResponses")
+            object.removeValue(forKey: "pendingLedgerResponseID")
+            usage.codexRequestLedgerState = try JSONDecoder().decode(
+                CostUsageScanner.CodexRequestLedgerState.self,
+                from: JSONSerialization.data(withJSONObject: object))
+            #expect(usage.codexRequestLedgerState?.sessionID == "execution-session")
+            #expect(usage.codexRequestLedgerState?.responseIDs == ["first"])
+            #expect(usage.codexRequestLedgerState?.mirroredResponses == nil)
+        }
         usage.codexRows = try usage.codexRows?.map { row in
             var row = row
             row.pricingMode = priority ? "priority" : "standard"
             var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(row)) as? [String: Any])
-            object.removeValue(forKey: "responseID")
-            object.removeValue(forKey: "requestMirrorKeys")
+            if revision < 7 {
+                object.removeValue(forKey: "responseID")
+                object.removeValue(forKey: "requestMirrorKeys")
+            }
             return try JSONDecoder().decode(
                 CostUsageScanner.CodexUsageRow.self,
                 from: JSONSerialization.data(withJSONObject: object))
         }
         old.files[file.path] = usage
         #expect(!CostUsageStoreAccess.replace(cacheRoot: env.cacheRoot, cache: old).catchUpRequired)
-        let predecessorHash = revision == 5 ? "4a4c4ef34ce6f037" : "c61aebb9cf043a72"
+        let predecessorHash = switch revision {
+        case 5: "4a4c4ef34ce6f037"
+        case 6: "c61aebb9cf043a72"
+        default: "029fe80aa98f27e8"
+        }
         let predecessorVersion = CostUsageStore.combinedSchemaVersion(
             base: CostUsageStore.baseSchemaVersion, parserHash: predecessorHash)
         let adoptedStore = CostUsageStore(cacheRoot: env.cacheRoot)

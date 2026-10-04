@@ -79,6 +79,8 @@
 "Average (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))" = "Media (\\(metadata.sessionLabel) + \\(metadata.weeklyLabel))";
 "Avoid Keychain prompts" = "Evitar as solicitudes do Chaveiro";
 "Balance" = "Saldo";
+"Cloud credits" = "Créditos na nube";
+"Expired" = "Caducado";
 "Battery Saver" = "Aforro de batería";
 "Bordered" = "Con bordo";
 "Build" = "Compilación";
@@ -1215,7 +1217,6 @@
 "Missing DeepSeek API key." = "Falta a chave de API de DeepSeek.";
 "Music Generation" = "Xeración de música";
 "No %@ utilization data yet." = "Aínda non hai datos de utilización de %@.";
-"No Cursor session found. Please log in to cursor.com in Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX, or Edge Canary. If you use Safari, grant CodexBar Full Disk Access in System Settings ▸ Privacy & Security. You can also sign in to Cursor from the CodexBar menu (Add / switch account)." = "Non se atopou ningunha sesión de Cursor. Inicia sesión en cursor.com desde Safari, Chrome, Microsoft Edge, Brave, Arc, Dia, ChatGPT Atlas, Chromium, Helium, Vivaldi, Yandex Browser, Firefox, Zen, Colibri, Sidekick, Opera, Opera GX ou Edge Canary. Se usas Safari, concede a CodexBar acceso completo ao disco en Axustes do Sistema ▸ Privacidade e seguridade. Tamén podes iniciar sesión en Cursor desde o menú de CodexBar (Engadir / cambiar conta).";
 "No JetBrains IDE with AI Assistant detected. Install a JetBrains IDE and enable AI Assistant." = "Non se detectou ningún IDE de JetBrains co Asistente de IA. Instala un IDE de JetBrains e activa o Asistente de IA.";
 "No OpenCode session cookies found in browsers." = "Non se atoparon cookies de sesión de OpenCode nos navegadores.";
 "No available fetch strategy for %@." = "Non hai ningunha estratexia de obtención dispoñible para %@.";
@@ -1633,3 +1634,4 @@
 "antigravity_cost_estimate_hint" = "Uso local × prezos públicos da API · non son cargos nin créditos de Antigravity";
 "antigravity_quota_window_note" = "O custo da xanela inclúe todos os modelos · a xanela amosada é a familia máis limitada";
 "antigravity_no_priced_token_history" = "Non hai historial de tokens de Antigravity con prezo dispoñible.";
+"Supported browsers: %@. Use Manual for other browsers." = "Navegadores compatibles: %@. Usa Manual para outros navegadores.";

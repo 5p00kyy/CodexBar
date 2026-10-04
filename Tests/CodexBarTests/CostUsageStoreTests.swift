@@ -955,6 +955,7 @@ extension CostUsageStoreTests {
 
 extension CostUsageStoreTests {
     @Test(arguments: [
+        "029fe80aa98f27e8", // Before the shared JSON fallback.
         "c61aebb9cf043a72", // Previous request-ledger revision.
         "4a4c4ef34ce6f037", // Before request-ledger accounting.
         // Orphan-fork scheduling preserves parsed rows, replay buffers, and scan checkpoints.
@@ -1000,6 +1001,7 @@ extension CostUsageStoreTests {
         let fixture = try StoreFixture()
         defer { fixture.remove() }
         #expect(CostUsageStore.compatiblePredecessorParserHashes == [
+            "029fe80aa98f27e8",
             "c61aebb9cf043a72",
             "4a4c4ef34ce6f037",
             "04a6361469a4ff77",

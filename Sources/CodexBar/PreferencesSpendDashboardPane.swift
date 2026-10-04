@@ -778,10 +778,20 @@ private struct SpendProjectRows: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(identity.name)
                             .lineLimit(1)
-                            .help(identity.name)
+                            .help(identity.path ?? identity.name)
                         Text(row.providerName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let path = identity.path,
+                           self.group.projects.contains(where: { $0.id != row.id && $0.projectName == row.projectName })
+                        {
+                            Text(path)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .help(path)
+                        }
                     }
                     Spacer()
                     Text(spendDashboardMetricText(

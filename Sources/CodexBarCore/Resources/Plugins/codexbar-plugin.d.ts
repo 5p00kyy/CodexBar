@@ -231,6 +231,7 @@ interface CodexBarPluginContext {
     getSecret(key: string): string | null;
   };
   readonly browser: {
+    readonly supportedBrowsers: string;
     availability(domain: string): "available" | "off" | "manual";
     acceptCookie(domain: string, session: CodexBarCookieSession): void;
     rejectCookie(domain: string, session?: CodexBarCookieSession): void;
