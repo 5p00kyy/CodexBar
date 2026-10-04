@@ -179,8 +179,139 @@ struct ClaudeWebManualCookieLinuxTests {
         #endif
     }
 
+    @Test
+    func `auto manual web success does not launch an available CLI`() async throws {
+        #if os(Linux)
+        let fixture = try Self.cliFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let context = Self.context(sourceMode: .auto, cookieHeader: Self.manualHeader, environment: fixture.environment)
+        let transport = ProviderHTTPTransportHandler { request in
+            try Self.successfulResponse(request)
+        }
+        let outcome = await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
+            await ProviderDescriptorRegistry.descriptor(for: .claude).fetchOutcome(context: context)
+        }
+        #expect(outcome.attempts.map(\.strategyID) == ["claude.web"])
+        #expect(try outcome.result.get().usage.primary?.usedPercent == 11)
+        #expect(!FileManager.default.fileExists(atPath: fixture.log.path))
+        #endif
+    }
+
+    @Test(arguments: [401, 403])
+    func `auto recovers failed manual web sessions through the configured CLI`(_ status: Int) async throws {
+        #if os(Linux)
+        let fixture = try Self.cliFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let context = Self.context(sourceMode: .auto, cookieHeader: Self.manualHeader, environment: fixture.environment)
+        let transport = ProviderHTTPTransportHandler { request in
+            try Self.json(#require(request.url), status == 403 ? "Just a moment" : "{}", status: status)
+        }
+        let outcome = await ClaudeCLISession.withIsolatedSessionForTesting {
+            await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
+                await ProviderDescriptorRegistry.descriptor(for: .claude).fetchOutcome(context: context)
+            }
+        }
+        #expect(outcome.attempts.map(\.strategyID) == ["claude.web", "claude.cli"])
+        #expect(outcome.attempts.map(\.wasAvailable) == [true, true])
+        #expect(outcome.attempts.first?.errorDescription != nil)
+        let result = try outcome.result.get()
+        #expect(result.strategyID == "claude.cli")
+        #expect(result.usage.primary?.usedPercent == 7)
+        #expect(try String(contentsOf: fixture.log, encoding: .utf8).contains("/usage"))
+        #endif
+    }
+
+    @Test(arguments: [401, 403])
+    func `explicit manual web failure does not launch an available CLI`(_ status: Int) async throws {
+        #if os(Linux)
+        let fixture = try Self.cliFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let context = Self.context(sourceMode: .web, cookieHeader: Self.manualHeader, environment: fixture.environment)
+        let transport = ProviderHTTPTransportHandler { request in
+            try Self.json(#require(request.url), status == 403 ? "Just a moment" : "{}", status: status)
+        }
+        let outcome = await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
+            await ProviderDescriptorRegistry.descriptor(for: .claude).fetchOutcome(context: context)
+        }
+        #expect(outcome.attempts.map(\.strategyID) == ["claude.web"])
+        if case .success = outcome.result { Issue.record("Failed web session unexpectedly returned usage") }
+        #expect(!FileManager.default.fileExists(atPath: fixture.log.path))
+        #endif
+    }
+
+    @Test
+    func `auto cancellation does not launch an available CLI`() async throws {
+        #if os(Linux)
+        let fixture = try Self.cliFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let context = Self.context(sourceMode: .auto, cookieHeader: Self.manualHeader, environment: fixture.environment)
+        let transport = ProviderHTTPTransportHandler { _ in throw CancellationError() }
+        let outcome = await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
+            await ProviderDescriptorRegistry.descriptor(for: .claude).fetchOutcome(context: context)
+        }
+        #expect(outcome.attempts.map(\.strategyID) == ["claude.web"])
+        if case let .failure(error) = outcome.result {
+            #expect(error is CancellationError)
+        } else {
+            Issue.record("Cancelled web request unexpectedly returned usage")
+        }
+        #expect(!FileManager.default.fileExists(atPath: fixture.log.path))
+        #endif
+    }
+
     #if os(Linux)
-    private static func context(sourceMode: ProviderSourceMode, cookieHeader: String) -> ProviderFetchContext {
+    private static func cliFixture() throws -> (root: URL, log: URL, environment: [String: String]) {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let log = root.appendingPathComponent("invocations.log")
+        let binary = root.appendingPathComponent("claude")
+        try """
+        #!/bin/sh
+        printf '%s\\n' "$*" >> '\(log.path)'
+        if [ "$1" = "--version" ]; then printf '1.2.3\\n'; exit 0; fi
+        if [ "$1" = "auth" ]; then printf '{"loggedIn":true}\\n'; exit 0; fi
+        while IFS= read -r line; do
+          printf '%s\\n' "$line" >> '\(log.path)'
+          case "$line" in
+            *"/usage"*)
+              printf '%s\\n' 'Current session' '93% left' 'Dec 23 at 4:00PM' \\
+                'Current week (all models)' '79% left' 'Dec 29 at 11:00PM' ;;
+            *"/status"*) printf 'Account: fixture@example.com\\nOrg: Fixture Org\\n' ;;
+          esac
+        done
+        """.write(to: binary, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: binary.path)
+        return (root, log, [
+            "HOME": root.path,
+            "CLAUDE_CONFIG_DIR": root.appendingPathComponent(".claude").path,
+            "CLAUDE_CLI_PATH": binary.path,
+            "PATH": "\(root.path):/usr/bin:/bin",
+        ])
+    }
+
+    private static func successfulResponse(_ request: URLRequest) throws -> (Data, URLResponse) {
+        let url = try #require(request.url)
+        #expect(request.value(forHTTPHeaderField: "Cookie") == Self.manualHeader)
+        switch url.path {
+        case "/api/organizations":
+            return Self.json(url, #"[{"uuid":"org-123","capabilities":["chat"]}]"#)
+        case "/api/organizations/org-123/usage":
+            return Self.json(url, #"{"five_hour":{"utilization":11},"seven_day":{"utilization":22}}"#)
+        case "/api/account":
+            return Self.json(url, "{}")
+        case "/api/organizations/org-123/overage_spend_limit":
+            return Self.json(url, "{}", status: 404)
+        default:
+            Issue.record("Unexpected request path: \(url.path)")
+            return Self.json(url, "{}", status: 404)
+        }
+    }
+
+    private static func context(
+        sourceMode: ProviderSourceMode,
+        cookieHeader: String,
+        environment: [String: String] = [:]) -> ProviderFetchContext
+    {
         let browserDetection = BrowserDetection(cacheTTL: 0)
         return ProviderFetchContext(
             runtime: .cli,
@@ -190,14 +321,14 @@ struct ClaudeWebManualCookieLinuxTests {
             webTimeout: 5,
             webDebugDumpHTML: false,
             verbose: false,
-            env: [:],
+            env: environment,
             settings: .make(claude: .init(
                 usageDataSource: .auto,
                 webExtrasEnabled: false,
                 cookieSource: .manual,
                 manualCookieHeader: cookieHeader)),
-            fetcher: UsageFetcher(environment: [:]),
-            claudeFetcher: ClaudeUsageFetcher(browserDetection: browserDetection, environment: [:]),
+            fetcher: UsageFetcher(environment: environment),
+            claudeFetcher: ClaudeUsageFetcher(browserDetection: browserDetection, environment: environment),
             browserDetection: browserDetection)
     }
 
