@@ -1636,3 +1636,5 @@
 "antigravity_quota_window_note" = "Вартість вікна охоплює всі моделі · показано вікно найбільш обмеженої родини";
 "antigravity_no_priced_token_history" = "Немає оціненої історії токенів Antigravity.";
 "Supported browsers: %@. Use Manual for other browsers." = "Підтримувані браузери: %@. Для інших браузерів використовуйте ручний режим.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Вставте заголовок Cookie із запиту Chrome до www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "Зарезервовано";

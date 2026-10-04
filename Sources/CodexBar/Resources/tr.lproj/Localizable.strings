@@ -1638,3 +1638,5 @@
 "antigravity_quota_window_note" = "Pencere maliyeti tüm modelleri kapsar · gösterilen pencere en kısıtlı ailedir";
 "antigravity_no_priced_token_history" = "Fiyatlandırılmış Antigravity token geçmişi yok.";
 "Supported browsers: %@. Use Manual for other browsers." = "Desteklenen tarayıcılar: %@. Diğer tarayıcılar için Manuel seçeneğini kullanın.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Chrome’dan www.workbuddy.cn/profile/plans-usage adresine gönderilen isteğin Cookie başlığını yapıştırın.";
+"Reserved" = "Ayrılmış";

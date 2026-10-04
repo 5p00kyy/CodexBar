@@ -65,6 +65,10 @@ provider's typed cookie snapshot to the broker, including the manual origin used
 Cookie domains and session capabilities remain authoritative in the unchanged bundled manifest; the shared
 `ScriptFetchStrategy` passes those declarations through to the broker without widening them.
 
+WorkBuddy uses this shared cookie host for its billing-only plugin. Its descriptor supplies Chrome's installed major
+version because the website binds sessions to the browser User-Agent; cookie values stay opaque to the script.
+See [WorkBuddy](workbuddy.md) for the request contract, bounded optional reset lookup, and account coverage.
+
 Manus, Muse (muse.ai), Perplexity, Hyper, Raycast, Sakana, and T3 Chat use the shared app implementation. Helmcode retains its tenant
 picker/snapshot, and Qoder retains its regional dashboard action and source-label adapter while sharing cookie UI.
 Provider-owned values resolvers retain token normalization and captured-header allowlists. Replicate and TypeSafe

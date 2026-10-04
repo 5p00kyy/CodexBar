@@ -1605,3 +1605,5 @@
 "antigravity_quota_window_note" = "창 비용은 모든 모델을 포함합니다 · 표시된 창은 가장 제한적인 제품군입니다";
 "antigravity_no_priced_token_history" = "가격이 매겨진 Antigravity 토큰 기록이 없습니다.";
 "Supported browsers: %@. Use Manual for other browsers." = "지원되는 브라우저: %@. 다른 브라우저는 수동 모드를 사용하세요.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Chrome에서 www.workbuddy.cn/profile/plans-usage로 보낸 요청의 Cookie 헤더를 붙여넣으세요.";
+"Reserved" = "보류됨";
