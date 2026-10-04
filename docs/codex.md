@@ -370,6 +370,18 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     Successful historical queries update their own pricing window independently of the live scan cursor, including
     results with no priority turns; validated pricing outside that window remains intact.
 - Window: configurable 1-365 day rolling history.
+- Owned `token_usage_record` responses recover usage after resumed-session counter resets. Each response is counted
+  once on its event date, with matching legacy `token_count` observations reconciled rather than added again.
+  Exact mirrors include their timestamps, so repeated counters cannot erase an earlier legacy-only request.
+  Adjacent observations also need a matching timestamp or thread cumulative total; equal request sizes alone do not
+  establish that they are mirrors. Legacy snapshots containing only last usage or only cumulative totals also
+  reconcile with matching owned responses after the existing counter checks.
+  Paired observations retain their response identity across files; the owned response supplies the date while
+  matching saved pricing survives replacement of an older legacy page.
+  Thread and execution-session identities are validated separately; copied child history remains excluded by the
+  existing subagent boundaries. Cached tails retain these identities across refreshes and SQLite reopen.
+  Compatible caches retain stored history and matching saved prices while older parser revisions reparse in bounded
+  passes. Legacy-only logs retain their existing replay protections; a counter decrease alone does not prove new usage.
 - Pending cost scans retain their discovery range when the same cache receives narrower or wider history requests ending on the same day. Reports still use the requested dates, and compatible existing caches retain stored usage and partial-scan progress on upgrade. A new ending day, changed roots/timezone, or a forced rescan keeps the usual discovery reset behavior.
 - Routine rescans of changed sessions replace request-pricing rows within the scan window alongside token totals. Cached rows outside that window remain available; obsolete rows cannot make an otherwise priceable day lose its cost estimate. Budget-limited scans retain matching request-pricing evidence and the parser position across restarts, without counting unparsed requests in active totals. Upgrades from 0.60.1 retain saved history, including sessions whose source files are no longer available.
 - App cadence: regular timer-driven local-history refreshes have a 15-minute minimum (30 minutes in Low Power Mode).
