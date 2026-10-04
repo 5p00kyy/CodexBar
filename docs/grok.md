@@ -360,3 +360,14 @@ points to `https://status.x.ai`.
 - `Sources/CodexBarCore/Providers/Grok/GrokStatusProbe.swift`
 - `Sources/CodexBarCore/Providers/Grok/GrokLocalSessionScanner.swift`
 - `Sources/CodexBar/Providers/Grok/GrokProviderImplementation.swift`
+
+## Purchased credits in CLI JSON
+
+When the CLI proxy publishes `config.prepaidBalance`, `usage --provider grok --json` exports it as
+`usage.providerCost.balance` with `currencyCode: "USD"`. The proxy's typed `Cent.val` is USD cents,
+so `1446` becomes `14.46`; an empty Cent object (`{}`) is a confirmed zero. A missing, null, negative,
+or malformed wallet remains absent instead of being reported as zero. This balance is separate
+from the included quota; the balance-only snapshot has neutral `used`/`limit` values of zero and
+does not infer a spending limit, consumed amount, or reset period.
+
+Unit contract: [official Grok billing source](https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-shell/src/extensions/billing.rs).

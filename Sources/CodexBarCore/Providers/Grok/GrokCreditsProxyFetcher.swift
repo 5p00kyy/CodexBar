@@ -69,7 +69,8 @@ public enum GrokCreditsProxyFetcher {
                 windowMinutes: windowMinutes,
                 subscriptionTier: subscriptionTier,
                 productUsage: GrokProductUsage.composing(
-                    config.productUsage?.values ?? [], creditUsagePercent: percent))
+                    config.productUsage?.values ?? [], creditUsagePercent: percent),
+                prepaidBalanceUSD: config.prepaidBalance?.usd)
         }
 
         if let cap = config.onDemandCap?.val,
@@ -81,15 +82,17 @@ public enum GrokCreditsProxyFetcher {
                 usedPercent: percent,
                 resetsAt: resetsAt,
                 windowMinutes: windowMinutes,
-                subscriptionTier: subscriptionTier)
+                subscriptionTier: subscriptionTier,
+                prepaidBalanceUSD: config.prepaidBalance?.usd)
         }
 
-        if resetsAt != nil {
+        if resetsAt != nil || config.prepaidBalance?.usd != nil {
             return GrokWebBillingSnapshot(
                 usedPercent: nil,
                 resetsAt: resetsAt,
                 windowMinutes: windowMinutes,
-                subscriptionTier: subscriptionTier)
+                subscriptionTier: subscriptionTier,
+                prepaidBalanceUSD: config.prepaidBalance?.usd)
         }
 
         throw GrokWebBillingError.parseFailed
@@ -118,6 +121,39 @@ public enum GrokCreditsProxyFetcher {
         let onDemandUsed: CreditsAmount?
         let subscriptionTier: String?
         let productUsage: LossyProductUsageArray?
+        let prepaidBalance: PrepaidBalance?
+    }
+
+    /// The official Grok billing contract defines this as USD cents. Keep malformed optional
+    /// wallet data local so it cannot discard an otherwise valid quota response.
+    private struct PrepaidBalance: Decodable {
+        let usd: Double?
+
+        private enum CodingKeys: String, CodingKey { case val }
+
+        init(from decoder: Decoder) throws {
+            guard let container = try? decoder.container(keyedBy: CodingKeys.self) else {
+                self.usd = nil
+                return
+            }
+            let cents: Int64?
+            if !container.contains(.val) {
+                // Proto3 JSON omits the zero scalar: an existing empty Cent object means zero.
+                let empty = try? decoder.singleValueContainer().decode([String: Int64].self)
+                cents = empty?.isEmpty == true ? 0 : nil
+            } else if let number = try? container.decode(Int64.self, forKey: .val) {
+                cents = number
+            } else if let string = try? container.decode(String.self, forKey: .val) {
+                cents = Int64(string)
+            } else {
+                cents = nil
+            }
+            guard let cents, cents >= 0, let exact = Double(exactly: cents) else {
+                self.usd = nil
+                return
+            }
+            self.usd = exact / 100
+        }
     }
 
     private struct LossyProductUsageArray: Decodable {
