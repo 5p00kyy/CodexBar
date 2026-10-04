@@ -370,6 +370,18 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
     Successful historical queries update their own pricing window independently of the live scan cursor, including
     results with no priority turns; validated pricing outside that window remains intact.
 - Window: configurable 1-365 day rolling history.
+- Owned `token_usage_record` responses recover usage after resumed-session counter resets. Each response is counted
+  once on its event date, with matching legacy `token_count` observations reconciled rather than added again.
+  Exact mirrors include their timestamps, so repeated counters cannot erase an earlier legacy-only request.
+  Adjacent observations also need a matching timestamp or thread cumulative total; equal request sizes alone do not
+  establish that they are mirrors. Legacy snapshots containing only last usage or only cumulative totals also
+  reconcile with matching owned responses after the existing counter checks.
+  Paired observations retain their response identity across files; the owned response supplies the date while
+  matching saved pricing survives replacement of an older legacy page.
+  Thread and execution-session identities are validated separately; copied child history remains excluded by the
+  existing subagent boundaries. Cached tails retain these identities across refreshes and SQLite reopen.
+  Compatible caches retain stored history and matching saved prices while older parser revisions reparse in bounded
+  passes. Legacy-only logs retain their existing replay protections; a counter decrease alone does not prove new usage.
 - Pending cost scans retain their discovery range when the same cache receives narrower or wider history requests ending on the same day. Reports still use the requested dates, and compatible existing caches retain stored usage and partial-scan progress on upgrade. A new ending day, changed roots/timezone, or a forced rescan keeps the usual discovery reset behavior.
 - Routine rescans of changed sessions replace request-pricing rows within the scan window alongside token totals. Cached rows outside that window remain available; obsolete rows cannot make an otherwise priceable day lose its cost estimate. Budget-limited scans retain matching request-pricing evidence and the parser position across restarts, without counting unparsed requests in active totals. Upgrades from 0.60.1 retain saved history, including sessions whose source files are no longer available.
 - App cadence: regular timer-driven local-history refreshes have a 15-minute minimum (30 minutes in Low Power Mode).
@@ -380,7 +392,7 @@ the local result and returns a nonzero exit code. See [CLI host reporting](cli.m
 - Menu cost catch-up discards an overlapping refresh queued before a no-progress or error pause, preventing an immediate retry. A later normal or manual refresh can still start a fresh attempt; successful completion still honors queued refreshes for newly discovered history.
 - Automatic Codex catch-up scheduling in both usage and Spend Dashboard honors the app’s 30-minute Low Power Mode minimum after each pass. Explicit acceleration remains immediate, and physical low-power/thermal pauses retain their own retry policy. The setting applies when the next delay is computed; an already pending sleep is not replanned.
 - Automatic catch-up reports thermal pressure when serious heat and Low Power Mode coexist. Both constraints keep the existing 60-second pause before rechecking resource state.
-- Automatic catch-up duty-cycle delays use time spent in that scan, including publication, excluding waits on the shared account/provider queue. Power, thermal, scan-budget, and complete-history publication rules still apply.
+- Automatic catch-up starts without an assumed prior scan delay and continues cheap discovery pages within a two-second burst, capped at eight passes. Each pass receives the remaining scan time, checks normal window readiness, and can publish validated totals before the next sleep. The subsequent duty-cycle delay accounts for the whole burst, excluding waits on the shared account/provider queue. Returning to automatic mode counts only the in-flight accelerated pass toward its next delay. App Low Power Mode still floors each delay, and physical low-power/thermal pauses, no-progress detection, cancellation, and complete-history publication rules still apply.
 - A catch-up worker that loses its account or settings scope clears its abandoned Refreshing activity on exit. Legitimate pauses remain visible, and an older worker cannot clear a replacement worker's activity.
 - Cache-wide migration reseeding keeps paths already waiting ahead of new revisits. Repeated pricing or priority-turn changes therefore cannot keep the same completed files ahead of the stale tail in each 512-candidate pass. Initial seeding still honors newest-first preference, and publication waits for exact inventory validation. Native Codex stores from published parser fingerprint `4969a789db679c93` adopt the new generation without rebuilding rows, checkpoints, or retained reports; Pi/OMP retains its existing one-time reparse on a parser-hash change.
 - When a warm cost refresh reaches its time limit, it saves the remaining file work and completed discovery. Compatible shorter/wider history requests resume that work across the retained scan range; publication still waits for exact inventory validation.

@@ -12,8 +12,10 @@ read_when:
 # LithosAI
 
 Enable LithosAI in Settings → Providers. Sign in at <https://console.lithosai.cloud> in Chrome and use the
-provider's refresh action to import the session when browser access is allowed. Automatic import is Chrome-only and follows the host's
-browser-access gate. Alternatively choose Manual and paste a Cookie request header containing
+**Refresh** beside **Cookie source** (or the menu's Refresh action) to authorize importing the session.
+An explicit refresh allows one bounded macOS Keychain permission retry; scheduled refreshes never prompt.
+If Chrome access is suppressed or denied, the error points back to Cookie source → Refresh and the Manual fallback.
+Automatic import is Chrome-only and follows the host's browser-access gate. Alternatively choose Manual and paste a Cookie request header containing
 both `__Host-console_session` and `__Host-console_csrf` from the same signed-in console session. Manual cookies
 are stored in the CodexBar config file. Inference API keys cannot read console billing.
 
@@ -22,6 +24,9 @@ and optional today/month-to-date spend in UTC. Money fields use **1 USD = 1,000,
 are summed across models and keys; a successful empty report means zero spend. An unavailable or malformed spend
 report leaves the balance visible and labels spend unavailable. There is no invented quota percentage, budget,
 or reset date. Negative balances remain visible, and positive amounts below one cent are labeled explicitly.
+With Icon & percent, the automatic numeric value is this same formatted balance (for example, `L $2.57`).
+The explicit **Balance** layout token also uses it, including when LithosAI is selected in merged mode.
+Zero, negative, and sub-cent values retain the dropdown formatting.
 
 Read-only console GETs:
 
@@ -32,7 +37,7 @@ Read-only console GETs:
 Billing requests echo the active organization ID as `X-Organization-Id`. The host, not the script, echoes
 `__Host-console_csrf` as `X-Console-Csrf` from the selected session and only on the declared HTTPS console origin.
 Cookie values remain opaque to JavaScript. Both cookies must match the request URL; no persistent session cache
-is added. HTTP 401 rejects that session and tries the next profile; 403 reports denied access without evicting it.
+is added; a validated refresh succeeds without requiring a persistent cookie write. HTTP 401 rejects that session and tries the next profile; 403 reports denied access without evicting it.
 
 CLI: `codexbar usage --provider lithosai --source web --json`. On Linux use a manual cookie header in the config;
 automatic Chrome import is macOS-only. No API key or separate login command is needed.
