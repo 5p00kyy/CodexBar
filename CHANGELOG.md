@@ -4,6 +4,7 @@
 
 ### Added
 
+- Claude: allow the claude.ai web source on Linux when a manual `sessionKey` cookie is configured; browser cookie import remains macOS-only.
 - Claude: show promotional cloud-session credits separately from prepaid credits in menus, settings, and CLI output, including exhausted, expired, and unavailable states (#4194, #4214). Thanks @dstier-git!
 - Antigravity: opt in to additional Gemini profile homes in provider settings or config.json to combine local token/cost history without double-counting copied conversations (#4177). Thanks @keeuu!
 ### Fixed

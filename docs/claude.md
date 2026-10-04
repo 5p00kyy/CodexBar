@@ -216,6 +216,10 @@ the cookie import.
   2) Chrome/Chromium forks: `~/Library/Application Support/Google/Chrome/*/Cookies`
   3) Firefox: `~/Library/Application Support/Firefox/Profiles/*/cookies.sqlite`
 - Domain: `claude.ai`.
+- Linux: the web source supports an explicitly configured manual `sessionKey` cookie. Automatic browser import,
+  including Firefox import, remains unavailable. This enables the same API request path as macOS; it does not
+  bypass Cloudflare challenges, refresh Claude Code OAuth credentials, or guarantee that a browser session will
+  work outside the browser. Use the OAuth source when the web request is challenged.
 - Cookie name required:
   - `sessionKey` (value prefix `sk-ant-...`).
 - Cached cookies: Keychain cache `com.steipete.codexbar.cache` (account `cookie.claude`, source + timestamp).
