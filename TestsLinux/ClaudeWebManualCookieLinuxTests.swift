@@ -6,6 +6,7 @@ import Testing
 @testable import CodexBarCLI
 @testable import CodexBarCore
 
+#if os(Linux)
 /// Manual-cookie transport and routing without browser import or live credentials.
 @Suite(.serialized)
 struct ClaudeWebManualCookieLinuxTests {
@@ -13,7 +14,6 @@ struct ClaudeWebManualCookieLinuxTests {
 
     @Test
     func `manual cookie exempts Claude web from the Linux browser gate`() {
-        #if os(Linux)
         let manual = ProviderSettingsSnapshot.make(claude: .init(
             usageDataSource: .auto,
             webExtrasEnabled: false,
@@ -25,45 +25,21 @@ struct ClaudeWebManualCookieLinuxTests {
 
         // No manual cookie: explicit web still needs the macOS-only browser import.
         #expect(CodexBarCLI.sourceModeRequiresWebSupport(.web, provider: .claude, settings: .make()))
-        // Blank manual cookie does not count.
-        #expect(CodexBarCLI.sourceModeRequiresWebSupport(
-            .web,
-            provider: .claude,
-            settings: ProviderSettingsSnapshot.make(claude: .init(
-                usageDataSource: .auto,
-                webExtrasEnabled: false,
-                cookieSource: .manual,
-                manualCookieHeader: "   "))))
-        #else
-        #expect(Bool(true))
-        #endif
+        for header in ["", "   ", "other=1", "sessionKey=invalid"] {
+            #expect(CodexBarCLI.sourceModeRequiresWebSupport(
+                .web,
+                provider: .claude,
+                settings: ProviderSettingsSnapshot.make(claude: .init(
+                    usageDataSource: .auto,
+                    webExtrasEnabled: false,
+                    cookieSource: .manual,
+                    manualCookieHeader: header))))
+        }
     }
 
     @Test
     func `manual cookie fetch reads Claude usage on Linux`() async throws {
-        #if os(Linux)
-        let transport = ProviderHTTPTransportHandler { request in
-            let url = try #require(request.url)
-            switch url.path {
-            case "/api/organizations":
-                return Self.json(
-                    url,
-                    #"[{"uuid":"org-123","name":"Test Org","capabilities":["chat"]}]"#)
-            case "/api/organizations/org-123/usage":
-                #expect(request.value(forHTTPHeaderField: "Cookie") == Self.manualHeader)
-                return Self.json(
-                    url,
-                    #"{"five_hour":{"utilization":11},"seven_day":{"utilization":22}}"#)
-            case "/api/account":
-                return Self.json(
-                    url,
-                    #"{"email_address":"user@example.com","memberships":["#
-                        + #"{"organization":{"uuid":"org-123","name":"Test Org","rate_limit_tier":"#
-                        + #""default_claude_pro"}}]}"#)
-            default:
-                return Self.json(url, "{}", status: 404)
-            }
-        }
+        let transport = ProviderHTTPTransportHandler { try Self.successfulResponse($0) }
 
         let usage = try await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
             try await ClaudeWebAPIFetcher.fetchUsage(
@@ -76,25 +52,17 @@ struct ClaudeWebManualCookieLinuxTests {
         #expect(usage.weeklyPercentUsed == 22)
         #expect(usage.accountOrganizationID == "org-123")
         #expect(usage.accountEmail == "user@example.com")
-        #else
-        #expect(Bool(true))
-        #endif
     }
 
     @Test
     func `browser import stays unavailable on Linux`() {
-        #if os(Linux)
         #expect(ClaudeWebAPIFetcher.hasSessionKey(browserDetection: BrowserDetection(cacheTTL: 0)) == false)
         #expect(ClaudeWebAPIFetcher.hasSessionKey(cookieHeader: Self.manualHeader))
         #expect(!ClaudeWebAPIFetcher.hasSessionKey(cookieHeader: "other=1"))
-        #else
-        #expect(Bool(true))
-        #endif
     }
 
     @Test
     func `auto planner makes web available only with a valid manual session`() async {
-        #if os(Linux)
         let descriptor = ProviderDescriptorRegistry.descriptor(for: .claude)
         for header in [Self.manualHeader, "other=1", "   "] {
             let context = Self.context(sourceMode: .auto, cookieHeader: header)
@@ -103,31 +71,13 @@ struct ClaudeWebManualCookieLinuxTests {
             #expect(web != nil)
             #expect(await web?.isAvailable(context) == (header == Self.manualHeader))
         }
-        #endif
     }
 
     @Test
     func `explicit web uses the provider pipeline without a CLI fallback`() async throws {
-        #if os(Linux)
         let context = Self.context(sourceMode: .web, cookieHeader: Self.manualHeader)
         let descriptor = ProviderDescriptorRegistry.descriptor(for: .claude)
-        let transport = ProviderHTTPTransportHandler { request in
-            let url = try #require(request.url)
-            #expect(request.value(forHTTPHeaderField: "Cookie") == Self.manualHeader)
-            switch url.path {
-            case "/api/organizations":
-                return Self.json(url, #"[{"uuid":"org-123","capabilities":["chat"]}]"#)
-            case "/api/organizations/org-123/usage":
-                return Self.json(url, #"{"five_hour":{"utilization":11},"seven_day":{"utilization":22}}"#)
-            case "/api/account":
-                return Self.json(url, "{}")
-            case "/api/organizations/org-123/overage_spend_limit":
-                return Self.json(url, "{}", status: 404)
-            default:
-                Issue.record("Unexpected request path: \(url.path)")
-                return Self.json(url, "{}", status: 404)
-            }
-        }
+        let transport = ProviderHTTPTransportHandler { try Self.successfulResponse($0) }
         let outcome = await ClaudeWebHTTPTransport.$overrideForTesting.withValue(transport) {
             await descriptor.fetchOutcome(context: context)
         }
@@ -136,12 +86,10 @@ struct ClaudeWebManualCookieLinuxTests {
         #expect(result.sourceLabel == "web")
         #expect(result.usage.primary?.usedPercent == 11)
         #expect(result.usage.secondary?.usedPercent == 22)
-        #endif
     }
 
     @Test
     func `invalid manual cookie fails before issuing HTTP requests`() async {
-        #if os(Linux)
         let transport = ProviderHTTPTransportHandler { request in
             Issue.record("Invalid cookie issued a request")
             return try Self.json(#require(request.url), "{}")
@@ -156,12 +104,10 @@ struct ClaudeWebManualCookieLinuxTests {
                 Issue.record("Unexpected validation error: \(error)")
             }
         }
-        #endif
     }
 
     @Test
     func `Cloudflare challenge remains a terminal explicit web failure`() async {
-        #if os(Linux)
         let context = Self.context(sourceMode: .web, cookieHeader: Self.manualHeader)
         let transport = ProviderHTTPTransportHandler { request in
             try Self.json(#require(request.url), "Just a moment", status: 403)
@@ -176,12 +122,10 @@ struct ClaudeWebManualCookieLinuxTests {
         } else {
             Issue.record("Cloudflare challenge unexpectedly returned usage")
         }
-        #endif
     }
 
     @Test
     func `auto manual web success does not launch an available CLI`() async throws {
-        #if os(Linux)
         let fixture = try Self.cliFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let context = Self.context(sourceMode: .auto, cookieHeader: Self.manualHeader, environment: fixture.environment)
@@ -194,12 +138,10 @@ struct ClaudeWebManualCookieLinuxTests {
         #expect(outcome.attempts.map(\.strategyID) == ["claude.web"])
         #expect(try outcome.result.get().usage.primary?.usedPercent == 11)
         #expect(!FileManager.default.fileExists(atPath: fixture.log.path))
-        #endif
     }
 
     @Test(arguments: [401, 403])
     func `auto recovers failed manual web sessions through the configured CLI`(_ status: Int) async throws {
-        #if os(Linux)
         let fixture = try Self.cliFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let context = Self.context(sourceMode: .auto, cookieHeader: Self.manualHeader, environment: fixture.environment)
@@ -218,12 +160,10 @@ struct ClaudeWebManualCookieLinuxTests {
         #expect(result.strategyID == "claude.cli")
         #expect(result.usage.primary?.usedPercent == 7)
         #expect(try String(contentsOf: fixture.log, encoding: .utf8).contains("/usage"))
-        #endif
     }
 
     @Test(arguments: [401, 403])
     func `explicit manual web failure does not launch an available CLI`(_ status: Int) async throws {
-        #if os(Linux)
         let fixture = try Self.cliFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let context = Self.context(sourceMode: .web, cookieHeader: Self.manualHeader, environment: fixture.environment)
@@ -236,12 +176,10 @@ struct ClaudeWebManualCookieLinuxTests {
         #expect(outcome.attempts.map(\.strategyID) == ["claude.web"])
         if case .success = outcome.result { Issue.record("Failed web session unexpectedly returned usage") }
         #expect(!FileManager.default.fileExists(atPath: fixture.log.path))
-        #endif
     }
 
     @Test
     func `auto cancellation does not launch an available CLI`() async throws {
-        #if os(Linux)
         let fixture = try Self.cliFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }
         let context = Self.context(sourceMode: .auto, cookieHeader: Self.manualHeader, environment: fixture.environment)
@@ -256,10 +194,8 @@ struct ClaudeWebManualCookieLinuxTests {
             Issue.record("Cancelled web request unexpectedly returned usage")
         }
         #expect(!FileManager.default.fileExists(atPath: fixture.log.path))
-        #endif
     }
 
-    #if os(Linux)
     private static func cliFixture() throws -> (root: URL, log: URL, environment: [String: String]) {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -298,7 +234,11 @@ struct ClaudeWebManualCookieLinuxTests {
         case "/api/organizations/org-123/usage":
             return Self.json(url, #"{"five_hour":{"utilization":11},"seven_day":{"utilization":22}}"#)
         case "/api/account":
-            return Self.json(url, "{}")
+            return Self.json(
+                url,
+                #"{"email_address":"user@example.com","memberships":["#
+                    + #"{"organization":{"uuid":"org-123","name":"Test Org","rate_limit_tier":"#
+                    + #""default_claude_pro"}}]}"#)
         case "/api/organizations/org-123/overage_spend_limit":
             return Self.json(url, "{}", status: 404)
         default:
@@ -344,5 +284,5 @@ struct ClaudeWebManualCookieLinuxTests {
             headerFields: ["Content-Type": "application/json"])!
         return (Data(body.utf8), response)
     }
-    #endif
 }
+#endif
