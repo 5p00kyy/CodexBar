@@ -1,0 +1,30 @@
+name: Claude Linux patch macOS verification
+
+on:
+  push:
+    branches: [ci/claude-linux-verification]
+
+permissions:
+  contents: read
+
+jobs:
+  macos-compatibility:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select upstream compatibility toolchain
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          swift --version
+      - name: Build app, CLI, and tests
+        run: swift build --build-tests
+      - name: Check Claude browser import and web regression suites
+        run: |
+          set -euo pipefail
+          source Scripts/test_environment.sh
+          swift test --skip-build --filter 'ClaudeWeb|ClaudeSourcePlanner|ClaudeCookieHeader|ClaudeCookieImport'
