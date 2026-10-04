@@ -1634,3 +1634,5 @@
 "antigravity_quota_window_note" = "El coste de la ventana incluye todos los modelos · la ventana mostrada es la familia más limitada";
 "antigravity_no_priced_token_history" = "No hay historial de tokens de Antigravity con precio disponible.";
 "Supported browsers: %@. Use Manual for other browsers." = "Navegadores compatibles: %@. Usa Manual para otros navegadores.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Pega la cabecera Cookie de una solicitud de Chrome a www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "Reservado";

@@ -1640,3 +1640,5 @@
 "antigravity_quota_window_note" = "هزینهٔ بازه همهٔ مدل‌ها را دربر می‌گیرد · بازهٔ نمایش‌داده‌شده محدودترین خانواده است";
 "antigravity_no_priced_token_history" = "تاریخچهٔ قیمت‌گذاری‌شدهٔ توکن Antigravity موجود نیست.";
 "Supported browsers: %@. Use Manual for other browsers." = "مرورگرهای پشتیبانی‌شده: %@. برای مرورگرهای دیگر از حالت دستی استفاده کنید.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "هدر Cookie را از یک درخواست Chrome به www.workbuddy.cn/profile/plans-usage جای‌گذاری کنید.";
+"Reserved" = "رزروشده";

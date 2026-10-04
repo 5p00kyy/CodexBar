@@ -1640,3 +1640,5 @@
 "antigravity_quota_window_note" = "ค่าใช้จ่ายของหน้าต่างครอบคลุมทุกโมเดล · หน้าต่างที่แสดงคือกลุ่มที่จำกัดมากที่สุด";
 "antigravity_no_priced_token_history" = "ไม่มีประวัติโทเคน Antigravity ที่คิดราคาไว้";
 "Supported browsers: %@. Use Manual for other browsers." = "เบราว์เซอร์ที่รองรับ: %@ ใช้โหมดกำหนดเองสำหรับเบราว์เซอร์อื่น";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "วางส่วนหัว Cookie จากคำขอของ Chrome ไปยัง www.workbuddy.cn/profile/plans-usage";
+"Reserved" = "สำรองไว้";

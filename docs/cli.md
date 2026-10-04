@@ -149,6 +149,7 @@ sources and setup guide. The [provider ID list](provider-ids.md) is generated fr
   - Choose exactly one of `--provider <id>` or `--all`; provider support comes from shared browser-cookie metadata rather than a fixed CLI list.
   - Prompt-capable Chromium imports require `--allow-keychain-prompt`. Without it, the command fails before cache mutation with an interactive-retry hint.
   - A six-hour Keychain-denial cooldown is bypassed only by that explicit acknowledgment flag. Output never includes cookie values.
+  - Classified provider failures distinguish rejected sessions, permissions, rate limits, outages, network errors, and unreadable responses. Missing credentials retain the browser sign-in hint; disabled or denied Keychain access takes precedence. Hints never echo raw provider error messages.
   - Providers configured for Manual or Off cookie sources are skipped.
 - `codexbar guard --provider <id>` gates automation on one provider's remaining quota.
   - `--min-remaining <percent>` sets the inclusive threshold (default: `10`; valid range: `0...100`).
@@ -369,6 +370,11 @@ Note: Using CLI fallback
   }
 }
 ```
+
+Grok purchased Extra Usage Credits appear in usage JSON as `usage.providerCost.balance` with
+`currencyCode: "USD"` when the CLI proxy supplies a valid wallet. The amount is dollars (`1446` cents → `14.46`),
+separate from quota percentages; zero is retained and unavailable or invalid balances are omitted. The balance-only
+`used`/`limit` fields are zero and do not describe spending or a budget. See [Grok](grok.md#purchased-credits-in-cli-json).
 
 ## Exit codes
 - 0: success
