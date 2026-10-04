@@ -95,7 +95,7 @@ It colors **Session pace**, **Weekly pace**, and **Auto pace** in the layout edi
 rewrite stored layouts, or migrate legacy display modes. Existing installs stay monochrome until the option is enabled.
 
 Balance uses the same provider amount as the menu card: Codex credits, OpenRouter remaining credits, MiMo,
-DeepSeek, DeepInfra, Moonshot, Poe points, Hypercredits, Atlas Cloud and Vercel available balances, or OpenCode Go's
+DeepSeek, DeepInfra, Moonshot, Poe points, Hypercredits, LithosAI prepaid balance, Atlas Cloud and Vercel available balances, or OpenCode Go's
 Zen balance. DevPass shows remaining billing-cycle credits (a plan allowance); Mistral shows monthly API spend.
 An explicit Balance token remains available alongside quota percentages. Missing amounts render a dash;
 unrelated spend is never substituted. Conditional balance thresholds remain OpenRouter-only. Auto %

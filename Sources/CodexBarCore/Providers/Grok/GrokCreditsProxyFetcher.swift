@@ -62,40 +62,25 @@ public enum GrokCreditsProxyFetcher {
         let periodStart = currentPeriodEnd == nil ? config.billingPeriodStart : config.currentPeriod?.start
         let windowMinutes = Self.windowMinutes(start: periodStart, end: resetsAt, now: now)
 
-        if let percent = config.creditUsagePercent, percent.isFinite {
-            return GrokWebBillingSnapshot(
-                usedPercent: min(100, max(0, percent)),
-                resetsAt: resetsAt,
-                windowMinutes: windowMinutes,
-                subscriptionTier: subscriptionTier,
-                productUsage: GrokProductUsage.composing(
-                    config.productUsage?.values ?? [], creditUsagePercent: percent),
-                prepaidBalanceUSD: config.prepaidBalance?.usd)
+        let percent: Double? = if let reported = config.creditUsagePercent, reported.isFinite {
+            reported
+        } else if let cap = config.onDemandCap?.val, cap > 0, let used = config.onDemandUsed?.val {
+            used / cap * 100
+        } else {
+            nil
         }
-
-        if let cap = config.onDemandCap?.val,
-           cap > 0,
-           let used = config.onDemandUsed?.val
-        {
-            let percent = min(100, max(0, used / cap * 100))
-            return GrokWebBillingSnapshot(
-                usedPercent: percent,
-                resetsAt: resetsAt,
-                windowMinutes: windowMinutes,
-                subscriptionTier: subscriptionTier,
-                prepaidBalanceUSD: config.prepaidBalance?.usd)
+        guard percent != nil || resetsAt != nil || config.prepaidBalance?.usd != nil else {
+            throw GrokWebBillingError.parseFailed
         }
-
-        if resetsAt != nil || config.prepaidBalance?.usd != nil {
-            return GrokWebBillingSnapshot(
-                usedPercent: nil,
-                resetsAt: resetsAt,
-                windowMinutes: windowMinutes,
-                subscriptionTier: subscriptionTier,
-                prepaidBalanceUSD: config.prepaidBalance?.usd)
-        }
-
-        throw GrokWebBillingError.parseFailed
+        return GrokWebBillingSnapshot(
+            usedPercent: percent.map { min(100, max(0, $0)) },
+            resetsAt: resetsAt,
+            windowMinutes: windowMinutes,
+            subscriptionTier: subscriptionTier,
+            productUsage: config.creditUsagePercent.map {
+                GrokProductUsage.composing(config.productUsage?.values ?? [], creditUsagePercent: $0)
+            } ?? [],
+            prepaidBalanceUSD: config.prepaidBalance?.usd)
     }
 
     private static func windowMinutes(start: String?, end: Date?, now: Date) -> Int? {

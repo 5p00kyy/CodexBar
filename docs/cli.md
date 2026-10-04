@@ -370,6 +370,11 @@ Note: Using CLI fallback
 }
 ```
 
+Grok purchased Extra Usage Credits appear in usage JSON as `usage.providerCost.balance` with
+`currencyCode: "USD"` when the CLI proxy supplies a valid wallet. The amount is dollars (`1446` cents → `14.46`),
+separate from quota percentages; zero is retained and unavailable or invalid balances are omitted. The balance-only
+`used`/`limit` fields are zero and do not describe spending or a budget. See [Grok](grok.md#purchased-credits-in-cli-json).
+
 ## Exit codes
 - 0: success
 - 2: provider missing (binary not on PATH)

@@ -55,9 +55,6 @@ struct GrokPrepaidBalanceTests {
             openaiDashboard: nil,
             error: nil)
         let encoded = try JSONEncoder().encode(payload)
-        if case .positive = wallet {
-            try print("Synthetic Grok CLI JSON fixture: " + #require(String(bytes: encoded, encoding: .utf8)))
-        }
         let object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         let exportedUsage = try #require(object["usage"] as? [String: Any])
         let cost = exportedUsage["providerCost"] as? [String: Any]
