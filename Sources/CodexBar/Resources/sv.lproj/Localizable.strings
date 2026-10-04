@@ -1635,3 +1635,5 @@
 "antigravity_quota_window_note" = "Fönsterkostnaden omfattar alla modeller · fönstret som visas är den mest begränsade familjen";
 "antigravity_no_priced_token_history" = "Ingen prissatt Antigravity-tokenhistorik tillgänglig.";
 "Supported browsers: %@. Use Manual for other browsers." = "Webbläsare som stöds: %@. Använd Manuellt för andra webbläsare.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Klistra in Cookie-headern från en Chrome-begäran till www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "Reserverat";

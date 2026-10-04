@@ -1637,3 +1637,5 @@
 "antigravity_quota_window_note" = "Стоимость окна включает все модели · показано окно самого ограниченного семейства";
 "antigravity_no_priced_token_history" = "Нет оценённой истории токенов Antigravity.";
 "Supported browsers: %@. Use Manual for other browsers." = "Поддерживаемые браузеры: %@. Для других браузеров используйте ручной режим.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Вставьте заголовок Cookie из запроса Chrome к www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "Зарезервировано";

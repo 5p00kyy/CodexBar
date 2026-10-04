@@ -1636,3 +1636,5 @@
 "antigravity_quota_window_note" = "ウィンドウの費用は全モデルを含みます · 表示中のウィンドウは最も制限の厳しいファミリーです";
 "antigravity_no_priced_token_history" = "価格付きの Antigravity トークン履歴がありません。";
 "Supported browsers: %@. Use Manual for other browsers." = "対応ブラウザ: %@。その他のブラウザでは「手動」を使用してください。";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Chrome で www.workbuddy.cn/profile/plans-usage に送信したリクエストの Cookie ヘッダーを貼り付けてください。";
+"Reserved" = "確保済み";
