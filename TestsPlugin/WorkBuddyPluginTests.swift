@@ -82,7 +82,11 @@ struct WorkBuddyPluginTests {
                 #expect(request.value(forHTTPHeaderField: "Accept") == "application/json")
                 #expect(request.value(forHTTPHeaderField: "Origin") == "https://www.workbuddy.cn")
                 #expect(request.value(forHTTPHeaderField: "Referer") == "https://www.workbuddy.cn/profile/plans-usage")
-                #expect(request.timeoutInterval == 22)
+                if path == Self.summaryPath {
+                    #expect(request.timeoutInterval == 22)
+                } else {
+                    #expect((1...5).contains(request.timeoutInterval))
+                }
                 #expect(request.value(forHTTPHeaderField: "User-Agent") == Self.chromeUserAgent(154))
                 let body = try JSONSerialization.jsonObject(with: #require(request.httpBody)) as? [String: Any]
                 if path == Self.summaryPath {
@@ -114,12 +118,13 @@ struct WorkBuddyPluginTests {
         {"code":0,"msg":"OK","data":{"SubscriptionPackageName":"专业版","IsPaidUser":true,"Packages":[
           {"CycleTotalCapacity":"2000","CycleRemainCapacity":"1500.5","CycleFrozenCapacity":"12.25","CapacityUnit":"credits"},
           {"CycleTotalCapacity":"500","CycleRemainCapacity":"500","CycleFrozenCapacity":"0","CapacityUnit":"credits"},
-          {"CycleTotalCapacity":"9","CycleRemainCapacity":"1","CapacityUnit":"requests"}
+          {"CycleTotalCapacity":"9","CycleRemainCapacity":"1","CapacityUnit":"requests"},
+          {"CycleTotalCapacity":"99","CycleRemainCapacity":"1"}
         ]}}
         """#
         let snapshot = try await Self.fetch(engine: engine, routes: [Self.summaryPath: (200, summary)])
         #expect(abs((snapshot.primary?.usedPercent ?? 0) - 19.98) < 0.001)
-        #expect(snapshot.primary?.resetDescription == "2000.5 / 2500 credits left")
+        #expect(snapshot.primary?.resetDescription == "2,000.5 / 2,500 credits left")
         #expect(snapshot.identity?.loginMethod == "专业版")
         #expect(snapshot.details.first?.rows.map(\.label) == ["Reserved"])
         #expect(snapshot.details.first?.rows.map(\.value) == ["12.25"])
@@ -141,7 +146,10 @@ struct WorkBuddyPluginTests {
     }
 
     @Test(
-        arguments: [(500, "{}"), (200, #"{"code":4001,"msg":"denied"}"#), (200, "not JSON"), (200, #"{"code":0}"#)],
+        arguments: [
+            (401, "{}"), (500, "{}"), (200, #"{"code":4001,"msg":"denied"}"#),
+            (200, "not JSON"), (200, #"{"code":0}"#),
+        ],
         BundledPluginTestSupport.engines)
     func `failed package listings keep the balance without a reset`(
         failure: (Int, String),
@@ -156,16 +164,79 @@ struct WorkBuddyPluginTests {
     }
 
     @Test(arguments: BundledPluginTestSupport.engines)
+    func `stalled listings keep the balance within the production fetch deadline`(
+        engine: ProviderPluginEngineKind) async throws
+    {
+        let context = ProviderFetchContext(
+            runtime: .cli, sourceMode: .web, includeCredits: false,
+            webTimeout: 60, webDebugDumpHTML: false, verbose: false, env: [:],
+            settings: .make(workbuddy: .init(cookieSource: .manual, manualCookieHeader: Self.fixtureCookie)),
+            fetcher: UsageFetcher(environment: [:]),
+            claudeFetcher: WorkBuddyUnusedClaudeFetcher(),
+            browserDetection: BrowserDetection(
+                homeDirectory: "/nonexistent/workbuddy-fixture",
+                fileExists: { _ in false }, directoryContents: { _ in nil }))
+        let web = try #require(WorkBuddyProviderDescriptor.spec.webSource)
+        let values = try #require(web.resolveValues(context))
+        let bundle = try #require(CodexBarCoreResources.bundle)
+        let source = try String(
+            contentsOf: #require(bundle.url(forResource: "workbuddy", withExtension: "js")),
+            encoding: .utf8)
+        let runtime = try ProviderPluginRuntime(
+            source: source, resourceBundle: bundle,
+            transport: ProviderHTTPTransportHandler { request in
+                if request.url?.path == Self.summaryPath {
+                    return try Self.response(request, body: Self.summary)
+                }
+                try await Task.sleep(for: .seconds(120))
+                throw URLError(.timedOut)
+            },
+            timeout: web.timeout.resolve(context), engine: engine)
+        let sessions = SessionTrace(headers: [Self.fixtureCookie])
+        let started = ContinuousClock.now
+        let snapshot = try await runtime.fetchUsage(
+            settings: values.settings, cookieSource: .manual,
+            cookieSessionResolver: { _, _ in sessions.next() })
+        #expect(started.duration(to: .now) < .seconds(15))
+        #expect(snapshot.primary?.usedPercent == 10)
+        #expect(snapshot.primary?.resetsAt == nil)
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `a failed paid listing preserves the free listing reset`(engine: ProviderPluginEngineKind) async throws {
+        let snapshot = try await Self.fetch(engine: engine, routes: [Self.paidPath: (401, "{}")])
+        #expect(snapshot.primary?.usedPercent == 10)
+        #expect(snapshot.primary?.resetsAt == Self.octoberReset)
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
+    func `cancelling an optional listing still cancels the refresh`(engine: ProviderPluginEngineKind) async throws {
+        let runtime = try BundledPluginTestSupport.runtime(
+            "workbuddy", engine: engine,
+            transport: ProviderHTTPTransportHandler { request in
+                if request.url?.path != Self.summaryPath { throw URLError(.cancelled) }
+                return try Self.response(request, body: Self.summary)
+            })
+        let sessions = SessionTrace(headers: [Self.fixtureCookie])
+        await #expect(throws: CancellationError.self) {
+            _ = try await runtime.fetchUsage(
+                now: Self.now,
+                cookieSessionResolver: { _, _ in sessions.next() },
+                cookieSessionValidator: { _, _ in })
+        }
+    }
+
+    @Test(arguments: BundledPluginTestSupport.engines)
     func `zero allowance shows left and total rows instead of a meter`(engine: ProviderPluginEngineKind) async throws {
         let summary = #"""
         {"code":0,"msg":"OK","data":{"SubscriptionPackageName":"体验版","Packages":[
-          {"CycleTotalCapacity":"0","CycleRemainCapacity":"0","CapacityUnit":"credits"}
+          {"CycleTotalCapacity":"0","CycleRemainCapacity":"0","CycleFrozenCapacity":"2.5","CapacityUnit":"credits"}
         ]}}
         """#
         let snapshot = try await Self.fetch(engine: engine, routes: [Self.summaryPath: (200, summary)])
         #expect(snapshot.primary == nil)
-        #expect(snapshot.details.first?.rows.map(\.label) == ["Left", "Total"])
-        #expect(snapshot.details.first?.rows.map(\.value) == ["0", "0"])
+        #expect(snapshot.details.first?.rows.map(\.label) == ["Left", "Total", "Reserved"])
+        #expect(snapshot.details.first?.rows.map(\.value) == ["0", "0", "2.5"])
         #expect(snapshot.identity?.loginMethod == "体验版")
     }
 

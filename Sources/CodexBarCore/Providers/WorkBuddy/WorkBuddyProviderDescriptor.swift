@@ -1,6 +1,8 @@
 import Foundation
 
 public enum WorkBuddyProviderDescriptor {
+    private static let webTimeout = PluginProviderSpec.WebSource.Timeout.web(
+        minimum: 30, maximum: .infinity, padding: 0, nonFinite: 30)
     public static let descriptor: ProviderDescriptor = Self.spec.makeDescriptor()
     public static let spec = PluginProviderSpec(
         id: .workbuddy,
@@ -11,7 +13,7 @@ public enum WorkBuddyProviderDescriptor {
         dashboardURL: "https://www.workbuddy.cn/profile/plans-usage",
         color: .init(hex: 0x0DC8A6),
         confetti: [0x0DC8A6, 0x7BE8D3, 0x1A1A1A],
-        noDataMessage: "WorkBuddy credits are a monthly allowance, not a cost history.",
+        noDataMessage: "No cost history data.",
         menuBarMetrics: ProviderMenuBarMetricCapabilities(supported: [.automatic, .primary]),
         presentation: ProviderUsagePresentation(
             menuCard: ProviderMenuCardPresentation(
@@ -23,14 +25,18 @@ public enum WorkBuddyProviderDescriptor {
         webSource: .init(
             settingsSection: .init(WorkBuddyProviderSettingsKey.self, cookieSettings: CookieProviderSettings.self),
             browserCookieOrder: BrowserCookieImportSupport.chromeOnly(
-                reason: "WorkBuddy imports only Chrome to avoid unrelated browser prompts."),
-            timeout: .web(minimum: 30, maximum: .infinity, padding: 0, nonFinite: 30),
+                reason: "WorkBuddy sessions are bound to Chrome's User-Agent."),
+            timeout: Self.webTimeout,
             browserSupportExemption: { _, _, settings in
                 settings?.workbuddy?.cookieSource == .manual
             },
             resolveValues: { context in
                 guard context.settings?.workbuddy?.cookieSource != .off else { return nil }
-                var settings = ["webTimeoutSeconds": String(context.webTimeout)]
+                var settings = [
+                    "webTimeoutSeconds": String(context.webTimeout),
+                    "resetDeadlineMillis": String(Date().addingTimeInterval(Self.webTimeout.resolve(context) - 1)
+                        .timeIntervalSince1970 * 1000),
+                ]
                 if let major = WorkBuddyChromeVersion.majorVersion() {
                     settings["chromeMajorVersion"] = String(major)
                 }
@@ -43,13 +49,15 @@ public enum WorkBuddyProviderDescriptor {
                 placeholder: "Cookie: …",
                 action: (
                     id: "workbuddy-open-usage",
-                    title: "Open WorkBuddy Usage",
+                    title: "Open Usage Page",
                     url: "https://www.workbuddy.cn/profile/plans-usage")),
             picker: .init(
                 id: "workbuddy-cookie-source",
                 allowsOff: true,
-                auto: .localized("Automatic imports Chrome cookies from www.workbuddy.cn."),
-                manual: .localized("Paste a Cookie header captured from %@.", argument: "the plans and usage page"),
+                auto: .localized("Automatic imports browser cookies."),
+                manual: .localized(
+                    "Paste a Cookie header captured from %@.",
+                    argument: "www.workbuddy.cn/profile/plans-usage"),
                 off: .localized("%@ cookies are disabled.", argument: "WorkBuddy"),
                 showsRefreshAction: true),
             detailLine: "web"))

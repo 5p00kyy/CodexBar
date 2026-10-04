@@ -1637,3 +1637,5 @@
 "antigravity_quota_window_note" = "Chi phí cửa sổ bao gồm mọi mô hình · cửa sổ hiển thị là nhóm bị giới hạn nhất";
 "antigravity_no_priced_token_history" = "Không có lịch sử token Antigravity được định giá.";
 "Supported browsers: %@. Use Manual for other browsers." = "Trình duyệt được hỗ trợ: %@. Dùng chế độ Thủ công cho các trình duyệt khác.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Dán tiêu đề Cookie từ yêu cầu Chrome tới www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "Đã giữ lại";

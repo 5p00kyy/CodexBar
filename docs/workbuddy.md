@@ -26,7 +26,7 @@ Cookie: …
 
 ## Authentication
 
-In Settings → Providers → WorkBuddy, choose a cookie source:
+WorkBuddy is off by default. In Settings → Providers → WorkBuddy, enable it and choose a cookie source:
 
 - **Automatic:** sign in to `www.workbuddy.cn` in Chrome, then refresh once (or run
   `codexbar cookie refresh --provider workbuddy --allow-keychain-prompt`). Only Chrome is queried. The imported
@@ -47,6 +47,8 @@ reads the installed Chrome version (`/Applications/Google Chrome.app` or `~/Appl
 If that is rejected, it retries once with the previous major version, which covers an installed Chrome update that
 has not been relaunched yet. Manual cookies therefore need to come from that Chrome. Without a readable Chrome
 version the request has no browser User-Agent and is expected to fail as an expired session.
+This binding is why WorkBuddy retains Chrome-only import instead of the shared browser order. Authentication currently
+requires Chrome on macOS; the Linux CLI cannot discover a matching browser User-Agent.
 
 Automatic mode tries the next session when every User-Agent attempt returns HTTP 401. Permission
 failures, rate limits, service errors, non-zero API codes, and malformed payloads stop retries without rejecting the
@@ -65,7 +67,10 @@ cookies to each request. A session is accepted into the cache only after a succe
   "PackageCodes":[…],"Status":[0,3]}`): `data.Accounts[].CycleEndTime` supplies the reset time. The listings reject
   requests without `PackageCodes` (HTTP 400, code `10001`), so the plugin sends the paid and free package codes used by
   the WorkBuddy 5.6.2 client; packages added later are not considered for the reset. A failed or unexpected listing
-  leaves the reset unknown and keeps the balance.
+  keeps the balance, including HTTP 401; a successful listing can still supply the reset if the other listing fails.
+  Both listings share at most five seconds, capped before the overall fetch deadline; a stalled listing cannot consume
+  the balance's publication time. Only the first 100 accounts in each listing are considered. Cancelling a refresh still
+  stops the fetch.
 
 Responses must have HTTP 200 and `code: 0`. Billing responses also contain account identifiers (UIN, app, account,
 order, and resource IDs); the plugin never uses, displays, or logs them.
@@ -79,7 +84,8 @@ order, and resource IDs); the plugin never uses, displays, or logs them.
 | `CycleFrozenCapacity` | A **Reserved** row when above zero, as reported. |
 | `SubscriptionPackageName` | Header plan label, as returned (for example `体验版` for the free tier). |
 
-**Left** and **Total** rows appear instead of the meter when the total is zero.
+**Left** and **Total** rows appear instead of the meter when the total is zero; any reserved credits remain visible.
+Amounts use CodexBar's shared number formatting, including thousands separators.
 
 ## Limitations
 

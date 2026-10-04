@@ -11,6 +11,7 @@ defineProvider({
   endpoints: ["https://www.workbuddy.cn"],
   settings: [
     { key: "webTimeoutSeconds", title: "Web timeout", type: "plain" },
+    { key: "resetDeadlineMillis", title: "Reset lookup deadline", type: "plain" },
     { key: "chromeMajorVersion", title: "Chrome major version", type: "plain" },
   ],
   capabilities: ["browser-cookies", "http-status"],
@@ -48,14 +49,7 @@ defineProvider({
       return Number.isFinite(parsed) ? parsed : fail(field);
     };
     const text = (value) => (typeof value === "string" ? value.trim() || undefined : undefined);
-    // No thousands grouping, so the footnote matches the dashboard amount.
-    const format = (value) => {
-      if (Number.isInteger(value)) return String(value);
-      let result = value.toFixed(2);
-      while (result.endsWith("0")) result = result.slice(0, -1);
-      if (result.endsWith(".")) result = result.slice(0, -1);
-      return result;
-    };
+    const format = (value) => ctx.format.number(value, { maximumFractionDigits: 2 });
     const decode = (bodyText, field) => {
       let value;
       try {
@@ -70,7 +64,7 @@ defineProvider({
     const sessionExpired = ctx.fail.authenticationExpired(
       "WorkBuddy session expired. Sign in at www.workbuddy.cn or paste a fresh Cookie header.",
     );
-    const post = async (session, agent, path, body) => {
+    const post = async (session, agent, path, body, requestTimeout = timeoutSeconds) => {
       const headers = {
         Accept: "application/json",
         Origin: origin,
@@ -79,7 +73,7 @@ defineProvider({
       if (agent) headers["User-Agent"] = agent;
       const response = await ctx.http.post(`${origin}${path}`, {
         body,
-        timeoutSeconds,
+        timeoutSeconds: requestTimeout,
         cookieSession: session.id,
         headers,
       });
@@ -135,19 +129,25 @@ defineProvider({
     // Reset time is optional: a failed or unexpected package listing must not discard the balance.
     const nextReset = async (session, agent) => {
       const now = ctx.date.now().getTime();
+      // Share five seconds across listings, retaining the host's margin for publishing the balance.
+      const hostDeadline = Number(ctx.settings.get("resetDeadlineMillis"));
+      const deadline = Math.min(Date.now() + 5000, hostDeadline > 0 ? hostDeadline : Infinity);
       let earliest;
       for (const [path, codes] of [
         ["/billing/meter/get-user-resource-paid-packages", paidPackageCodes],
         ["/billing/meter/get-user-resource-free-packages", freePackageCodes],
       ]) {
+        const budget = (deadline - Date.now()) / 1000;
+        if (budget < 1) break;
         try {
           // The listings reject requests without package codes (HTTP 400, code 10001). Status 0 is valid, 3 used up.
-          const page = await post(session, agent, path, {
-            PageNumber: 1,
-            PageSize: 100,
-            PackageCodes: codes,
-            Status: [0, 3],
-          });
+          const page = await post(
+            session,
+            agent,
+            path,
+            { PageNumber: 1, PageSize: 100, PackageCodes: codes, Status: [0, 3] },
+            Math.min(timeoutSeconds, budget),
+          );
           if (!Array.isArray(page.Accounts)) continue;
           for (const raw of page.Accounts) {
             if (raw === null || typeof raw !== "object" || Array.isArray(raw)) continue;
@@ -158,7 +158,7 @@ defineProvider({
           }
         } catch (error) {
           const failure = error;
-          if (failure.transportClass === "cancelled" || error === sessionExpired) throw error;
+          if (failure.transportClass === "cancelled") throw error;
         }
       }
       return earliest;
@@ -190,44 +190,30 @@ defineProvider({
       let total = 0;
       let remaining = 0;
       let frozen = 0;
-      let counted = 0;
       for (const raw of summary.Packages) {
         const item = object(raw, "package");
-        if (item.CapacityUnit !== undefined && item.CapacityUnit !== "credits") continue;
+        if (item.CapacityUnit !== "credits") continue;
         total += amount(item.CycleTotalCapacity, "CycleTotalCapacity");
         remaining += amount(item.CycleRemainCapacity, "CycleRemainCapacity");
         if (item.CycleFrozenCapacity !== undefined) frozen += amount(item.CycleFrozenCapacity, "CycleFrozenCapacity");
-        counted += 1;
       }
       const plan = text(summary.SubscriptionPackageName);
-      const identity = plan ? { loginMethod: plan } : undefined;
-      if (counted === 0 || total <= 0) {
-        return {
-          details: [
-            {
-              title: "Credits",
-              rows: [
-                { label: "Left", value: format(remaining) },
-                { label: "Total", value: format(total) },
-              ],
-            },
-          ],
-          identity,
-          dataConfidence: "exact",
-        };
-      }
-
-      const resetsAt = await nextReset(session, agent);
       // Frozen credits are listed as reported; the meter uses the remaining amount the dashboard shows.
       const rows = frozen > 0 ? [{ label: "Reserved", value: format(frozen) }] : [];
+      if (total <= 0) {
+        rows.unshift({ label: "Left", value: format(remaining) }, { label: "Total", value: format(total) });
+      }
       return {
-        primary: {
-          usedPercent: ctx.pct(Math.max(0, total - remaining), total),
-          resetsAt,
-          resetDescription: `${format(remaining)} / ${format(total)} credits left`,
-        },
+        primary:
+          total > 0
+            ? {
+                usedPercent: ctx.pct(Math.max(0, total - remaining), total),
+                resetsAt: await nextReset(session, agent),
+                resetDescription: `${format(remaining)} / ${format(total)} credits left`,
+              }
+            : undefined,
         details: rows.length ? [{ title: "Credits", rows }] : undefined,
-        identity,
+        identity: plan ? { loginMethod: plan } : undefined,
         dataConfidence: "exact",
       };
     }

@@ -1638,3 +1638,5 @@
 "antigravity_quota_window_note" = "El cost de la finestra inclou tots els models · la finestra mostrada és la família més limitada";
 "antigravity_no_priced_token_history" = "No hi ha historial de tokens d'Antigravity amb preu disponible.";
 "Supported browsers: %@. Use Manual for other browsers." = "Navegadors compatibles: %@. Fes servir Manual per als altres navegadors.";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "Enganxeu la capçalera Cookie d’una sol·licitud de Chrome a www.workbuddy.cn/profile/plans-usage.";
+"Reserved" = "Reservat";

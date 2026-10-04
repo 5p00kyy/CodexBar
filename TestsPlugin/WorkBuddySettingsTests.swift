@@ -71,7 +71,7 @@ struct WorkBuddyChromeVersionTests {
     }
 }
 
-private struct WorkBuddyUnusedClaudeFetcher: ClaudeUsageFetching {
+struct WorkBuddyUnusedClaudeFetcher: ClaudeUsageFetching {
     func detectVersion() -> String? { nil }
     func loadLatestUsage(model _: String) async throws -> ClaudeUsageSnapshot { throw CancellationError() }
     func debugRawProbe(model _: String) async -> String { "unused" }

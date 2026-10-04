@@ -1651,3 +1651,5 @@
 "antigravity_quota_window_note" = "窗口费用涵盖所有模型 · 所示窗口为最受限的模型系列";
 "antigravity_no_priced_token_history" = "没有可计价的 Antigravity 令牌历史记录。";
 "Supported browsers: %@. Use Manual for other browsers." = "支持的浏览器：%@。其他浏览器请使用“手动”模式。";
+"Paste the Cookie header from a Chrome request to www.workbuddy.cn/profile/plans-usage." = "粘贴 Chrome 向 www.workbuddy.cn/profile/plans-usage 发送的请求中的 Cookie 标头。";
+"Reserved" = "已预留";

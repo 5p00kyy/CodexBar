@@ -20,13 +20,15 @@ final class WorkBuddyScreenshotRenderTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let snapshot = try await Self.fetch()
-        let cards: [(String, Bool, ResetTimeDisplayStyle)] = [
-            ("remaining-left", false, .countdown),
-            ("remaining-used", true, .absolute),
+        let reserved = try await Self.fetch(zeroAllowance: true)
+        let cards: [(String, UsageSnapshot, Bool, ResetTimeDisplayStyle)] = [
+            ("remaining-left", snapshot, false, .countdown),
+            ("remaining-used", snapshot, true, .absolute),
+            ("zero-reserved", reserved, false, .countdown),
         ]
 
         try CodexBarLocalizationOverride.$appLanguage.withValue("en") {
-            for (name, showUsed, resetStyle) in cards {
+            for (name, snapshot, showUsed, resetStyle) in cards {
                 let model = try Self.model(snapshot, showUsed: showUsed, resetStyle: resetStyle)
                 let view = AnyView(UsageMenuCardView(model: model, width: 360)
                     .environment(\.locale, Locale(identifier: "en_US_POSIX"))
@@ -41,8 +43,12 @@ final class WorkBuddyScreenshotRenderTests: XCTestCase {
         }
     }
 
-    private static func fetch() async throws -> UsageSnapshot {
-        let summary = #"""
+    private static func fetch(zeroAllowance: Bool = false) async throws -> UsageSnapshot {
+        let summary = zeroAllowance ? #"""
+        {"code":0,"data":{"SubscriptionPackageName":"Fixture plan","Packages":[
+          {"CycleTotalCapacity":"0","CycleRemainCapacity":"0","CycleFrozenCapacity":"2.5","CapacityUnit":"credits"}
+        ]}}
+        """# : #"""
         {"code":0,"msg":"OK","data":{"SubscriptionPackageName":"体验版","IsPaidUser":false,"Packages":[
           {"CycleTotalCapacity":"500","CycleRemainCapacity":"450","CycleFrozenCapacity":"0","CapacityUnit":"credits"}
         ]}}
