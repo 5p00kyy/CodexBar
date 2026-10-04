@@ -354,7 +354,8 @@ public enum AntigravityOAuthConfig {
                     range = match.upperBound..<range.upperBound
                     let record = match.lowerBound - (intel ? 0 : 12)
                     guard record >= start, record <= start + length - (intel ? 37 : 32) else { continue }
-                    /// PC-relative addresses map to file offsets because __TEXT has an aligned VM base and file offset 0.
+                    /// __TEXT has an aligned VM base and file offset 0,
+                    /// so PC-relative addresses map to file offsets.
                     func reference(_ offset: Int) -> (Int, Int)? {
                         if intel {
                             guard word(offset) & 0x00FF_FFFF == 0x000D_8D48 else { return nil }
