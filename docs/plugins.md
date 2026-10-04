@@ -212,6 +212,10 @@ so portable third-party plugins must use the host helpers below instead of ECMA-
   usable session. API-only (and other non-web) source modes report `"off"`; Manual reports `"manual"`, so plugins can
   route an origin-less pasted header to one explicitly selected tenant. Missing cookie resolvers report `"off"`.
   `cookieHeader` also enforces Off/API-only policy, even if the plugin skips this check.
+  Explicit app refreshes preserve the user-initiated, one-browser Keychain retry scope across both JavaScript engines.
+  Background imports remain non-interactive. Suppressed or denied access reports permission recovery guidance rather
+  than a missing login when all authentication paths fail; valid fallback credentials can still succeed. A successful
+  refresh retains each manifest's cookie persistence policy, including nonpersistent sessions.
 - `ctx.browser.supportedBrowsers` is a comma-separated display list from the provider's configured browser catalog subset (Chrome for user plugins). It describes supported Automatic sources, not installed or searched profiles; it performs no browser or Keychain access. On platforms without browser import it reads `none on this platform`.
 - `await ctx.browser.cookieHeader(domain)` returns a cookie header only with the `browser-cookies` capability and for a
   declared domain. User plugins import from Chrome; bundled providers retain their declared browser order.
